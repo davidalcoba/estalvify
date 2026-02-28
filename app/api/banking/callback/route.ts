@@ -22,6 +22,20 @@ export async function GET(request: NextRequest) {
   if (error || !code || !state) {
     const errorMsg = error ?? "missing_code_or_state";
     console.error("Banking callback error:", errorMsg);
+
+    // Clean up the dangling PENDING connection (user cancelled or error)
+    if (state) {
+      await prisma.bankConnection
+        .deleteMany({ where: { sessionId: state, status: "PENDING_REAUTH" } })
+        .catch(() => {}); // best effort
+    }
+
+    // Don't show an error page on user-initiated cancellation
+    const isCancelled = error === "access_denied" || error === "user_cancelled";
+    if (isCancelled) {
+      return NextResponse.redirect(`${appUrl}/accounts`);
+    }
+
     return NextResponse.redirect(
       `${appUrl}/accounts?error=${encodeURIComponent(errorMsg)}`
     );
@@ -78,6 +92,14 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Banking callback processing error:", error);
+
+    // Clean up the PENDING connection if exchange or DB write failed
+    if (state) {
+      await prisma.bankConnection
+        .deleteMany({ where: { sessionId: state, status: "PENDING_REAUTH" } })
+        .catch(() => {});
+    }
+
     return NextResponse.redirect(
       `${appUrl}/accounts?error=${encodeURIComponent(message)}`
     );
