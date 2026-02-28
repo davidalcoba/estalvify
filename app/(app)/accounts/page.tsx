@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Shield, Building2, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import { ConnectBankDialog } from "@/components/accounts/connect-bank-dialog";
+import { DisconnectBankButton } from "@/components/accounts/disconnect-bank-button";
 
 export const metadata: Metadata = { title: "Bank Accounts" };
 
@@ -109,6 +110,7 @@ export default async function AccountsPage() {
                       <StatusIcon className="h-3 w-3" />
                       {statusConfig.label}
                     </Badge>
+                    <DisconnectBankButton connectionId={connection.id} bankName={connection.bankName} />
                   </div>
                 </CardHeader>
 
@@ -120,7 +122,12 @@ export default async function AccountsPage() {
                         return (
                           <div key={account.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
                             <div>
-                              <p className="text-sm font-medium">{account.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium">{account.name}</p>
+                                <span className="text-xs text-muted-foreground px-1.5 py-0.5 bg-slate-200 rounded">
+                                  {account.type}
+                                </span>
+                              </div>
                               {account.iban && (
                                 <p className="text-xs text-muted-foreground font-mono">
                                   {account.iban.replace(/(.{4})/g, "$1 ").trim()}
