@@ -12,6 +12,7 @@ import { ConnectBankDialog } from "@/components/accounts/connect-bank-dialog";
 import { DisconnectBankButton } from "@/components/accounts/disconnect-bank-button";
 import { AccountNameEditor } from "@/components/accounts/account-name-editor";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
+import { SyncNowButton } from "@/components/accounts/sync-now-button";
 
 export const metadata: Metadata = { title: "Bank Accounts" };
 
@@ -116,6 +117,9 @@ export default async function AccountsPage() {
                       <StatusIcon className="h-3 w-3" />
                       {statusConfig.label}
                     </Badge>
+                    {connection.status === "ACTIVE" && (
+                      <SyncNowButton connectionId={connection.id} />
+                    )}
                     <DisconnectBankButton connectionId={connection.id} bankName={connection.bankName} />
                   </div>
                 </CardHeader>
