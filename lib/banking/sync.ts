@@ -68,8 +68,8 @@ export async function syncConnection(
   const errors: string[] = [];
 
   for (const account of connection.bankAccounts) {
+    // ── Balances ────────────────────────────────────────────────────────
     try {
-      // ── Balances ────────────────────────────────────────────────────────
       const { balances } = await getBalances(account.externalAccountId);
 
       for (const balance of balances) {
@@ -94,10 +94,18 @@ export async function syncConnection(
         });
         balancesFetched++;
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
+      errors.push(`Account ${account.externalAccountId} balances: ${msg}`);
+    }
 
-      // ── Transactions (with automatic pagination) ─────────────────────────
-      // The Enable Banking API may return a `continuation_key` when there are
-      // more records beyond the current page. We loop until it stops coming.
+    // ── Transactions (with automatic pagination) ─────────────────────────
+    // The Enable Banking API may return a `continuation_key` when there are
+    // more records beyond the current page. We loop until it stops coming.
+    // Some account types (CARD, LOAN, etc.) may not support the transactions
+    // endpoint — a 404 is logged as a warning but does not fail the sync.
+    try {
       let continuationKey: string | undefined;
       let pageCount = 0;
 
@@ -162,8 +170,17 @@ export async function syncConnection(
       } while (continuationKey);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      console.error(`[sync] Account ${account.externalAccountId} error:`, msg);
-      errors.push(`Account ${account.externalAccountId}: ${msg}`);
+      const is404 = msg.includes("404");
+
+      if (is404) {
+        // Account type does not support transaction history via PSD2 — not an error.
+        console.warn(
+          `[sync] Account ${account.externalAccountId} has no transaction endpoint (404) — skipping transactions`
+        );
+      } else {
+        console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
+        errors.push(`Account ${account.externalAccountId} transactions: ${msg}`);
+      }
     }
   }
 
