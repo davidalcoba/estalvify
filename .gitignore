@@ -48,3 +48,4 @@ certificates/
 *.pem
 *.p12
 *.pfx
+.env*.local

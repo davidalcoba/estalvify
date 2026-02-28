@@ -1,10 +1,11 @@
-// Enable Banking OAuth callback handler
-// Bank redirects user here after authentication with ?session_id=...
-// We store the session and redirect user back to /accounts
+// GET /api/banking/callback
+// Enable Banking redirects here after user authenticates with their bank.
+// Fetches accounts and stores them in the database.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccounts } from "@/lib/banking/enable-banking";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -19,43 +20,67 @@ export async function GET(request: NextRequest) {
 
   if (error || !sessionId) {
     const errorMsg = error ?? "missing_session_id";
+    console.error("Banking callback error:", errorMsg);
     return NextResponse.redirect(
       new URL(`/accounts?error=${encodeURIComponent(errorMsg)}`, request.url)
     );
   }
 
   try {
-    // Find the pending bank connection for this user (created when we started the OAuth flow)
-    const pendingConnection = await prisma.bankConnection.findFirst({
+    // Find the bank connection we created when initiating the flow
+    const bankConnection = await prisma.bankConnection.findFirst({
       where: {
         userId: session.user.id,
-        status: "ACTIVE",
-        sessionId: "PENDING", // Placeholder set during session creation
+        sessionId,
       },
     });
 
-    if (!pendingConnection) {
+    if (!bankConnection) {
       return NextResponse.redirect(
         new URL("/accounts?error=connection_not_found", request.url)
       );
     }
 
-    // Update the connection with the real session ID from Enable Banking
-    await prisma.bankConnection.update({
-      where: { id: pendingConnection.id },
-      data: {
-        sessionId,
-        status: "ACTIVE",
-        // TODO: Fetch and store accounts after connecting
-        // This would call getAccounts(sessionId) and create BankAccount records
-      },
-    });
+    // Fetch the user's accounts from Enable Banking
+    const { accounts } = await getAccounts(sessionId);
+
+    // Store each account in the database
+    for (const account of accounts) {
+      await prisma.bankAccount.upsert({
+        where: { externalAccountId: account.uid },
+        create: {
+          userId: session.user.id,
+          bankConnectionId: bankConnection.id,
+          externalAccountId: account.uid,
+          iban: account.iban,
+          name: account.name ?? account.iban ?? account.uid,
+          currency: account.currency,
+          type: mapAccountType(account.account_type),
+          isActive: true,
+        },
+        update: {
+          name: account.name ?? account.iban ?? account.uid,
+          isActive: true,
+        },
+      });
+    }
 
     return NextResponse.redirect(new URL("/accounts?connected=true", request.url));
   } catch (error) {
-    console.error("Banking callback error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Banking callback processing error:", error);
     return NextResponse.redirect(
-      new URL("/accounts?error=connection_failed", request.url)
+      new URL(`/accounts?error=${encodeURIComponent(message)}`, request.url)
     );
   }
+}
+
+function mapAccountType(type?: string): "CHECKING" | "SAVINGS" | "CREDIT" | "INVESTMENT" | "OTHER" {
+  if (!type) return "CHECKING";
+  const t = type.toLowerCase();
+  if (t.includes("saving")) return "SAVINGS";
+  if (t.includes("credit")) return "CREDIT";
+  if (t.includes("invest") || t.includes("pension")) return "INVESTMENT";
+  if (t.includes("current") || t.includes("checking")) return "CHECKING";
+  return "OTHER";
 }
