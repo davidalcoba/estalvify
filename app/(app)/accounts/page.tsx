@@ -24,7 +24,11 @@ export default async function AccountsPage() {
   const session = await auth();
 
   const connections = await prisma.bankConnection.findMany({
-    where: { userId: session!.user.id },
+    where: {
+      userId: session!.user.id,
+      // Hide PENDING_REAUTH connections with no accounts (abandoned flows)
+      NOT: { status: "PENDING_REAUTH", bankAccounts: { none: {} } },
+    },
     include: {
       bankAccounts: {
         where: { isActive: true },

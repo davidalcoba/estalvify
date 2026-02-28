@@ -34,29 +34,26 @@ export async function POST(request: NextRequest) {
     "127.0.0.1";
 
   try {
-    // Generate a state UUID for CSRF protection.
-    // Stored as the temporary sessionId on the PENDING connection —
-    // replaced with the real session_id after the callback.
     const state = crypto.randomUUID();
 
-    // Create PENDING connection — no session_id yet
+    // Call Enable Banking API FIRST — if it fails, no DB record is created
+    const { url } = await createBankingSession({
+      aspspName,
+      aspspCountry,
+      psuIpAddress,
+      state,
+    });
+
+    // Only create the DB record once we have a valid redirect URL
     await prisma.bankConnection.create({
       data: {
         userId: session.user.id,
         bankId: aspspName,
         bankName: aspspName,
         country: aspspCountry,
-        sessionId: state, // temporary until callback
+        sessionId: state,
         status: "PENDING_REAUTH",
       },
-    });
-
-    // Call POST /auth → returns redirect URL
-    const { url } = await createBankingSession({
-      aspspName,
-      aspspCountry,
-      psuIpAddress,
-      state,
     });
 
     return NextResponse.json({ url });
