@@ -1,13 +1,7 @@
-// Root page: redirect authenticated users to dashboard, others to login
+// Root page: proxy.ts handles redirect to /login for unauthenticated users.
+// Authenticated users that reach here are sent to /dashboard.
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 
-export default async function RootPage() {
-  const session = await auth();
-
-  if (session?.user) {
-    redirect("/dashboard");
-  } else {
-    redirect("/login");
-  }
+export default function RootPage() {
+  redirect("/dashboard");
 }
