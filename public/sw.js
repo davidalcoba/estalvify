@@ -7,7 +7,7 @@
 // a redirect or error response, causing "This site can't be reached"
 // on subsequent visits until the user did a hard reload.
 
-const CACHE_NAME = "estalvify-v2";
+const CACHE_NAME = "estalvify-v3";
 
 self.addEventListener("install", (event) => {
   // Only cache the offline fallback — never cache real app pages.
@@ -15,6 +15,11 @@ self.addEventListener("install", (event) => {
     caches.open(CACHE_NAME).then((cache) => cache.add("/offline"))
   );
   self.skipWaiting();
+});
+
+// Allow the page to force activation of a waiting SW.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
