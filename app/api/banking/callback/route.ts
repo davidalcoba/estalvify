@@ -1,17 +1,16 @@
 // GET /api/banking/callback
 // Enable Banking redirects here after user authenticates with their bank.
-// Exchanges the authorization code for a session, stores accounts, then
-// runs an initial 90-day sync so the user has data immediately.
+//
+// Two flows:
+//   NEW connection: store accounts in sessionData → redirect to setup page
+//   RE-AUTH (reconnectConnectionId present): restore the existing connection
+//     with the new session, skip setup, accounts are untouched.
 //
 // NOTE: No session auth required — the `state` UUID is the security mechanism.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  exchangeCodeForSession,
-  type EnableBankingAccount,
-} from "@/lib/banking/enable-banking";
-import { syncConnection, toDateString } from "@/lib/banking/sync";
+import { exchangeCodeForSession } from "@/lib/banking/enable-banking";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -39,91 +38,96 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Find the pending connection created when the user started the OAuth flow
+  const bankConnection = await prisma.bankConnection.findFirst({
+    where: { sessionId: state, status: "PENDING_REAUTH" },
+  });
+
+  if (!bankConnection) {
+    return NextResponse.redirect(`${appUrl}/accounts?error=connection_not_found`);
+  }
+
+  // Check if this is a re-auth for an existing expired connection
+  const reconnectConnectionId = (bankConnection.sessionData as { reconnectConnectionId?: string } | null)
+    ?.reconnectConnectionId;
+
   try {
-    const bankConnection = await prisma.bankConnection.findFirst({
-      where: { sessionId: state, status: "PENDING_REAUTH" },
-    });
-
-    if (!bankConnection) {
-      return NextResponse.redirect(`${appUrl}/accounts?error=connection_not_found`);
-    }
-
     const { session_id, accounts, access } = await exchangeCodeForSession(code);
 
+    // Log raw account fields so we can see what the bank returns for naming
+    console.log("[callback] accounts from API:", JSON.stringify(
+      accounts.map((a) => ({ uid: a.uid, name: a.name, product: a.product, details: a.details, iban: a.account_id?.iban })),
+      null, 2
+    ));
+
+    const consentExpiresAt = access?.valid_until ? new Date(access.valid_until) : null;
+
+    // ── RE-AUTH FLOW ───────────────────────────────────────────────────────
+    // Restore the existing connection with the new session — accounts unchanged.
+    if (reconnectConnectionId) {
+      await prisma.$transaction(async (tx) => {
+        // Restore the expired connection with the new Enable Banking session
+        await tx.bankConnection.update({
+          where: { id: reconnectConnectionId },
+          data: {
+            sessionId: session_id,
+            status: "ACTIVE",
+            consentExpiresAt,
+          },
+        });
+
+        // Clean up the temporary PENDING_REAUTH placeholder
+        await tx.bankConnection.delete({ where: { id: bankConnection.id } });
+      });
+
+      return NextResponse.redirect(`${appUrl}/accounts?reconnected=true`);
+    }
+
+    // ── NEW CONNECTION FLOW ────────────────────────────────────────────────
+    // Duplicate check: block if any account already belongs to a different
+    // active connection for this user.
+    const externalIds = accounts.map((a) => a.uid);
+    const duplicate = await prisma.bankAccount.findFirst({
+      where: {
+        externalAccountId: { in: externalIds },
+        userId: bankConnection.userId,
+        isActive: true,
+        bankConnectionId: { not: bankConnection.id },
+      },
+      select: { name: true },
+    });
+
+    if (duplicate) {
+      await prisma.bankConnection
+        .delete({ where: { id: bankConnection.id } })
+        .catch(() => {});
+      return NextResponse.redirect(`${appUrl}/accounts?error=already_connected`);
+    }
+
+    // Store accounts + move to setup page for account selection
     await prisma.bankConnection.update({
       where: { id: bankConnection.id },
       data: {
         sessionId: session_id,
-        status: "ACTIVE",
-        consentExpiresAt: access?.valid_until ? new Date(access.valid_until) : null,
+        status: "PENDING_SETUP",
+        consentExpiresAt,
+        sessionData: JSON.parse(JSON.stringify({ accounts })),
       },
     });
 
-    // Store accounts — use IBAN suffix as display name (bank returns holder name)
-    const savedAccounts = await Promise.all(
-      accounts.map((account) =>
-        prisma.bankAccount.upsert({
-          where: { externalAccountId: account.uid },
-          create: {
-            userId: bankConnection.userId,
-            bankConnectionId: bankConnection.id,
-            externalAccountId: account.uid,
-            iban: account.account_id?.iban,
-            name: buildAccountName(account),
-            currency: account.currency,
-            type: mapAccountType(account.cash_account_type),
-            isActive: true,
-          },
-          update: { isActive: true },
-          // Don't overwrite a name the user may have customised
-        })
-      )
+    return NextResponse.redirect(
+      `${appUrl}/accounts/setup?connectionId=${bankConnection.id}`
     );
-
-    // Initial sync: fetch last 90 days so the user has data immediately
-    const dateTo = toDateString(new Date());
-    const dateFrom = toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
-
-    await syncConnection(
-      { ...bankConnection, sessionId: session_id, bankAccounts: savedAccounts },
-      dateFrom,
-      dateTo
-    ).catch((err) =>
-      console.error("Initial sync failed (non-fatal):", err)
-    );
-
-    return NextResponse.redirect(`${appUrl}/accounts?connected=true`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Banking callback processing error:", error);
 
-    if (state) {
-      await prisma.bankConnection
-        .deleteMany({ where: { sessionId: state, status: "PENDING_REAUTH" } })
-        .catch(() => {});
-    }
+    await prisma.bankConnection
+      .delete({ where: { id: bankConnection.id } })
+      .catch(() => {});
 
     return NextResponse.redirect(
       `${appUrl}/accounts?error=${encodeURIComponent(message)}`
     );
-  }
-}
-
-/** Use IBAN last-4 as default name — the bank returns the holder's name, not a useful label. */
-function buildAccountName(account: EnableBankingAccount): string {
-  const iban = account.account_id?.iban;
-  if (iban) return `···${iban.slice(-4)}`;
-  return account.uid.slice(0, 8);
-}
-
-function mapAccountType(type?: string): "CHECKING" | "SAVINGS" | "CREDIT" | "INVESTMENT" | "OTHER" {
-  if (!type) return "CHECKING";
-  switch (type) {
-    case "CACC": return "CHECKING"; // Current Account
-    case "SVGS": return "SAVINGS";  // Savings Account
-    case "CARD": return "CREDIT";   // Card Account
-    case "LOAN": return "OTHER";    // Loan Account
-    case "CASH": return "OTHER";
-    default:     return "OTHER";
   }
 }

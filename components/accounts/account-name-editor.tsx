@@ -66,11 +66,12 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
   }
 
   return (
-    <div className="flex items-center gap-1 group">
+    <div className="flex items-center gap-1">
       <span className="text-sm font-medium">{saved}</span>
       <button
         onClick={startEditing}
-        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+        className="text-muted-foreground/50 hover:text-foreground transition-colors"
+        title="Rename"
       >
         <Pencil className="h-3 w-3" />
       </button>

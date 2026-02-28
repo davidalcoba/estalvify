@@ -44,7 +44,15 @@ function buildExternalId(tx: EnableBankingTransaction): string | null {
 
 /**
  * Sync balances and transactions for all accounts in a connection.
- * `dateFrom` / `dateTo` are YYYY-MM-DD strings.
+ *
+ * `dateFrom` / `dateTo` are YYYY-MM-DD strings. Callers are responsible for
+ * computing the right range (e.g. from lastSyncAt for incremental syncs, or
+ * yesterday for the initial sync).
+ *
+ * Transactions are fetched exhaustively: the API may paginate via
+ * `continuation_key` and we loop until there are no more pages.
+ *
+ * On success, `connection.lastSyncAt` is updated in the DB.
  */
 export async function syncConnection(
   connection: ConnectionWithAccounts,
@@ -61,10 +69,8 @@ export async function syncConnection(
 
   for (const account of connection.bankAccounts) {
     try {
-      // ── Balances ──────────────────────────────────────────────────────────
-      const { balances } = await getBalances(
-        account.externalAccountId
-      );
+      // ── Balances ────────────────────────────────────────────────────────
+      const { balances } = await getBalances(account.externalAccountId);
 
       for (const balance of balances) {
         await prisma.accountBalance.upsert({
@@ -89,58 +95,80 @@ export async function syncConnection(
         balancesFetched++;
       }
 
-      // ── Transactions ──────────────────────────────────────────────────────
-      const { transactions } = await getTransactions(
-        account.externalAccountId,
-        { dateFrom, dateTo }
-      );
+      // ── Transactions (with automatic pagination) ─────────────────────────
+      // The Enable Banking API may return a `continuation_key` when there are
+      // more records beyond the current page. We loop until it stops coming.
+      let continuationKey: string | undefined;
+      let pageCount = 0;
 
-      console.log(
-        `[sync] Account ${account.externalAccountId}: ${transactions.length} raw transactions from ${dateFrom} to ${dateTo}`
-      );
-
-      for (const tx of transactions) {
-        const externalId = buildExternalId(tx);
-        if (!externalId) {
-          transactionsSkipped++;
-          console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
-          continue;
-        }
-
-        await prisma.transaction.upsert({
-          where: { externalTransactionId: externalId },
-          create: {
-            userId: connection.userId,
-            bankAccountId: account.id,
-            externalTransactionId: externalId,
-            amount: tx.transaction_amount.amount,
-            currency: tx.transaction_amount.currency,
-            direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
-            bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
-            valueDate: tx.value_date ? new Date(tx.value_date) : null,
-            description:
-              tx.bank_transaction_code?.description ??
-              tx.remittance_information?.join(" | ") ??
-              tx.note ??
-              null,
-            creditorName: tx.creditor?.name ?? null,
-            debtorName: tx.debtor?.name ?? null,
-            creditorIban: tx.creditor_account?.iban ?? null,
-            debtorIban: tx.debtor_account?.iban ?? null,
-            remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
-            merchantCategoryCode: tx.merchant_category_code ?? null,
-            rawData: tx as object,
-          },
-          update: {}, // transactions are immutable once stored
+      do {
+        const page = await getTransactions(account.externalAccountId, {
+          dateFrom,
+          dateTo,
+          continuationKey,
         });
 
-        transactionsFetched++;
-      }
+        pageCount++;
+        continuationKey = page.continuation_key;
+
+        console.log(
+          `[sync] Account ${account.externalAccountId}: page ${pageCount}, ` +
+            `${page.transactions.length} transactions (${dateFrom}→${dateTo})` +
+            (continuationKey ? ", fetching next page…" : "")
+        );
+
+        for (const tx of page.transactions) {
+          const externalId = buildExternalId(tx);
+          if (!externalId) {
+            transactionsSkipped++;
+            console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
+            continue;
+          }
+
+          await prisma.transaction.upsert({
+            where: { externalTransactionId: externalId },
+            create: {
+              userId: connection.userId,
+              bankAccountId: account.id,
+              externalTransactionId: externalId,
+              amount: tx.transaction_amount.amount,
+              currency: tx.transaction_amount.currency,
+              direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
+              bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
+              valueDate: tx.value_date ? new Date(tx.value_date) : null,
+              description:
+                tx.bank_transaction_code?.description ??
+                tx.remittance_information?.join(" | ") ??
+                tx.note ??
+                null,
+              creditorName: tx.creditor?.name ?? null,
+              debtorName: tx.debtor?.name ?? null,
+              creditorIban: tx.creditor_account?.iban ?? null,
+              debtorIban: tx.debtor_account?.iban ?? null,
+              remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
+              merchantCategoryCode: tx.merchant_category_code ?? null,
+              rawData: tx as object,
+            },
+            update: {}, // transactions are immutable once stored
+          });
+
+          transactionsFetched++;
+        }
+      } while (continuationKey);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error(`[sync] Account ${account.externalAccountId} error:`, msg);
       errors.push(`Account ${account.externalAccountId}: ${msg}`);
     }
+  }
+
+  // Record the time of this sync so the next call can start from here,
+  // avoiding redundant re-fetching of old transactions.
+  if (errors.length === 0) {
+    await prisma.bankConnection.update({
+      where: { id: connection.id },
+      data: { lastSyncAt: new Date() },
+    });
   }
 
   return {

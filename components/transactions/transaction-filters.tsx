@@ -12,19 +12,30 @@ const PRESETS = [
   { label: "1 year", days: 365 },
 ];
 
+interface Account {
+  id: string;
+  name: string;
+  iban: string | null;
+}
+
 interface TransactionFiltersProps {
   from: string;
   to: string;
+  accountId: string;
+  accounts: Account[];
 }
 
-export function TransactionFilters({ from, to }: TransactionFiltersProps) {
+export function TransactionFilters({ from, to, accountId, accounts }: TransactionFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
 
   function navigate(params: Record<string, string>) {
     const next = new URLSearchParams(searchParams.toString());
-    Object.entries(params).forEach(([k, v]) => next.set(k, v));
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    });
     next.set("page", "1");
     router.push(`/transactions?${next.toString()}`);
   }
@@ -48,6 +59,27 @@ export function TransactionFilters({ from, to }: TransactionFiltersProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* Account selector */}
+      {accounts.length > 1 && (
+        <>
+          <select
+            value={accountId}
+            onChange={(e) => navigate({ accountId: e.target.value })}
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">All accounts</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+                {a.iban ? ` (${a.iban.slice(-4)})` : ""}
+              </option>
+            ))}
+          </select>
+          <div className="w-px h-5 bg-border mx-1 hidden sm:block" />
+        </>
+      )}
+
+      {/* Date presets */}
       {PRESETS.map((p) => (
         <Button
           key={p.label}
@@ -62,6 +94,7 @@ export function TransactionFilters({ from, to }: TransactionFiltersProps) {
 
       <div className="w-px h-5 bg-border mx-1 hidden sm:block" />
 
+      {/* Custom date range */}
       <form ref={formRef} onSubmit={handleSubmit} className="flex items-center gap-1.5">
         <Input
           type="date"
@@ -83,3 +116,4 @@ export function TransactionFilters({ from, to }: TransactionFiltersProps) {
     </div>
   );
 }
+

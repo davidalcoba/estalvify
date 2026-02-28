@@ -3,6 +3,7 @@
 
 import type { Metadata } from "next";
 import { auth } from "@/auth";
+import { getUserPrefs, formatDate } from "@/lib/user-prefs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Wallet, Tag } from "lucide-react";
@@ -11,6 +12,7 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const session = await auth();
+  const { locale, timezone } = await getUserPrefs(session!.user.id);
 
   return (
     <div className="space-y-6">
@@ -21,7 +23,7 @@ export default async function DashboardPage() {
         </h2>
         <p className="text-muted-foreground">
           Here&apos;s your financial overview for{" "}
-          {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}.
+          {formatDate(new Date(), locale, timezone, { month: "long", year: "numeric" })}.
         </p>
       </div>
 

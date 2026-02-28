@@ -24,6 +24,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // User preferences
+  timezone      String    @default("Europe/London")
+  currency      String    @default("EUR")
+  locale        String    @default("es-ES")
+
   accounts        Account[]
   sessions        Session[]
   bankConnections BankConnection[]
@@ -104,9 +109,10 @@ model BankConnection {
   // PSD2 consent validity
   consentExpiresAt DateTime?
 
-  status    BankConnectionStatus @default(ACTIVE)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  status      BankConnectionStatus @default(ACTIVE)
+  lastSyncAt  DateTime?            // When the last successful sync completed
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bankAccounts BankAccount[]
@@ -116,8 +122,10 @@ model BankConnection {
 
 enum BankConnectionStatus {
   ACTIVE
+  SYNCING         // Sync in progress
   EXPIRED         // Token expired, needs re-auth
-  PENDING_REAUTH  // User must re-authenticate with the bank
+  PENDING_REAUTH  // User must re-authenticate with the bank (OAuth in progress)
+  PENDING_SETUP   // OAuth done, user is selecting which accounts to import
   REVOKED         // User explicitly disconnected
 }
 

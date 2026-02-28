@@ -228,20 +228,25 @@ export async function getAccounts(
 }
 
 /**
- * Get transactions for an account filtered by date range.
- * Called once per day by the cron job — do not call more than needed.
+ * Get a single page of transactions for an account filtered by date range.
+ * Pass `continuationKey` to fetch subsequent pages when the API returns one.
  */
 export async function getTransactions(
   accountId: string,
   params: {
-    dateFrom: string; // YYYY-MM-DD
-    dateTo: string;   // YYYY-MM-DD
+    dateFrom: string;          // YYYY-MM-DD
+    dateTo: string;            // YYYY-MM-DD
+    continuationKey?: string;  // opaque token for fetching the next page
   }
 ): Promise<{ transactions: EnableBankingTransaction[]; continuation_key?: string }> {
   const query = new URLSearchParams({
     date_from: params.dateFrom,
     date_to: params.dateTo,
   });
+
+  if (params.continuationKey) {
+    query.set("continuation_key", params.continuationKey);
+  }
 
   return request<{ transactions: EnableBankingTransaction[]; continuation_key?: string }>(
     `/accounts/${accountId}/transactions?${query}`

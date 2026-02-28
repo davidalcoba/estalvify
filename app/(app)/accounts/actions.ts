@@ -25,17 +25,54 @@ export async function disconnectBank(connectionId: string) {
   revalidatePath("/accounts");
 }
 
+export async function disconnectBankGroup(connectionIds: string[]) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const connections = await prisma.bankConnection.findMany({
+    where: { id: { in: connectionIds }, userId: session.user.id },
+    select: { id: true, sessionId: true },
+  });
+
+  // Revoke all Enable Banking sessions (non-fatal)
+  await Promise.allSettled(connections.map((c) => deleteSession(c.sessionId)));
+
+  await prisma.bankConnection.deleteMany({
+    where: { id: { in: connections.map((c) => c.id) } },
+  });
+
+  revalidatePath("/accounts");
+}
+
 export async function deleteAccount(accountId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
 
   const account = await prisma.bankAccount.findFirst({
     where: { id: accountId, userId: session.user.id },
+    select: { id: true, bankConnectionId: true },
   });
 
   if (!account) throw new Error("Account not found");
 
   await prisma.bankAccount.delete({ where: { id: accountId } });
+
+  // If no active accounts remain on this connection, clean it up too
+  const remaining = await prisma.bankAccount.count({
+    where: { bankConnectionId: account.bankConnectionId, isActive: true },
+  });
+
+  if (remaining === 0) {
+    const connection = await prisma.bankConnection.findUnique({
+      where: { id: account.bankConnectionId },
+      select: { sessionId: true },
+    });
+    if (connection) {
+      try { await deleteSession(connection.sessionId); } catch { /* already expired */ }
+    }
+    await prisma.bankConnection.delete({ where: { id: account.bankConnectionId } });
+  }
+
   revalidatePath("/accounts");
 }
 

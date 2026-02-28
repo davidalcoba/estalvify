@@ -1,6 +1,12 @@
-// Daily sync cron job — fetches yesterday's transactions and current balances
-// Triggered by Vercel Cron at 01:00 UTC every day (configured in vercel.json)
-// Protected by CRON_SECRET to prevent unauthorized calls
+// Daily sync cron job — fetches new transactions and current balances for all active connections.
+// Triggered by Vercel Cron at 01:00 UTC every day (configured in vercel.json).
+// Protected by CRON_SECRET to prevent unauthorized calls.
+//
+// Date range per connection:
+//   - If the connection has been synced before: start 1 day before lastSyncAt
+//     (gives a 1-day overlap to catch late-settling transactions).
+//   - If the connection has never been synced: start from yesterday.
+// dateTo is always today so pending transactions are included.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -18,8 +24,7 @@ export async function GET(request: NextRequest) {
   yesterday.setDate(yesterday.getDate() - 1);
   yesterday.setHours(0, 0, 0, 0);
 
-  const dateFrom = toDateString(yesterday);
-  const dateTo = toDateString(yesterday);
+  const dateTo = toDateString(new Date());
 
   let totalTransactionsFetched = 0;
   let totalAccountsSynced = 0;
@@ -32,6 +37,12 @@ export async function GET(request: NextRequest) {
     });
 
     for (const connection of activeConnections) {
+      // Use the connection's own lastSyncAt so each connection gets the right
+      // date range, regardless of when it was last individually synced.
+      const dateFrom = connection.lastSyncAt
+        ? toDateString(new Date(connection.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
+        : toDateString(yesterday);
+
       try {
         const result = await syncConnection(connection, dateFrom, dateTo);
         totalTransactionsFetched += result.transactionsFetched;
@@ -72,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      syncDate: dateFrom,
+      syncDate: dateTo,
       transactionsFetched: totalTransactionsFetched,
       accountsSynced: totalAccountsSynced,
       ...(errors.length > 0 && { errors }),

@@ -2,18 +2,23 @@
 // Zero-based budgeting: plan where every euro goes before the month starts
 
 import type { Metadata } from "next";
+import { auth } from "@/auth";
+import { getUserPrefs, formatDate } from "@/lib/user-prefs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PiggyBank, Plus } from "lucide-react";
 
 export const metadata: Metadata = { title: "Budget" };
 
-const currentMonth = new Date().toLocaleDateString("en-GB", {
-  month: "long",
-  year: "numeric",
-});
+export default async function BudgetPage() {
+  const session = await auth();
+  const { locale, timezone } = await getUserPrefs(session!.user.id);
 
-export default function BudgetPage() {
+  const currentMonth = formatDate(new Date(), locale, timezone, {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

@@ -1,6 +1,8 @@
 // POST /api/banking/connect
 // Initiates the Enable Banking OAuth flow for a specific bank.
 // Creates a PENDING BankConnection and returns the bank auth URL.
+// When `reconnectConnectionId` is provided, this is a re-auth for an expired
+// connection — the callback will restore that connection instead of creating new accounts.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
@@ -11,6 +13,8 @@ import { z } from "zod";
 const connectSchema = z.object({
   aspspName: z.string().min(1),
   aspspCountry: z.string().length(2).default("ES"),
+  // Present when re-authing an expired connection — skips account setup on callback
+  reconnectConnectionId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -25,9 +29,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { aspspName, aspspCountry } = parsed.data;
+  const { aspspName, aspspCountry, reconnectConnectionId } = parsed.data;
 
-  // Get user's IP for PSD2 compliance
+  // Verify the target connection exists and belongs to this user
+  if (reconnectConnectionId) {
+    const existing = await prisma.bankConnection.findFirst({
+      where: { id: reconnectConnectionId, userId: session.user.id, status: "EXPIRED" },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Connection not found or not expired" }, { status: 400 });
+    }
+  }
+
   const psuIpAddress =
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     request.headers.get("x-real-ip") ??
@@ -36,7 +49,6 @@ export async function POST(request: NextRequest) {
   try {
     const state = crypto.randomUUID();
 
-    // Call Enable Banking API FIRST — if it fails, no DB record is created
     const { url } = await createBankingSession({
       aspspName,
       aspspCountry,
@@ -44,7 +56,6 @@ export async function POST(request: NextRequest) {
       state,
     });
 
-    // Only create the DB record once we have a valid redirect URL
     await prisma.bankConnection.create({
       data: {
         userId: session.user.id,
@@ -53,6 +64,10 @@ export async function POST(request: NextRequest) {
         country: aspspCountry,
         sessionId: state,
         status: "PENDING_REAUTH",
+        // Store reconnect target so the callback can restore the existing connection
+        sessionData: reconnectConnectionId
+          ? JSON.parse(JSON.stringify({ reconnectConnectionId }))
+          : undefined,
       },
     });
 

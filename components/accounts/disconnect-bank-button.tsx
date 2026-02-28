@@ -12,20 +12,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { disconnectBank } from "@/app/(app)/accounts/actions";
+import { disconnectBankGroup } from "@/app/(app)/accounts/actions";
 
 interface DisconnectBankButtonProps {
-  connectionId: string;
+  connectionIds: string[];
   bankName: string;
 }
 
-export function DisconnectBankButton({ connectionId, bankName }: DisconnectBankButtonProps) {
+export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBankButtonProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleDisconnect() {
     startTransition(async () => {
-      await disconnectBank(connectionId);
+      await disconnectBankGroup(connectionIds);
       setOpen(false);
     });
   }

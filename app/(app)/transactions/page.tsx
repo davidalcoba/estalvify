@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getUserPrefs, formatDate } from "@/lib/user-prefs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
@@ -15,7 +16,7 @@ export const metadata: Metadata = { title: "Transactions" };
 const PAGE_SIZE = 50;
 
 interface PageProps {
-  searchParams: Promise<{ from?: string; to?: string; page?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; page?: string; accountId?: string }>;
 }
 
 export default async function TransactionsPage({ searchParams }: PageProps) {
@@ -30,6 +31,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const fromDate = params.from ? new Date(params.from + "T00:00:00") : defaultFrom;
   const toDate = params.to ? new Date(params.to + "T23:59:59") : today;
   const page = Math.max(1, parseInt(params.page ?? "1") || 1);
+  const accountId = params.accountId ?? "";
 
   const fromStr = fromDate.toISOString().split("T")[0];
   const toStr = toDate.toISOString().split("T")[0];
@@ -37,9 +39,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const where = {
     userId: session!.user.id,
     bookingDate: { gte: fromDate, lte: toDate },
+    ...(accountId ? { bankAccountId: accountId } : {}),
   };
 
-  const [total, transactions] = await Promise.all([
+  const [total, transactions, accounts, prefs] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -48,13 +51,22 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
+    prisma.bankAccount.findMany({
+      where: { userId: session!.user.id, isActive: true },
+      select: { id: true, name: true, iban: true },
+      orderBy: { name: "asc" },
+    }),
+    getUserPrefs(session!.user.id),
   ]);
+
+  const { locale: userLocale, currency: userCurrency, timezone: userTimezone } = prefs;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Build a URL preserving current filters but changing page
   function pageUrl(p: number) {
     const sp = new URLSearchParams({ from: fromStr, to: toStr, page: String(p) });
+    if (accountId) sp.set("accountId", accountId);
     return `/transactions?${sp.toString()}`;
   }
 
@@ -80,7 +92,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
 
       {/* Filters */}
       <Suspense>
-        <TransactionFilters from={fromStr} to={toStr} />
+        <TransactionFilters from={fromStr} to={toStr} accountId={accountId} accounts={accounts} />
       </Suspense>
 
       {transactions.length === 0 ? (
@@ -140,7 +152,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
             {Array.from(grouped.entries()).map(([dateKey, txs]) => (
               <div key={dateKey}>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                  {new Date(dateKey + "T12:00:00").toLocaleDateString("en-GB", {
+                  {formatDate(dateKey + "T12:00:00", userLocale, userTimezone, {
                     weekday: "long",
                     day: "numeric",
                     month: "long",
@@ -159,7 +171,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                         const counterparty = isCredit ? tx.debtorName : tx.creditorName;
 
                         return (
-                          <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
+                          <div key={tx.id} className="flex items-center gap-4 px-4 py-3">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                                 isCredit
@@ -190,7 +202,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                               }`}
                             >
                               {isCredit ? "+" : "−"}
-                              {Number(tx.amount).toLocaleString("es-ES", {
+                              {Number(tx.amount).toLocaleString(userLocale, {
                                 style: "currency",
                                 currency: tx.currency,
                               })}
@@ -199,6 +211,34 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                         );
                       })}
                     </div>
+
+                    {/* Daily net total */}
+                    {(() => {
+                      const netByCurrency = new Map<string, number>();
+                      for (const tx of txs) {
+                        const sign = tx.direction === "CREDIT" ? 1 : -1;
+                        netByCurrency.set(
+                          tx.currency,
+                          (netByCurrency.get(tx.currency) ?? 0) + sign * Number(tx.amount)
+                        );
+                      }
+                      const entries = Array.from(netByCurrency.entries()).sort(([a], [b]) =>
+                        a === userCurrency ? -1 : b === userCurrency ? 1 : a.localeCompare(b)
+                      );
+                      return (
+                        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 px-4 py-2 border-t bg-muted/30">
+                          {entries.map(([currency, net]) => (
+                            <span
+                              key={currency}
+                              className={`text-xs font-medium tabular-nums ${net >= 0 ? "text-green-600" : "text-muted-foreground"}`}
+                            >
+                              {net >= 0 ? "+" : ""}
+                              {net.toLocaleString(userLocale, { style: "currency", currency })}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               </div>

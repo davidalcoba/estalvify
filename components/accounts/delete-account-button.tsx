@@ -33,7 +33,7 @@ export function DeleteAccountButton({ accountId, accountName }: DeleteAccountBut
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity ml-1">
+        <button className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Delete account">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </DialogTrigger>
