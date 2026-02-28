@@ -191,8 +191,8 @@ model Transaction {
   userId        String
   bankAccountId String
 
-  // Unique bank-side transaction ID (prevents duplicates)
-  externalTransactionId String @unique
+  // Unique bank-side transaction ID (prevents duplicates within an account)
+  externalTransactionId String
 
   // Core financial data
   amount      Decimal @db.Decimal(15, 2)
@@ -223,6 +223,7 @@ model Transaction {
   categorization   TransactionCategorization?
   aiSuggestion     AiCategorySuggestion?
 
+  @@unique([bankAccountId, externalTransactionId])
   @@index([userId, bookingDate])
   @@index([bankAccountId, bookingDate])
   @@map("transactions")

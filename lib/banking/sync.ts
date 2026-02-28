@@ -126,7 +126,12 @@ export async function syncConnection(
           }
 
           await prisma.transaction.upsert({
-            where: { externalTransactionId: externalId },
+            where: {
+              bankAccountId_externalTransactionId: {
+                bankAccountId: account.id,
+                externalTransactionId: externalId,
+              },
+            },
             create: {
               userId: connection.userId,
               bankAccountId: account.id,

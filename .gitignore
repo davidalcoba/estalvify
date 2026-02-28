@@ -49,3 +49,4 @@ certificates/
 *.p12
 *.pfx
 .env*.local
+.env.production
