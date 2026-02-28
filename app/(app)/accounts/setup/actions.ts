@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { type EnableBankingAccount } from "@/lib/banking/enable-banking";
-import { syncConnection, toDateString } from "@/lib/banking/sync";
+import { send } from "@vercel/queue";
+import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
 function buildAccountName(account: EnableBankingAccount): string {
   // Try every API text field before falling back to IBAN — different banks
@@ -69,28 +70,16 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
     );
   });
 
-  // Initial sync — non-fatal.
-  // Start from yesterday (1 day back) so we capture today's transactions
-  // without pulling a large history; subsequent syncs extend from lastSyncAt.
-  const dateTo = toDateString(new Date());
-  const dateFrom = toDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
-
-  // Set status to SYNCING so the UI can show progress while we wait.
+  // Mark as SYNCING immediately so the accounts page shows progress.
+  // The actual sync runs in background — the user is redirected right away.
   await prisma.bankConnection.update({
     where: { id: connectionId },
     data: { status: "SYNCING" },
   });
 
-  await syncConnection(
-    { ...connection, bankAccounts: savedAccounts },
-    dateFrom,
-    dateTo
-  ).catch((err) => console.error("Initial sync failed (non-fatal):", err));
-
-  // Restore ACTIVE regardless of sync outcome so the user can interact.
-  await prisma.bankConnection.update({
-    where: { id: connectionId },
-    data: { status: "ACTIVE" },
+  await send<SyncConnectionMessage>(TOPICS.syncConnection, {
+    connectionId,
+    userId: session.user.id,
   });
 
   redirect("/accounts?connected=true");

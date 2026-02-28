@@ -19,21 +19,16 @@ export function SyncNowButton({ connectionIds, disabled = false }: SyncNowButton
 
     for (const connectionId of connectionIds) {
       try {
-        // Start the sync — the API immediately sets status to SYNCING in DB.
-        const syncPromise = fetch(`/api/banking/sync/${connectionId}`, { method: "POST" });
-
-        // Refresh the page shortly after the request lands so the server-rendered
-        // SYNCING badge appears and the SyncPoller activates to keep polling.
-        setTimeout(() => router.refresh(), 400);
-
-        await syncPromise;
+        // The route sets status=SYNCING in DB and enqueues the job, then
+        // returns immediately. A single refresh is enough to show the badge.
+        await fetch(`/api/banking/sync/${connectionId}`, { method: "POST" });
       } catch {
         // non-fatal
       }
     }
 
     setSyncing(false);
-    // Final refresh to show the ACTIVE status and updated balances.
+    // Refresh once — the SYNCING badge is now in DB, SyncPoller takes over.
     router.refresh();
   }
 
