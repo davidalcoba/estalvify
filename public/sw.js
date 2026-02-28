@@ -1,21 +1,24 @@
 // Estalvify Service Worker — minimal PWA support
-// Caches the app shell for offline access
-// More sophisticated caching strategies can be added later
+// Provides an offline fallback page only.
+//
+// Navigation requests (HTML pages) always go to the network so that
+// auth redirects and server-rendered content work correctly. Caching
+// entire pages cache-first broke the app: the first visit could cache
+// a redirect or error response, causing "This site can't be reached"
+// on subsequent visits until the user did a hard reload.
 
-const CACHE_NAME = "estalvify-v1";
-
-// Files to cache for offline access
-const PRECACHE_URLS = ["/", "/dashboard", "/offline"];
+const CACHE_NAME = "estalvify-v2";
 
 self.addEventListener("install", (event) => {
+  // Only cache the offline fallback — never cache real app pages.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.add("/offline"))
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  // Clean up old caches
+  // Purge all old caches (including v1 which had the bad page cache).
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
@@ -27,17 +30,17 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
   if (event.request.method !== "GET") return;
 
-  // Skip API calls and auth routes — always fetch fresh
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth")) return;
+  // For full-page navigations: network-first, fall back to /offline only when
+  // the network is completely unavailable (e.g. airplane mode).
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match("/offline"))
+    );
+    return;
+  }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      // Return cached version if available, otherwise fetch
-      return cached ?? fetch(event.request);
-    })
-  );
+  // All other requests (JS, CSS, images, fonts, API calls) are handled
+  // by the browser's normal HTTP cache — we don't intercept them.
 });
