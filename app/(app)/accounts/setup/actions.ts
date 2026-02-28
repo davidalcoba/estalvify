@@ -77,10 +77,19 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
     data: { status: "SYNCING" },
   });
 
-  await send<SyncConnectionMessage>(TOPICS.syncConnection, {
-    connectionId,
-    userId: session.user.id,
-  });
+  try {
+    await send<SyncConnectionMessage>(TOPICS.syncConnection, {
+      connectionId,
+      userId: session.user.id,
+    });
+  } catch (err) {
+    // Queues unavailable (plan limitation, misconfiguration, etc.).
+    // Revert to ACTIVE so the connection isn't stuck in SYNCING forever.
+    console.error("[finalizeSetup] Failed to enqueue sync:", err);
+    await prisma.bankConnection
+      .update({ where: { id: connectionId }, data: { status: "ACTIVE" } })
+      .catch(() => {});
+  }
 
   redirect("/accounts?connected=true");
 }

@@ -37,10 +37,18 @@ export async function POST(
     data: { status: "SYNCING" },
   });
 
-  const { messageId } = await send<SyncConnectionMessage>(TOPICS.syncConnection, {
-    connectionId,
-    userId: session.user.id,
-  });
-
-  return NextResponse.json({ queued: true, messageId });
+  try {
+    const { messageId } = await send<SyncConnectionMessage>(TOPICS.syncConnection, {
+      connectionId,
+      userId: session.user.id,
+    });
+    return NextResponse.json({ queued: true, messageId });
+  } catch (err) {
+    console.error("[sync route] Failed to enqueue sync:", err);
+    // Revert so the connection isn't stuck in SYNCING.
+    await prisma.bankConnection
+      .update({ where: { id: connectionId }, data: { status: "ACTIVE" } })
+      .catch(() => {});
+    return NextResponse.json({ error: "Failed to enqueue sync job" }, { status: 500 });
+  }
 }
