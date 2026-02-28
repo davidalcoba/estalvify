@@ -1,46 +1,43 @@
 // GET /api/banking/callback
 // Enable Banking redirects here after user authenticates with their bank.
 // Exchanges the authorization code for a session, then stores accounts in the DB.
+//
+// NOTE: No session auth required here — the `state` UUID is the security
+// mechanism (generated server-side, stored in DB). This allows the callback
+// to work even when the user initiated the flow from a different origin
+// (e.g. localhost redirecting to the Vercel callback URL).
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { exchangeCodeForSession } from "@/lib/banking/enable-banking";
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin;
+
   if (error || !code || !state) {
     const errorMsg = error ?? "missing_code_or_state";
     console.error("Banking callback error:", errorMsg);
     return NextResponse.redirect(
-      new URL(`/accounts?error=${encodeURIComponent(errorMsg)}`, request.url)
+      `${appUrl}/accounts?error=${encodeURIComponent(errorMsg)}`
     );
   }
 
   try {
-    // Find the PENDING connection created in the connect route (state stored as sessionId)
+    // Look up the PENDING connection by state alone — state is a UUID secret
     const bankConnection = await prisma.bankConnection.findFirst({
       where: {
-        userId: session.user.id,
         sessionId: state,
         status: "PENDING_REAUTH",
       },
     });
 
     if (!bankConnection) {
-      return NextResponse.redirect(
-        new URL("/accounts?error=connection_not_found", request.url)
-      );
+      return NextResponse.redirect(`${appUrl}/accounts?error=connection_not_found`);
     }
 
     // Exchange authorization code → real session_id + accounts
@@ -61,7 +58,7 @@ export async function GET(request: NextRequest) {
       await prisma.bankAccount.upsert({
         where: { externalAccountId: account.uid },
         create: {
-          userId: session.user.id,
+          userId: bankConnection.userId,
           bankConnectionId: bankConnection.id,
           externalAccountId: account.uid,
           iban: account.iban,
@@ -77,12 +74,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.redirect(new URL("/accounts?connected=true", request.url));
+    return NextResponse.redirect(`${appUrl}/accounts?connected=true`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Banking callback processing error:", error);
     return NextResponse.redirect(
-      new URL(`/accounts?error=${encodeURIComponent(message)}`, request.url)
+      `${appUrl}/accounts?error=${encodeURIComponent(message)}`
     );
   }
 }
