@@ -29,12 +29,13 @@ export const POST = handleCallback<SyncConnectionMessage>(
       data: { status: "SYNCING" },
     });
 
-    // Determine date range from lastSyncAt (1-day overlap to catch late-settling
-    // transactions). Falls back to yesterday for the very first sync.
+    // Determine date range. For the first sync (no lastSyncAt) fetch 90 days
+    // of history so the user sees meaningful data right away. Subsequent syncs
+    // use a 1-day overlap on lastSyncAt to catch any late-settling transactions.
     const dateTo = toDateString(new Date());
     const dateFrom = connection.lastSyncAt
       ? toDateString(new Date(connection.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
-      : toDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      : toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
 
     try {
       await syncConnection(connection, dateFrom, dateTo);
