@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/app/generated/prisma
+
+# Certificates & private keys
+certificates/
+*.key
+*.pem
+*.p12
+*.pfx
