@@ -68,10 +68,10 @@ export async function GET(request: NextRequest) {
             userId: bankConnection.userId,
             bankConnectionId: bankConnection.id,
             externalAccountId: account.uid,
-            iban: account.iban,
+            iban: account.account_id?.iban,
             name: buildAccountName(account),
             currency: account.currency,
-            type: mapAccountType(account.account_type),
+            type: mapAccountType(account.cash_account_type),
             isActive: true,
           },
           update: { isActive: true },
@@ -111,16 +111,19 @@ export async function GET(request: NextRequest) {
 
 /** Use IBAN last-4 as default name — the bank returns the holder's name, not a useful label. */
 function buildAccountName(account: EnableBankingAccount): string {
-  if (account.iban) return `···${account.iban.slice(-4)}`;
+  const iban = account.account_id?.iban;
+  if (iban) return `···${iban.slice(-4)}`;
   return account.uid.slice(0, 8);
 }
 
 function mapAccountType(type?: string): "CHECKING" | "SAVINGS" | "CREDIT" | "INVESTMENT" | "OTHER" {
   if (!type) return "CHECKING";
-  const t = type.toLowerCase();
-  if (t.includes("saving")) return "SAVINGS";
-  if (t.includes("credit")) return "CREDIT";
-  if (t.includes("invest") || t.includes("pension")) return "INVESTMENT";
-  if (t.includes("current") || t.includes("checking")) return "CHECKING";
-  return "OTHER";
+  switch (type) {
+    case "CACC": return "CHECKING"; // Current Account
+    case "SVGS": return "SAVINGS";  // Savings Account
+    case "CARD": return "CREDIT";   // Card Account
+    case "LOAN": return "OTHER";    // Loan Account
+    case "CASH": return "OTHER";
+    default:     return "OTHER";
+  }
 }

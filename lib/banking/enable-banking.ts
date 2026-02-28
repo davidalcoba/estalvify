@@ -34,11 +34,18 @@ export interface EnableBankingSessionResponse {
 
 export interface EnableBankingAccount {
   uid: string;
-  iban?: string;
-  bban?: string;
+  account_id?: {
+    iban?: string;
+    other?: { identification: string; scheme_name: string };
+  };
+  all_account_ids?: Array<{ identification: string; scheme_name: string }>;
   name?: string;
+  details?: string;
+  cash_account_type: string; // CACC, CARD, CASH, LOAN, OTHR, SVGS
   currency: string;
-  account_type?: string;
+  product?: string;
+  identification_hash: string;
+  identification_hashes: string[];
 }
 
 export interface EnableBankingTransaction {
@@ -49,15 +56,22 @@ export interface EnableBankingTransaction {
     currency: string;
   };
   credit_debit_indicator: "CRDT" | "DBIT";
+  status: string; // BOOK, PDNG, HOLD, etc.
   booking_date?: string;
   value_date?: string;
-  transaction_information?: string;
-  creditor_name?: string;
-  creditor_account?: { iban?: string };
-  debtor_name?: string;
-  debtor_account?: { iban?: string };
-  remittance_information_unstructured?: string;
+  transaction_date?: string;
+  creditor?: { name?: string };
+  creditor_account?: { iban?: string; other?: { identification: string; scheme_name: string } };
+  creditor_agent?: { bic_fi?: string; name?: string };
+  debtor?: { name?: string };
+  debtor_account?: { iban?: string; other?: { identification: string; scheme_name: string } };
+  debtor_agent?: { bic_fi?: string; name?: string };
+  bank_transaction_code?: { description?: string; code?: string; sub_code?: string };
+  remittance_information?: string[]; // array of strings
+  note?: string;
   merchant_category_code?: string;
+  balance_after_transaction?: { amount: string; currency: string };
+  reference_number?: string;
 }
 
 export interface EnableBankingBalance {
@@ -218,7 +232,6 @@ export async function getAccounts(
  * Called once per day by the cron job — do not call more than needed.
  */
 export async function getTransactions(
-  sessionId: string,
   accountId: string,
   params: {
     dateFrom: string; // YYYY-MM-DD
@@ -231,7 +244,7 @@ export async function getTransactions(
   });
 
   return request<{ transactions: EnableBankingTransaction[]; continuation_key?: string }>(
-    `/sessions/${sessionId}/accounts/${accountId}/transactions?${query}`
+    `/accounts/${accountId}/transactions?${query}`
   );
 }
 
@@ -240,11 +253,10 @@ export async function getTransactions(
  * Called once per day by the cron job.
  */
 export async function getBalances(
-  sessionId: string,
   accountId: string
 ): Promise<{ balances: EnableBankingBalance[] }> {
   return request<{ balances: EnableBankingBalance[] }>(
-    `/sessions/${sessionId}/accounts/${accountId}/balances`
+    `/accounts/${accountId}/balances`
   );
 }
 

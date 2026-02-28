@@ -36,7 +36,7 @@ function buildExternalId(tx: EnableBankingTransaction): string | null {
     tx.transaction_amount.amount,
     tx.transaction_amount.currency,
     tx.credit_debit_indicator,
-    tx.transaction_information ?? tx.remittance_information_unstructured ?? "",
+    tx.remittance_information?.[0] ?? tx.bank_transaction_code?.description ?? tx.note ?? "",
   ].join("|");
 
   return createHash("sha256").update(key).digest("hex").slice(0, 32);
@@ -63,7 +63,6 @@ export async function syncConnection(
     try {
       // ── Balances ──────────────────────────────────────────────────────────
       const { balances } = await getBalances(
-        connection.sessionId,
         account.externalAccountId
       );
 
@@ -92,7 +91,6 @@ export async function syncConnection(
 
       // ── Transactions ──────────────────────────────────────────────────────
       const { transactions } = await getTransactions(
-        connection.sessionId,
         account.externalAccountId,
         { dateFrom, dateTo }
       );
@@ -121,14 +119,15 @@ export async function syncConnection(
             bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
             valueDate: tx.value_date ? new Date(tx.value_date) : null,
             description:
-              tx.transaction_information ??
-              tx.remittance_information_unstructured ??
+              tx.bank_transaction_code?.description ??
+              tx.remittance_information?.join(" | ") ??
+              tx.note ??
               null,
-            creditorName: tx.creditor_name ?? null,
-            debtorName: tx.debtor_name ?? null,
+            creditorName: tx.creditor?.name ?? null,
+            debtorName: tx.debtor?.name ?? null,
             creditorIban: tx.creditor_account?.iban ?? null,
             debtorIban: tx.debtor_account?.iban ?? null,
-            remittanceInfo: tx.remittance_information_unstructured ?? null,
+            remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
             merchantCategoryCode: tx.merchant_category_code ?? null,
             rawData: tx as object,
           },
