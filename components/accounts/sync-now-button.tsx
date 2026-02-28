@@ -28,7 +28,8 @@ export function SyncNowButton({ connectionId }: SyncNowButtonProps) {
       }
 
       setStatus("done");
-      setResult(`${data.transactionsFetched} transactions synced`);
+      const skipped = data.transactionsSkipped ? ` (${data.transactionsSkipped} skipped)` : "";
+      setResult(`${data.transactionsFetched} synced${skipped}`);
       router.refresh();
     } catch {
       setStatus("error");

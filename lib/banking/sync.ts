@@ -1,7 +1,9 @@
 // Shared sync logic — used by both the daily cron job and the initial post-connect sync.
 
+import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getBalances, getTransactions } from "./enable-banking";
+import type { EnableBankingTransaction } from "./enable-banking";
 import type { BankAccount, BankConnection } from "@/app/generated/prisma";
 
 interface ConnectionWithAccounts extends BankConnection {
@@ -11,7 +13,33 @@ interface ConnectionWithAccounts extends BankConnection {
 export interface SyncResult {
   accountsSynced: number;
   transactionsFetched: number;
+  transactionsSkipped: number;
+  balancesFetched: number;
   errors: string[];
+}
+
+/**
+ * Build a deterministic external ID for a transaction.
+ * Uses explicit IDs when available; falls back to a hash of core fields
+ * for banks (e.g. BBVA) that don't always provide them.
+ */
+function buildExternalId(tx: EnableBankingTransaction): string | null {
+  if (tx.transaction_id) return tx.transaction_id;
+  if (tx.entry_reference) return tx.entry_reference;
+
+  // Fallback: hash of date + amount + direction + description
+  const date = tx.booking_date ?? tx.value_date;
+  if (!date) return null; // no date → can't create a stable ID
+
+  const key = [
+    date,
+    tx.transaction_amount.amount,
+    tx.transaction_amount.currency,
+    tx.credit_debit_indicator,
+    tx.transaction_information ?? tx.remittance_information_unstructured ?? "",
+  ].join("|");
+
+  return createHash("sha256").update(key).digest("hex").slice(0, 32);
 }
 
 /**
@@ -27,6 +55,8 @@ export async function syncConnection(
   today.setHours(0, 0, 0, 0);
 
   let transactionsFetched = 0;
+  let transactionsSkipped = 0;
+  let balancesFetched = 0;
   const errors: string[] = [];
 
   for (const account of connection.bankAccounts) {
@@ -57,6 +87,7 @@ export async function syncConnection(
             balance: balance.balance_amount.amount,
           },
         });
+        balancesFetched++;
       }
 
       // ── Transactions ──────────────────────────────────────────────────────
@@ -66,9 +97,17 @@ export async function syncConnection(
         { dateFrom, dateTo }
       );
 
+      console.log(
+        `[sync] Account ${account.externalAccountId}: ${transactions.length} raw transactions from ${dateFrom} to ${dateTo}`
+      );
+
       for (const tx of transactions) {
-        const externalId = tx.transaction_id ?? tx.entry_reference;
-        if (!externalId) continue;
+        const externalId = buildExternalId(tx);
+        if (!externalId) {
+          transactionsSkipped++;
+          console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
+          continue;
+        }
 
         await prisma.transaction.upsert({
           where: { externalTransactionId: externalId },
@@ -100,6 +139,7 @@ export async function syncConnection(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error(`[sync] Account ${account.externalAccountId} error:`, msg);
       errors.push(`Account ${account.externalAccountId}: ${msg}`);
     }
   }
@@ -107,6 +147,8 @@ export async function syncConnection(
   return {
     accountsSynced: connection.bankAccounts.length,
     transactionsFetched,
+    transactionsSkipped,
+    balancesFetched,
     errors,
   };
 }

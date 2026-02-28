@@ -37,6 +37,8 @@ export async function POST(
       success: true,
       accountsSynced: result.accountsSynced,
       transactionsFetched: result.transactionsFetched,
+      transactionsSkipped: result.transactionsSkipped,
+      balancesFetched: result.balancesFetched,
       ...(result.errors.length > 0 && { errors: result.errors }),
     });
   } catch (error) {
