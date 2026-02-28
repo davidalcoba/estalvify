@@ -10,8 +10,7 @@
       "experimentalTriggers": [
         {
           "type": "queue/v2beta",
-          "topic": "banking.sync-connection",
-          "retryAfterSeconds": 60
+          "topic": "sync-connection"
         }
       ]
     }

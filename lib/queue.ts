@@ -2,10 +2,10 @@
 // All producers and consumers import from here to avoid string/type drift.
 
 export const TOPICS = {
-  syncConnection: "banking.sync-connection",
+  syncConnection: "sync-connection",
 } as const;
 
-/** Payload sent to the banking.sync-connection topic */
+/** Payload sent to the sync-connection topic */
 export interface SyncConnectionMessage {
   connectionId: string;
   userId: string;

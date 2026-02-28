@@ -1,4 +1,4 @@
-// Consumer: banking.sync-connection
+// Consumer: sync-connection
 // Invoked by Vercel Queues (push mode) — no public URL, no auth needed.
 // Fetches transactions and balances for a single bank connection.
 
