@@ -4,62 +4,54 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { syncConnection, toDateString } from "@/lib/banking/sync";
 
-// Vercel Cron calls this endpoint daily
-// We authenticate it using a shared secret in the Authorization header
 export async function GET(request: NextRequest) {
-  // Verify cron secret
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const startTime = Date.now();
+
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   yesterday.setHours(0, 0, 0, 0);
+
+  const dateFrom = toDateString(yesterday);
+  const dateTo = toDateString(yesterday);
 
   let totalTransactionsFetched = 0;
   let totalAccountsSynced = 0;
   const errors: string[] = [];
 
   try {
-    // Get all active bank connections across all users
     const activeConnections = await prisma.bankConnection.findMany({
       where: { status: "ACTIVE" },
-      include: {
-        bankAccounts: {
-          where: { isActive: true },
-        },
-      },
+      include: { bankAccounts: { where: { isActive: true } } },
     });
 
-    // Process each connection
     for (const connection of activeConnections) {
       try {
-        // TODO: Implement Enable Banking API calls
-        // For each account in this connection:
-        // 1. Check if token is expired → mark for re-auth if so
-        // 2. GET /accounts/{id}/transactions?date_from=yesterday&date_to=yesterday
-        // 3. GET /accounts/{id}/balances
-        // 4. Upsert transactions (skip duplicates by externalTransactionId)
-        // 5. Save balance snapshot
+        const result = await syncConnection(connection, dateFrom, dateTo);
+        totalTransactionsFetched += result.transactionsFetched;
+        totalAccountsSynced += result.accountsSynced;
+        if (result.errors.length > 0) {
+          errors.push(...result.errors.map((e) => `[${connection.id}] ${e}`));
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        errors.push(`Connection ${connection.id}: ${msg}`);
 
-        totalAccountsSynced += connection.bankAccounts.length;
-      } catch (connectionError) {
-        const message =
-          connectionError instanceof Error ? connectionError.message : "Unknown error";
-        errors.push(`Connection ${connection.id}: ${message}`);
-
-        // If the error indicates token expiry, update connection status
-        // await prisma.bankConnection.update({
-        //   where: { id: connection.id },
-        //   data: { status: "EXPIRED" },
-        // });
+        // Mark expired if it looks like a consent/auth error
+        if (msg.includes("401") || msg.includes("403") || msg.includes("expired")) {
+          await prisma.bankConnection
+            .update({ where: { id: connection.id }, data: { status: "EXPIRED" } })
+            .catch(() => {});
+        }
       }
     }
 
-    // Log this sync run
     const status =
       errors.length === 0
         ? "SUCCESS"
@@ -80,10 +72,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      syncDate: yesterday.toISOString().split("T")[0],
+      syncDate: dateFrom,
       transactionsFetched: totalTransactionsFetched,
       accountsSynced: totalAccountsSynced,
-      errors: errors.length > 0 ? errors : undefined,
+      ...(errors.length > 0 && { errors }),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

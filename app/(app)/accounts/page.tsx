@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Shield, Building2, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import { ConnectBankDialog } from "@/components/accounts/connect-bank-dialog";
 import { DisconnectBankButton } from "@/components/accounts/disconnect-bank-button";
+import { AccountNameEditor } from "@/components/accounts/account-name-editor";
+import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 
 export const metadata: Metadata = { title: "Bank Accounts" };
 
@@ -124,13 +126,20 @@ export default async function AccountsPage() {
                       {connection.bankAccounts.map((account) => {
                         const latestBalance = account.balances[0];
                         return (
-                          <div key={account.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                          <div key={account.id} className="group flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium">{account.name}</p>
+                                <AccountNameEditor
+                                  accountId={account.id}
+                                  initialName={account.name}
+                                />
                                 <span className="text-xs text-muted-foreground px-1.5 py-0.5 bg-slate-200 rounded">
                                   {account.type}
                                 </span>
+                                <DeleteAccountButton
+                                  accountId={account.id}
+                                  accountName={account.name}
+                                />
                               </div>
                               {account.iban && (
                                 <p className="text-xs text-muted-foreground font-mono">

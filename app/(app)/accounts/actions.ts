@@ -15,13 +15,47 @@ export async function disconnectBank(connectionId: string) {
 
   if (!connection) throw new Error("Connection not found");
 
-  // Best-effort revocation on Enable Banking side (may already be expired)
   try {
     await deleteSession(connection.sessionId);
   } catch {
-    // Continue with local deletion regardless
+    // Session may already be expired — proceed with local deletion
   }
 
   await prisma.bankConnection.delete({ where: { id: connectionId } });
+  revalidatePath("/accounts");
+}
+
+export async function deleteAccount(accountId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const account = await prisma.bankAccount.findFirst({
+    where: { id: accountId, userId: session.user.id },
+  });
+
+  if (!account) throw new Error("Account not found");
+
+  await prisma.bankAccount.delete({ where: { id: accountId } });
+  revalidatePath("/accounts");
+}
+
+export async function renameAccount(accountId: string, name: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Name cannot be empty");
+
+  const account = await prisma.bankAccount.findFirst({
+    where: { id: accountId, userId: session.user.id },
+  });
+
+  if (!account) throw new Error("Account not found");
+
+  await prisma.bankAccount.update({
+    where: { id: accountId },
+    data: { name: trimmed },
+  });
+
   revalidatePath("/accounts");
 }
