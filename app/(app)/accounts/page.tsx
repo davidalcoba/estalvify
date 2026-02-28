@@ -15,6 +15,7 @@ import { ReconnectBankButton } from "@/components/accounts/reconnect-bank-button
 import { SyncNowButton } from "@/components/accounts/sync-now-button";
 import { AccountNameEditor } from "@/components/accounts/account-name-editor";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
+import { SyncPoller } from "@/components/accounts/sync-poller";
 import type { BankConnectionStatus } from "@/app/generated/prisma";
 
 export const metadata: Metadata = { title: "Bank Accounts" };
@@ -124,14 +125,20 @@ export default async function AccountsPage({
 
   const bankGroups = Array.from(bankGroupMap.values());
   const totalAccounts = bankGroups.reduce((sum, g) => sum + g.allAccounts.length, 0);
+  const hasSyncing = bankGroups.some((g) => g.status === "SYNCING");
 
   return (
     <div className="space-y-6">
+      {/* Polls every 3 s while any connection is syncing to keep status fresh */}
+      <SyncPoller active={hasSyncing} />
+
       {/* Callback feedback banners */}
       {params.connected === "true" && (
         <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           <CheckCircle className="h-4 w-4 shrink-0" />
-          Bank connected successfully. Your transactions are syncing in the background.
+          {hasSyncing
+            ? "Bank connected. Syncing your recent transactions — this page will update automatically."
+            : "Bank connected successfully."}
         </div>
       )}
       {params.reconnected === "true" && (
