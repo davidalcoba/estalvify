@@ -1,11 +1,11 @@
 // GET /api/banking/callback
 // Enable Banking redirects here after user authenticates with their bank.
-// Fetches accounts and stores them in the database.
+// Exchanges the authorization code for a session, then stores accounts in the DB.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccounts } from "@/lib/banking/enable-banking";
+import { exchangeCodeForSession } from "@/lib/banking/enable-banking";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -15,11 +15,12 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const sessionId = searchParams.get("session_id");
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  if (error || !sessionId) {
-    const errorMsg = error ?? "missing_session_id";
+  if (error || !code || !state) {
+    const errorMsg = error ?? "missing_code_or_state";
     console.error("Banking callback error:", errorMsg);
     return NextResponse.redirect(
       new URL(`/accounts?error=${encodeURIComponent(errorMsg)}`, request.url)
@@ -27,11 +28,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Find the bank connection we created when initiating the flow
+    // Find the PENDING connection created in the connect route (state stored as sessionId)
     const bankConnection = await prisma.bankConnection.findFirst({
       where: {
         userId: session.user.id,
-        sessionId,
+        sessionId: state,
+        status: "PENDING_REAUTH",
       },
     });
 
@@ -41,8 +43,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch the user's accounts from Enable Banking
-    const { accounts } = await getAccounts(sessionId);
+    // Exchange authorization code → real session_id + accounts
+    const { session_id, accounts, access } = await exchangeCodeForSession(code);
+
+    // Update connection with real session_id and mark active
+    await prisma.bankConnection.update({
+      where: { id: bankConnection.id },
+      data: {
+        sessionId: session_id,
+        status: "ACTIVE",
+        consentExpiresAt: access?.valid_until ? new Date(access.valid_until) : null,
+        lastSyncAt: new Date(),
+      },
+    });
 
     // Store each account in the database
     for (const account of accounts) {

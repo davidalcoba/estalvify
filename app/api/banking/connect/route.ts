@@ -1,6 +1,6 @@
 // POST /api/banking/connect
 // Initiates the Enable Banking OAuth flow for a specific bank.
-// Creates a pending BankConnection record and returns the bank auth URL.
+// Creates a PENDING BankConnection and returns the bank auth URL.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
@@ -34,28 +34,32 @@ export async function POST(request: NextRequest) {
     "127.0.0.1";
 
   try {
-    // Create Enable Banking session → get redirect URL
-    const bankingSession = await createBankingSession({
-      aspspName,
-      aspspCountry,
-      psuIpAddress,
-    });
+    // Generate a state UUID for CSRF protection.
+    // Stored as the temporary sessionId on the PENDING connection —
+    // replaced with the real session_id after the callback.
+    const state = crypto.randomUUID();
 
-    // Store pending connection in DB
-    // We'll update it with the real session_id in the callback
+    // Create PENDING connection — no session_id yet
     await prisma.bankConnection.create({
       data: {
         userId: session.user.id,
         bankId: aspspName,
         bankName: aspspName,
         country: aspspCountry,
-        sessionId: bankingSession.session_id,
-        status: "ACTIVE",
-        consentExpiresAt: new Date(bankingSession.valid_until),
+        sessionId: state, // temporary until callback
+        status: "PENDING_REAUTH",
       },
     });
 
-    return NextResponse.json({ url: bankingSession.url });
+    // Call POST /auth → returns redirect URL
+    const { url } = await createBankingSession({
+      aspspName,
+      aspspCountry,
+      psuIpAddress,
+      state,
+    });
+
+    return NextResponse.json({ url });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Banking connect error:", error);

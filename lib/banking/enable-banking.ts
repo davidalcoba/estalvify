@@ -18,11 +18,18 @@ const ENABLE_BANKING_BASE_URL = "https://api.enablebanking.com";
 // Types
 // ─────────────────────────────────────────────
 
-export interface EnableBankingSession {
-  session_id: string;
+// Response from POST /auth (step 1: initiate flow)
+export interface EnableBankingAuthResponse {
   url: string;
-  valid_until: string;
-  status: string;
+}
+
+// Response from POST /sessions (step 2: exchange code after callback)
+export interface EnableBankingSessionResponse {
+  session_id: string;
+  accounts: EnableBankingAccount[];
+  access: {
+    valid_until: string;
+  };
 }
 
 export interface EnableBankingAccount {
@@ -102,10 +109,11 @@ async function generateJwt(): Promise<string> {
   const privateKey = await getPrivateKey();
 
   return new SignJWT({})
-    .setProtectedHeader({ alg: "RS256" })
+    .setProtectedHeader({ alg: "RS256", kid: appId })
     .setIssuedAt()
     .setExpirationTime("1h")
     .setSubject(appId)
+    .setAudience("api.enablebanking.com")
     .sign(privateKey);
 }
 
@@ -149,36 +157,50 @@ export async function listBanks(country: string = "ES"): Promise<{ aspsps: Enabl
 // ─────────────────────────────────────────────
 
 /**
- * Step 1: Create an Enable Banking session for a specific bank.
- * Returns the URL to redirect the user to for bank authentication.
+ * Step 1: Initiate the Enable Banking auth flow for a specific bank.
+ * Returns the URL to redirect the user to for authentication.
+ * The `state` param is stored in DB to correlate the callback.
  */
 export async function createBankingSession(params: {
-  aspspName: string;  // Bank name from listBanks()
+  aspspName: string;
   aspspCountry: string;
-  psuIpAddress: string; // End user's IP (required by PSD2)
+  psuIpAddress: string;
+  state: string;
   redirectUri?: string;
-}): Promise<EnableBankingSession> {
+}): Promise<EnableBankingAuthResponse> {
   const redirectUri = params.redirectUri
     ?? process.env.ENABLE_BANKING_REDIRECT_URI
     ?? `${process.env.NEXT_PUBLIC_APP_URL}/api/banking/callback`;
 
-  return request<EnableBankingSession>("/sessions", {
+  return request<EnableBankingAuthResponse>("/auth", {
     method: "POST",
     body: JSON.stringify({
       access: {
-        // Request 90-day consent (PSD2 maximum)
         valid_until: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-        balances: [{}],
-        transactions: [{}],
+        balances: true,
+        transactions: true,
       },
       aspsp: {
         name: params.aspspName,
         country: params.aspspCountry,
       },
       redirect_url: redirectUri,
+      state: params.state,
       psu_type: "personal",
       psu_ip_address: params.psuIpAddress,
     }),
+  });
+}
+
+/**
+ * Step 2: Exchange the authorization code from the callback for a session.
+ * Called from the callback route after the user authenticates with their bank.
+ * Returns `session_id` and the list of accessible accounts.
+ */
+export async function exchangeCodeForSession(code: string): Promise<EnableBankingSessionResponse> {
+  return request<EnableBankingSessionResponse>("/sessions", {
+    method: "POST",
+    body: JSON.stringify({ code }),
   });
 }
 
