@@ -63,10 +63,10 @@ export async function GET(request: NextRequest) {
     const consentExpiresAt = access?.valid_until ? new Date(access.valid_until) : null;
 
     // ── RE-AUTH FLOW ───────────────────────────────────────────────────────
-    // Restore the existing connection with the new session — accounts unchanged.
+    // Restore the existing connection with the new Enable Banking session.
     if (reconnectConnectionId) {
+      // Update the connection and remove the placeholder atomically.
       await prisma.$transaction(async (tx) => {
-        // Restore the expired connection with the new Enable Banking session
         await tx.bankConnection.update({
           where: { id: reconnectConnectionId },
           data: {
@@ -75,10 +75,25 @@ export async function GET(request: NextRequest) {
             consentExpiresAt,
           },
         });
-
-        // Clean up the temporary PENDING_REAUTH placeholder
         await tx.bankConnection.delete({ where: { id: bankConnection.id } });
       });
+
+      // Enable Banking assigns new UIDs per session, so the stored
+      // externalAccountId values are now stale. Update them outside the
+      // transaction — individual failures are non-fatal (the connection is
+      // already restored) and we log them for debugging.
+      for (const newAccount of accounts) {
+        const iban = newAccount.account_id?.iban;
+        if (!iban || !newAccount.uid) continue;
+        try {
+          await prisma.bankAccount.updateMany({
+            where: { bankConnectionId: reconnectConnectionId, iban },
+            data: { externalAccountId: newAccount.uid },
+          });
+        } catch (err) {
+          console.warn(`[callback] Could not update UID for IBAN ${iban}:`, err);
+        }
+      }
 
       return NextResponse.redirect(`${appUrl}/accounts?reconnected=true`);
     }
