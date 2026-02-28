@@ -53,7 +53,6 @@ export async function GET(request: NextRequest) {
         sessionId: session_id,
         status: "ACTIVE",
         consentExpiresAt: access?.valid_until ? new Date(access.valid_until) : null,
-        lastSyncAt: new Date(),
       },
     });
 
