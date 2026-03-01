@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { CategorizeInbox } from "@/components/categorize/categorize-inbox";
-import { buildUncategorizedWhere } from "./actions";
+import { buildUncategorizedWhere } from "@/lib/categorize";
 
 export const metadata: Metadata = { title: "Categorize" };
 
