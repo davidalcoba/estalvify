@@ -59,7 +59,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     getUserPrefs(session!.user.id),
   ]);
 
-  const { locale: userLocale, currency: userCurrency, timezone: userTimezone } = prefs;
+  const { locale: userLocale, timezone: userTimezone } = prefs;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -212,33 +212,6 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                       })}
                     </div>
 
-                    {/* Daily net total */}
-                    {(() => {
-                      const netByCurrency = new Map<string, number>();
-                      for (const tx of txs) {
-                        const sign = tx.direction === "CREDIT" ? 1 : -1;
-                        netByCurrency.set(
-                          tx.currency,
-                          (netByCurrency.get(tx.currency) ?? 0) + sign * Number(tx.amount)
-                        );
-                      }
-                      const entries = Array.from(netByCurrency.entries()).sort(([a], [b]) =>
-                        a === userCurrency ? -1 : b === userCurrency ? 1 : a.localeCompare(b)
-                      );
-                      return (
-                        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 px-4 py-2 border-t bg-muted/30">
-                          {entries.map(([currency, net]) => (
-                            <span
-                              key={currency}
-                              className={`text-xs font-medium tabular-nums ${net >= 0 ? "text-green-600" : "text-muted-foreground"}`}
-                            >
-                              {net >= 0 ? "+" : ""}
-                              {net.toLocaleString(userLocale, { style: "currency", currency })}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })()}
                   </CardContent>
                 </Card>
               </div>
