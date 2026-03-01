@@ -146,126 +146,7 @@ function CategoryOptions({ categories }: { categories: Category[] }) {
 }
 
 // ─────────────────────────────────────────────
-// Focus modal — shared inner content
-// ─────────────────────────────────────────────
-
-interface FocusContentProps {
-  current: Transaction | null;
-  queue: Transaction[];
-  index: number;
-  categories: Category[];
-  locale: string;
-  timezone: string;
-  categorizedCount: number;
-  isPending: boolean;
-  onCategorySelect: (categoryId: string) => void;
-  onPrev: () => void;
-  onNext: () => void;
-}
-
-function FocusContent({
-  current,
-  queue,
-  index,
-  categories,
-  locale,
-  timezone,
-  categorizedCount,
-  isPending,
-  onCategorySelect,
-  onPrev,
-  onNext,
-}: FocusContentProps) {
-  const done = queue.length === 0;
-
-  if (done) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-10 px-5 text-center">
-        <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-          <CheckCircle className="h-6 w-6 text-green-600" />
-        </div>
-        <div>
-          <p className="font-semibold">Page done!</p>
-          <p className="text-sm text-muted-foreground">
-            {categorizedCount} transaction{categorizedCount !== 1 ? "s" : ""} categorized.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!current) return null;
-
-  const isCredit = current.direction === "CREDIT";
-  const label = txLabel(current);
-  const counterparty = txCounterparty(current);
-
-  return (
-    <div className="px-5 py-4 space-y-4">
-      {/* Transaction card */}
-      <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-            isCredit
-              ? "bg-green-100 text-green-600 dark:bg-green-900/30"
-              : "bg-red-100 text-red-500 dark:bg-red-900/30"
-          }`}>
-            {isCredit ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
-          </div>
-          <p className={`text-2xl font-bold tabular-nums ${isCredit ? "text-green-600" : ""}`}>
-            {isCredit ? "+" : "−"}{fmtAmount(current, locale)}
-          </p>
-        </div>
-
-        <div>
-          <p className="font-semibold leading-tight">{label}</p>
-          {counterparty && counterparty !== label && (
-            <p className="text-sm text-muted-foreground mt-0.5">{counterparty}</p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t">
-          <span className="flex items-center gap-1">
-            <Building2 className="h-3 w-3" />{current.bankAccount.name}
-          </span>
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />{fmtDateLong(current.bookingDate, locale, timezone)}
-          </span>
-          {current.remittanceInfo && (
-            <span className="w-full truncate text-muted-foreground/60">{current.remittanceInfo}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Category select — selecting immediately categorizes */}
-      <select
-        key={current.id}
-        defaultValue=""
-        onChange={(e) => onCategorySelect(e.target.value)}
-        disabled={isPending}
-        className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-      >
-        <option value="" disabled>
-          {isPending ? "Saving…" : "Pick a category…"}
-        </option>
-        <CategoryOptions categories={categories} />
-      </select>
-
-      {/* Prev / Next navigation */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={onPrev} disabled={index === 0}>
-          <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onNext} disabled={index >= queue.length - 1}>
-          Next <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// Focus modal — Sheet (mobile) or Dialog (desktop)
+// Focus modal — shared state + desktop content
 // ─────────────────────────────────────────────
 
 interface FocusModalProps {
@@ -297,76 +178,249 @@ function FocusModal({
 
   const current = queue[index] ?? null;
   const categorizedCount = snapshot.length - queue.length;
+  const done = queue.length === 0;
 
   function handleCategorySelect(categoryId: string) {
     if (!categoryId || !current || isPending) return;
     const txId = current.id;
     const tx = current;
-
     const newQueue = queue.filter((q) => q.id !== txId);
-    const newIndex = Math.min(index, Math.max(0, newQueue.length - 1));
     setQueue(newQueue);
-    setIndex(newIndex);
+    setIndex((i) => Math.min(i, Math.max(0, newQueue.length - 1)));
     onCategorized(txId);
-
     startTransition(async () => {
       try {
         await categorizeTransaction(txId, categoryId);
       } catch {
         onReverted(txId);
-        setQueue((q) => {
-          const next = [...q];
-          next.splice(Math.min(index, next.length), 0, tx);
-          return next;
-        });
+        setQueue((q) => { const next = [...q]; next.splice(Math.min(index, next.length), 0, tx); return next; });
       }
     });
   }
 
-  const counter = queue.length === 0
-    ? "Done!"
-    : `${index + 1} / ${queue.length}${categorizedCount > 0 ? ` · ✓ ${categorizedCount}` : ""}`;
+  const goPrev = () => setIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setIndex((i) => Math.min(queue.length - 1, i + 1));
 
-  const content = (
-    <FocusContent
-      current={current}
-      queue={queue}
-      index={index}
-      categories={categories}
-      locale={locale}
-      timezone={timezone}
-      categorizedCount={categorizedCount}
-      isPending={isPending}
-      onCategorySelect={handleCategorySelect}
-      onPrev={() => setIndex((i) => Math.max(0, i - 1))}
-      onNext={() => setIndex((i) => Math.min(queue.length - 1, i + 1))}
-    />
-  );
+  // ── Mobile: full-screen bottom sheet ─────────
 
   if (isMobile) {
+    const isCredit = current?.direction === "CREDIT";
+    const label = current ? txLabel(current) : "";
+    const counterparty = current ? txCounterparty(current) : null;
+
     return (
       <Sheet open onOpenChange={(open) => !open && onClose()}>
-        <SheetContent side="bottom" className="gap-0 pb-8 max-h-[90dvh] overflow-y-auto">
-          <SheetHeader className="px-5 pb-3 border-b">
-            <SheetTitle className="text-sm font-medium text-muted-foreground">
-              {counter}
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="h-[100dvh] gap-0 flex flex-col rounded-none p-0"
+        >
+          {/* ── Top bar ── */}
+          <div className="flex items-center justify-between px-5 pt-10 pb-4 shrink-0">
+            <SheetTitle className="text-sm font-medium text-muted-foreground tabular-nums">
+              {done ? "Done!" : `${index + 1} / ${queue.length}`}
+              {categorizedCount > 0 && !done && (
+                <span className="ml-2 text-green-600 font-semibold">✓ {categorizedCount}</span>
+              )}
             </SheetTitle>
-          </SheetHeader>
-          {content}
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* ── Content ── */}
+          {done ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8 text-center">
+              <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <CheckCircle className="h-10 w-10 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">All done!</p>
+                <p className="text-muted-foreground mt-1">
+                  {categorizedCount} transaction{categorizedCount !== 1 ? "s" : ""} categorized.
+                </p>
+              </div>
+              <Button className="w-full h-14 text-base mt-2" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          ) : current ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Transaction info — takes the upper portion */}
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-8 gap-3">
+                {/* Direction icon */}
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                  isCredit
+                    ? "bg-green-100 text-green-600 dark:bg-green-900/30"
+                    : "bg-red-100 text-red-500 dark:bg-red-900/30"
+                }`}>
+                  {isCredit
+                    ? <ArrowDownLeft className="h-8 w-8" />
+                    : <ArrowUpRight className="h-8 w-8" />}
+                </div>
+
+                {/* Amount */}
+                <p className={`text-5xl font-black tabular-nums tracking-tight ${
+                  isCredit ? "text-green-600" : ""
+                }`}>
+                  {isCredit ? "+" : "−"}{fmtAmount(current, locale)}
+                </p>
+
+                {/* Description */}
+                <p className="text-2xl font-bold leading-tight">{label}</p>
+
+                {/* Counterparty */}
+                {counterparty && counterparty !== label && (
+                  <p className="text-lg text-muted-foreground">{counterparty}</p>
+                )}
+
+                {/* Meta */}
+                <div className="flex flex-col items-center gap-0.5 text-sm text-muted-foreground">
+                  <span>{current.bankAccount.name}</span>
+                  <span>{fmtDateLong(current.bookingDate, locale, timezone)}</span>
+                  {current.remittanceInfo && (
+                    <span className="text-xs text-muted-foreground/60 max-w-xs truncate">
+                      {current.remittanceInfo}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Controls — fixed at the bottom */}
+              <div
+                className="shrink-0 px-5 pb-6 pt-4 space-y-3 border-t bg-background"
+                style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+              >
+                {/* Category picker */}
+                <select
+                  key={current.id}
+                  defaultValue=""
+                  onChange={(e) => handleCategorySelect(e.target.value)}
+                  disabled={isPending}
+                  className="w-full h-16 rounded-2xl border-2 border-input bg-background px-4 text-lg font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 appearance-none"
+                  style={{ fontSize: "18px" }}
+                >
+                  <option value="" disabled>
+                    {isPending ? "Saving…" : "Pick a category…"}
+                  </option>
+                  <CategoryOptions categories={categories} />
+                </select>
+
+                {/* Prev / Next */}
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-14 text-base gap-1"
+                    onClick={goPrev}
+                    disabled={index === 0}
+                  >
+                    <ChevronLeft className="h-5 w-5" /> Prev
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-14 text-base gap-1"
+                    onClick={goNext}
+                    disabled={index >= queue.length - 1}
+                  >
+                    Next <ChevronRight className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </SheetContent>
       </Sheet>
     );
   }
 
+  // ── Desktop: compact centered dialog ─────────
+
+  const counter = done
+    ? "Done!"
+    : `${index + 1} / ${queue.length}${categorizedCount > 0 ? ` · ✓ ${categorizedCount}` : ""}`;
+
+  const isCredit = current?.direction === "CREDIT";
+  const label = current ? txLabel(current) : "";
+  const counterparty = current ? txCounterparty(current) : null;
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden">
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b">
-          <DialogTitle className="text-sm font-medium text-muted-foreground">
-            {counter}
-          </DialogTitle>
+          <DialogTitle className="text-sm font-medium text-muted-foreground">{counter}</DialogTitle>
         </div>
-        {content}
+
+        {done ? (
+          <div className="flex flex-col items-center gap-3 py-10 px-5 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
+            <div>
+              <p className="font-semibold">Page done!</p>
+              <p className="text-sm text-muted-foreground">
+                {categorizedCount} transaction{categorizedCount !== 1 ? "s" : ""} categorized.
+              </p>
+            </div>
+          </div>
+        ) : current ? (
+          <div className="px-5 py-4 space-y-4">
+            {/* Transaction card */}
+            <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                  isCredit
+                    ? "bg-green-100 text-green-600 dark:bg-green-900/30"
+                    : "bg-red-100 text-red-500 dark:bg-red-900/30"
+                }`}>
+                  {isCredit ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                </div>
+                <p className={`text-2xl font-bold tabular-nums ${isCredit ? "text-green-600" : ""}`}>
+                  {isCredit ? "+" : "−"}{fmtAmount(current, locale)}
+                </p>
+              </div>
+              <div>
+                <p className="font-semibold leading-tight">{label}</p>
+                {counterparty && counterparty !== label && (
+                  <p className="text-sm text-muted-foreground mt-0.5">{counterparty}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t">
+                <span className="flex items-center gap-1">
+                  <Building2 className="h-3 w-3" />{current.bankAccount.name}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />{fmtDateLong(current.bookingDate, locale, timezone)}
+                </span>
+                {current.remittanceInfo && (
+                  <span className="w-full truncate text-muted-foreground/60">{current.remittanceInfo}</span>
+                )}
+              </div>
+            </div>
+
+            <select
+              key={current.id}
+              defaultValue=""
+              onChange={(e) => handleCategorySelect(e.target.value)}
+              disabled={isPending}
+              className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+            >
+              <option value="" disabled>{isPending ? "Saving…" : "Pick a category…"}</option>
+              <CategoryOptions categories={categories} />
+            </select>
+
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="sm" onClick={goPrev} disabled={index === 0}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+              </Button>
+              <Button variant="ghost" size="sm" onClick={goNext} disabled={index >= queue.length - 1}>
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
