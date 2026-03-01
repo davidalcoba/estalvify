@@ -9,20 +9,25 @@ import { buildUncategorizedWhere } from "@/lib/categorize";
 
 export const metadata: Metadata = { title: "Categorize" };
 
-const PAGE_SIZE = 50;
+const PAGE_SIZES = [25, 50, 100, 200] as const;
+const DEFAULT_SIZE = 100;
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ page?: string; size?: string }>;
 }
 
 export default async function CategorizePage({ searchParams }: PageProps) {
   const session = await auth();
-  const { q, page: pageStr } = await searchParams;
+  const { page: pageStr, size: sizeStr } = await searchParams;
 
   const userId = session!.user.id;
   const page = Math.max(1, parseInt(pageStr ?? "1") || 1);
+  const sizeParam = parseInt(sizeStr ?? String(DEFAULT_SIZE)) || DEFAULT_SIZE;
+  const pageSize = (PAGE_SIZES as readonly number[]).includes(sizeParam)
+    ? sizeParam
+    : DEFAULT_SIZE;
 
-  const where = buildUncategorizedWhere(userId, q);
+  const where = buildUncategorizedWhere(userId);
 
   const [total, transactions, categories, prefs] = await Promise.all([
     prisma.transaction.count({ where }),
@@ -30,8 +35,8 @@ export default async function CategorizePage({ searchParams }: PageProps) {
       where,
       include: { bankAccount: { select: { name: true } } },
       orderBy: [{ bookingDate: "desc" }, { id: "asc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
     prisma.category.findMany({
       where: { userId, isActive: true },
@@ -46,8 +51,8 @@ export default async function CategorizePage({ searchParams }: PageProps) {
       categories={categories}
       total={total}
       page={page}
-      pageSize={PAGE_SIZE}
-      initialQuery={q ?? ""}
+      pageSize={pageSize}
+      pageSizeOptions={[...PAGE_SIZES]}
       locale={prefs.locale}
       currency={prefs.currency}
       timezone={prefs.timezone}
