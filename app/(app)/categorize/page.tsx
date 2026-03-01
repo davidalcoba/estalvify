@@ -29,7 +29,7 @@ export default async function CategorizePage({ searchParams }: PageProps) {
     prisma.transaction.findMany({
       where,
       include: { bankAccount: { select: { name: true } } },
-      orderBy: { bookingDate: "desc" },
+      orderBy: [{ bookingDate: "desc" }, { id: "asc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
