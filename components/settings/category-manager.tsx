@@ -12,8 +12,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, TriangleAlert } from "lucide-react";
 import {
   createCategory,
   updateCategory,
@@ -41,12 +42,19 @@ export type CategoryWithChildren = {
   children: { id: string; name: string; color: string }[];
 };
 
-type DialogMode =
+type EditMode =
   | { type: "add-category" }
   | { type: "edit-category"; id: string }
   | { type: "add-subcategory"; parentId: string; parentColor: string }
   | { type: "edit-subcategory"; id: string }
   | null;
+
+type DeleteTarget = {
+  id: string;
+  name: string;
+  isCategory: boolean;
+  childCount: number;
+};
 
 interface CategoryManagerProps {
   initialCategories: CategoryWithChildren[];
@@ -57,17 +65,21 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(initialCategories.map((c) => c.id))
   );
-  const [dialog, setDialog] = useState<DialogMode>(null);
+  const [editMode, setEditMode] = useState<EditMode>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [formName, setFormName] = useState("");
   const [formColor, setFormColor] = useState(PRESET_COLORS[0]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function openDialog(mode: DialogMode, name = "", color = PRESET_COLORS[0]) {
+  const isCategory =
+    editMode?.type === "add-category" || editMode?.type === "edit-category";
+
+  function openEdit(mode: EditMode, name = "", color = PRESET_COLORS[0]) {
     setFormName(name);
     setFormColor(color);
     setError(null);
-    setDialog(mode);
+    setEditMode(mode);
   }
 
   function toggleExpand(id: string) {
@@ -89,16 +101,16 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
 
     startTransition(async () => {
       try {
-        if (dialog?.type === "add-category") {
+        if (editMode?.type === "add-category") {
           await createCategory({ name, color: formColor });
-        } else if (dialog?.type === "edit-category") {
-          await updateCategory(dialog.id, { name, color: formColor });
-        } else if (dialog?.type === "add-subcategory") {
-          await createSubcategory(dialog.parentId, { name, color: formColor });
-        } else if (dialog?.type === "edit-subcategory") {
-          await updateCategory(dialog.id, { name, color: formColor });
+        } else if (editMode?.type === "edit-category") {
+          await updateCategory(editMode.id, { name, color: formColor });
+        } else if (editMode?.type === "add-subcategory") {
+          await createSubcategory(editMode.parentId, { name, color: editMode.parentColor });
+        } else if (editMode?.type === "edit-subcategory") {
+          await updateCategory(editMode.id, { name, color: formColor });
         }
-        setDialog(null);
+        setEditMode(null);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save");
@@ -106,14 +118,21 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
     });
   }
 
-  function handleDelete(id: string) {
+  function confirmDelete(target: DeleteTarget) {
+    setDeleteTarget(target);
+  }
+
+  function handleDeleteConfirmed() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
     startTransition(async () => {
       await deleteCategory(id);
+      setDeleteTarget(null);
       router.refresh();
     });
   }
 
-  const dialogTitles: Record<NonNullable<DialogMode>["type"], string> = {
+  const editTitles: Record<NonNullable<EditMode>["type"], string> = {
     "add-category": "Add category",
     "edit-category": "Edit category",
     "add-subcategory": "Add subcategory",
@@ -159,14 +178,21 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                   {cat.children.length === 1 ? "subcategory" : "subcategories"}
                 </span>
                 <button
-                  onClick={() => openDialog({ type: "edit-category", id: cat.id }, cat.name, cat.color)}
+                  onClick={() => openEdit({ type: "edit-category", id: cat.id }, cat.name, cat.color)}
                   className="text-muted-foreground hover:text-foreground p-1 rounded"
                   aria-label="Edit category"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
-                  onClick={() => handleDelete(cat.id)}
+                  onClick={() =>
+                    confirmDelete({
+                      id: cat.id,
+                      name: cat.name,
+                      isCategory: true,
+                      childCount: cat.children.length,
+                    })
+                  }
                   disabled={isPending}
                   className="text-muted-foreground hover:text-destructive p-1 rounded"
                   aria-label="Delete category"
@@ -185,12 +211,12 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                     >
                       <div
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: sub.color }}
+                        style={{ backgroundColor: cat.color }}
                       />
                       <span className="flex-1 text-sm text-muted-foreground">{sub.name}</span>
                       <button
                         onClick={() =>
-                          openDialog({ type: "edit-subcategory", id: sub.id }, sub.name, sub.color)
+                          openEdit({ type: "edit-subcategory", id: sub.id }, sub.name, cat.color)
                         }
                         className="text-muted-foreground hover:text-foreground p-1 rounded"
                         aria-label="Edit subcategory"
@@ -198,7 +224,14 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button
-                        onClick={() => handleDelete(sub.id)}
+                        onClick={() =>
+                          confirmDelete({
+                            id: sub.id,
+                            name: sub.name,
+                            isCategory: false,
+                            childCount: 0,
+                          })
+                        }
                         disabled={isPending}
                         className="text-muted-foreground hover:text-destructive p-1 rounded"
                         aria-label="Delete subcategory"
@@ -210,7 +243,11 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
 
                   <button
                     onClick={() =>
-                      openDialog({ type: "add-subcategory", parentId: cat.id, parentColor: cat.color }, "", cat.color)
+                      openEdit(
+                        { type: "add-subcategory", parentId: cat.id, parentColor: cat.color },
+                        "",
+                        cat.color
+                      )
                     }
                     className="flex items-center gap-1.5 px-3 py-1.5 pl-10 w-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                   >
@@ -225,7 +262,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => openDialog({ type: "add-category" })}
+            onClick={() => openEdit({ type: "add-category" })}
             className="w-full mt-2"
           >
             <Plus className="h-4 w-4 mr-1.5" />
@@ -235,10 +272,10 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
       </Card>
 
       {/* Add / Edit dialog */}
-      <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
+      <Dialog open={editMode !== null} onOpenChange={(open) => !open && setEditMode(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{dialog ? dialogTitles[dialog.type] : ""}</DialogTitle>
+            <DialogTitle>{editMode ? editTitles[editMode.type] : ""}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-1">
@@ -255,31 +292,81 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
               {error && <p className="text-xs text-destructive">{error}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Color</Label>
-              <div className="flex gap-2 flex-wrap">
-                {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    aria-label={`Select color ${color}`}
-                    className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${
-                      formColor === color ? "ring-2 ring-offset-2 ring-ring scale-110" : ""
-                    }`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setFormColor(color)}
-                  />
-                ))}
+            {isCategory && (
+              <div className="space-y-1.5">
+                <Label>Color</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      aria-label={`Select color ${color}`}
+                      className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${
+                        formColor === color ? "ring-2 ring-offset-2 ring-ring scale-110" : ""
+                      }`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setFormColor(color)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialog(null)}>
+            <Button variant="ghost" onClick={() => setEditMode(null)}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={isPending}>
               {isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TriangleAlert className="h-5 w-5 text-destructive flex-shrink-0" />
+              Delete &ldquo;{deleteTarget?.name}&rdquo;?
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 pt-1">
+                {deleteTarget?.isCategory && deleteTarget.childCount > 0 && (
+                  <p>
+                    This will also delete its{" "}
+                    <strong>
+                      {deleteTarget.childCount}{" "}
+                      {deleteTarget.childCount === 1 ? "subcategory" : "subcategories"}
+                    </strong>
+                    .
+                  </p>
+                )}
+                <p>
+                  Any transactions categorized under{" "}
+                  <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong>
+                  {deleteTarget?.isCategory && deleteTarget.childCount > 0
+                    ? " or its subcategories"
+                    : ""}{" "}
+                  will become <strong>uncategorized</strong>.
+                </p>
+                <p>This action cannot be undone.</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirmed}
+              disabled={isPending}
+            >
+              {isPending ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
