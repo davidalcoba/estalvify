@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownLeft,
@@ -12,10 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  LayoutList,
-  CreditCard,
   X,
-  SkipForward,
   Building2,
   Calendar,
 } from "lucide-react";
@@ -23,13 +20,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { categorizeTransaction, bulkCategorize } from "@/app/(app)/categorize/actions";
+  categorizeTransaction,
+  bulkCategorizeByIds,
+} from "@/app/(app)/categorize/actions";
 
 // ─────────────────────────────────────────────
 // Types
@@ -65,14 +60,62 @@ interface Props {
   total: number;
   page: number;
   pageSize: number;
-  initialQuery: string;
+  pageSizeOptions: number[];
   locale: string;
   currency: string;
   timezone: string;
 }
 
 // ─────────────────────────────────────────────
-// Category select options (shared rendering)
+// Module-level helpers
+// ─────────────────────────────────────────────
+
+function txLabel(tx: Transaction): string {
+  const isCredit = tx.direction === "CREDIT";
+  return (
+    tx.description ?? (isCredit ? tx.debtorName : tx.creditorName) ?? "Transaction"
+  );
+}
+
+function txCounterparty(tx: Transaction): string | null {
+  const isCredit = tx.direction === "CREDIT";
+  return isCredit ? tx.debtorName : tx.creditorName;
+}
+
+function fmtAmount(tx: Transaction, locale: string): string {
+  return Number(tx.amount.toString()).toLocaleString(locale, {
+    style: "currency",
+    currency: tx.currency,
+  });
+}
+
+function fmtDate(date: Date, locale: string, timezone: string): string {
+  return date.toLocaleDateString(locale, {
+    timeZone: timezone,
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function fmtDateLong(date: Date, locale: string, timezone: string): string {
+  return date.toLocaleDateString(locale, {
+    timeZone: timezone,
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function matchesSearch(tx: Transaction, q: string): boolean {
+  const lower = q.toLowerCase();
+  return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some(
+    (f) => f?.toLowerCase().includes(lower)
+  );
+}
+
+// ─────────────────────────────────────────────
+// Category select options
 // ─────────────────────────────────────────────
 
 function CategoryOptions({ categories }: { categories: Category[] }) {
@@ -80,11 +123,10 @@ function CategoryOptions({ categories }: { categories: Category[] }) {
   const childrenMap: Record<string, Category[]> = {};
   for (const c of categories) {
     if (c.parentId) {
-      if (!childrenMap[c.parentId]) childrenMap[c.parentId] = [];
+      childrenMap[c.parentId] ??= [];
       childrenMap[c.parentId].push(c);
     }
   }
-
   return (
     <>
       {parents.map((parent) => {
@@ -111,240 +153,129 @@ function CategoryOptions({ categories }: { categories: Category[] }) {
 }
 
 // ─────────────────────────────────────────────
-// Focus mode modal
+// Focus modal
 // ─────────────────────────────────────────────
 
-interface FocusModeProps {
-  transactions: Transaction[];
+interface FocusModalProps {
+  snapshot: Transaction[];
+  startIndex: number;
   categories: Category[];
   locale: string;
   timezone: string;
-  total: number;
-  pageOffset: number; // (page - 1) * pageSize
   onClose: () => void;
   onCategorized: (txId: string) => void;
+  onReverted: (txId: string) => void;
 }
 
-function FocusMode({
-  transactions,
+function FocusModal({
+  snapshot,
+  startIndex,
   categories,
   locale,
   timezone,
-  total,
-  pageOffset,
   onClose,
   onCategorized,
-}: FocusModeProps) {
-  const [index, setIndex] = useState(0);
-  const [categoryId, setCategoryId] = useState("");
-  const [skipped, setSkipped] = useState<Set<string>>(new Set());
-  const [categorizedLocal, setCategorizedLocal] = useState<Set<string>>(new Set());
+  onReverted,
+}: FocusModalProps) {
+  const [queue, setQueue] = useState<Transaction[]>(snapshot);
+  const [index, setIndex] = useState(Math.min(startIndex, snapshot.length - 1));
   const [isPending, startTransition] = useTransition();
-  const selectRef = useRef<HTMLSelectElement>(null);
 
-  // Transactions still pending in this focus session
-  const pending = transactions.filter(
-    (tx) => !categorizedLocal.has(tx.id)
-  );
+  const current = queue[index] ?? null;
+  const total = snapshot.length;
+  const done = queue.length === 0;
+  const categorizedCount = total - queue.length;
 
-  const current = pending[index] ?? pending[pending.length - 1] ?? null;
-  const isLast = index >= pending.length - 1;
-
-  // Reset category when card changes
-  useEffect(() => {
-    setCategoryId("");
-  }, [current?.id]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-        e.preventDefault();
-        goNext();
-      }
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-        e.preventDefault();
-        goPrev();
-      }
-      if (e.key === "Enter" && categoryId) {
-        e.preventDefault();
-        handleCategorize();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
-  function goNext() {
-    if (index < pending.length - 1) setIndex((i) => i + 1);
-  }
-  function goPrev() {
-    if (index > 0) setIndex((i) => i - 1);
-  }
-
-  function handleSkip() {
-    setSkipped((prev) => new Set([...prev, current!.id]));
-    goNext();
-  }
-
-  function handleCategorize() {
-    if (!categoryId || !current) return;
+  function handleCategorySelect(categoryId: string) {
+    if (!categoryId || !current || isPending) return;
     const txId = current.id;
-    setCategorizedLocal((prev) => new Set([...prev, txId]));
-    onCategorized(txId);
+    const tx = current;
 
-    // Adjust index so we don't go out of bounds
-    const newPending = pending.filter((tx) => tx.id !== txId);
-    if (index >= newPending.length && newPending.length > 0) {
-      setIndex(newPending.length - 1);
-    }
+    const newQueue = queue.filter((q) => q.id !== txId);
+    const newIndex = Math.min(index, Math.max(0, newQueue.length - 1));
+    setQueue(newQueue);
+    setIndex(newIndex);
+    onCategorized(txId);
 
     startTransition(async () => {
       try {
         await categorizeTransaction(txId, categoryId);
       } catch {
-        // Revert
-        setCategorizedLocal((prev) => {
-          const next = new Set(prev);
-          next.delete(txId);
+        onReverted(txId);
+        setQueue((q) => {
+          const next = [...q];
+          next.splice(Math.min(index, next.length), 0, tx);
           return next;
         });
-        onCategorized(txId); // signal parent to un-hide too
       }
     });
   }
 
-  // Progress
-  const done = categorizedLocal.size;
-  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-  function formatAmount(tx: Transaction) {
-    return Number(tx.amount.toString()).toLocaleString(locale, {
-      style: "currency",
-      currency: tx.currency,
-    });
-  }
-  function formatDate(date: Date) {
-    return date.toLocaleDateString(locale, {
-      timeZone: timezone,
-      weekday: "short",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  }
-  function txLabel(tx: Transaction) {
-    const isCredit = tx.direction === "CREDIT";
-    return tx.description ?? (isCredit ? tx.debtorName : tx.creditorName) ?? "Transaction";
-  }
-  function txCounterparty(tx: Transaction) {
-    const isCredit = tx.direction === "CREDIT";
-    return isCredit ? tx.debtorName : tx.creditorName;
-  }
-
-  const allDoneLocally = pending.length === 0;
-
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
-        {/* ── Header ── */}
-        <DialogHeader className="px-5 pt-5 pb-3 border-b">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-semibold">
-              Focus mode
-            </DialogTitle>
-            <button
-              onClick={onClose}
-              className="rounded-sm opacity-70 hover:opacity-100 transition-opacity"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          {/* Progress bar */}
-          <div className="mt-3 space-y-1">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {done} categorized · {pending.length} remaining
+      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b">
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {done ? "All done!" : `${index + 1} / ${queue.length}`}
+            {categorizedCount > 0 && !done && (
+              <span className="ml-2 text-green-600 font-medium">
+                ✓ {categorizedCount}
               </span>
-              <span>{progressPct}%</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-        </DialogHeader>
+            )}
+          </span>
+          <button
+            onClick={onClose}
+            className="rounded-sm opacity-70 hover:opacity-100 transition-opacity"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-        {/* ── Card content ── */}
-        <div className="px-5 py-5 flex flex-col gap-4 min-h-64">
-          {allDoneLocally ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <div className="px-4 py-4 space-y-4">
+          {done ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
               <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="font-semibold">All done on this page!</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {done} transaction{done !== 1 ? "s" : ""} categorized.
+                <p className="font-semibold">Page done!</p>
+                <p className="text-sm text-muted-foreground">
+                  {categorizedCount} transaction{categorizedCount !== 1 ? "s" : ""} categorized.
                 </p>
               </div>
               <Button onClick={onClose}>Close</Button>
             </div>
           ) : current ? (
             <>
-              {/* Position indicator */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {index + 1} / {pending.length} on this page
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {total} total pending
-                </span>
-              </div>
-
               {/* Transaction card */}
-              <div className="rounded-xl border bg-card p-4 space-y-3">
-                {/* Direction badge + amount */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                        current.direction === "CREDIT"
-                          ? "bg-green-100 text-green-600 dark:bg-green-900/30"
-                          : "bg-red-100 text-red-500 dark:bg-red-900/30"
-                      }`}
-                    >
-                      {current.direction === "CREDIT" ? (
-                        <ArrowDownLeft className="h-4 w-4" />
-                      ) : (
-                        <ArrowUpRight className="h-4 w-4" />
-                      )}
-                    </div>
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {current.direction === "CREDIT" ? "Income" : "Expense"}
-                    </span>
+              <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      current.direction === "CREDIT"
+                        ? "bg-green-100 text-green-600 dark:bg-green-900/30"
+                        : "bg-red-100 text-red-500 dark:bg-red-900/30"
+                    }`}
+                  >
+                    {current.direction === "CREDIT" ? (
+                      <ArrowDownLeft className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpRight className="h-4 w-4" />
+                    )}
                   </div>
                   <p
-                    className={`text-2xl font-bold tabular-nums ${
-                      current.direction === "CREDIT"
-                        ? "text-green-600"
-                        : "text-foreground"
+                    className={`text-xl font-bold tabular-nums ${
+                      current.direction === "CREDIT" ? "text-green-600" : ""
                     }`}
                   >
                     {current.direction === "CREDIT" ? "+" : "−"}
-                    {formatAmount(current)}
+                    {fmtAmount(current, locale)}
                   </p>
                 </div>
 
-                {/* Description */}
                 <div>
-                  <p className="font-semibold text-base leading-tight">
-                    {txLabel(current)}
-                  </p>
+                  <p className="font-semibold leading-tight">{txLabel(current)}</p>
                   {txCounterparty(current) &&
                     txCounterparty(current) !== txLabel(current) && (
                       <p className="text-sm text-muted-foreground mt-0.5">
@@ -353,95 +284,56 @@ function FocusMode({
                     )}
                 </div>
 
-                {/* Meta */}
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1 border-t">
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t">
                   <span className="flex items-center gap-1">
                     <Building2 className="h-3 w-3" />
                     {current.bankAccount.name}
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {formatDate(current.bookingDate)}
+                    {fmtDateLong(current.bookingDate, locale, timezone)}
                   </span>
                   {current.remittanceInfo && (
-                    <span className="w-full truncate text-muted-foreground/70">
-                      Ref: {current.remittanceInfo}
+                    <span className="w-full truncate text-muted-foreground/60">
+                      {current.remittanceInfo}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Category picker */}
+              {/* Category select — selecting auto-categorizes */}
               <select
-                ref={selectRef}
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                key={current.id}
+                defaultValue=""
+                onChange={(e) => handleCategorySelect(e.target.value)}
+                disabled={isPending}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
               >
                 <option value="" disabled>
-                  Pick a category…
+                  {isPending ? "Saving…" : "Pick a category…"}
                 </option>
                 <CategoryOptions categories={categories} />
               </select>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                {/* Prev */}
+              {/* Navigation */}
+              <div className="flex items-center justify-between">
                 <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={goPrev}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIndex((i) => i - 1)}
                   disabled={index === 0}
-                  aria-label="Previous"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                 </Button>
-
-                {/* Skip */}
                 <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleSkip}
-                  disabled={isLast}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIndex((i) => Math.min(i + 1, queue.length - 1))}
+                  disabled={index >= queue.length - 1}
                 >
-                  <SkipForward className="h-4 w-4 mr-1.5" />
-                  Skip
-                </Button>
-
-                {/* Categorize */}
-                <Button
-                  className="flex-1"
-                  onClick={handleCategorize}
-                  disabled={!categoryId || isPending}
-                >
-                  {isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-1.5" />
-                      Categorize
-                    </>
-                  )}
-                </Button>
-
-                {/* Next */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={goNext}
-                  disabled={isLast}
-                  aria-label="Next"
-                >
-                  <ChevronRight className="h-4 w-4" />
+                  Next <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
-
-              {/* Keyboard hint */}
-              <p className="text-center text-xs text-muted-foreground/60">
-                ← → navigate · Enter categorize · Esc close
-              </p>
             </>
           ) : null}
         </div>
@@ -460,54 +352,92 @@ export function CategorizeInbox({
   total,
   page,
   pageSize,
-  initialQuery,
+  pageSizeOptions,
   locale,
-  currency,
   timezone,
 }: Props) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, startTransition] = useTransition();
 
-  // Local search input state (URL updated on debounce)
-  const [searchInput, setSearchInput] = useState(initialQuery);
+  // Client-side search filter
+  const [searchInput, setSearchInput] = useState("");
 
-  // Optimistic: hide individually categorized rows immediately
-  const [categorizedIds, setCategorizedIds] = useState<Set<string>>(new Set());
-
-  // Bulk categorize controls
+  // Checkbox selection for bulk
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [isBulking, setIsBulking] = useState(false);
 
-  // Focus mode
-  const [focusMode, setFocusMode] = useState(false);
+  // Optimistic hide after categorization
+  const [categorizedIds, setCategorizedIds] = useState<Set<string>>(new Set());
 
-  const visibleTransactions = transactions.filter((tx) => !categorizedIds.has(tx.id));
+  // Focus modal: snapshot + starting index, null = closed
+  const [focusState, setFocusState] = useState<{
+    snapshot: Transaction[];
+    index: number;
+  } | null>(null);
+
+  // Derived lists
+  const available = transactions.filter((tx) => !categorizedIds.has(tx.id));
+  const filtered = searchInput.trim()
+    ? available.filter((tx) => matchesSearch(tx, searchInput.trim()))
+    : available;
+
+  const checkedVisible = filtered.filter((tx) => checkedIds.has(tx.id));
+  const allChecked =
+    filtered.length > 0 && checkedVisible.length === filtered.length;
+  const someChecked = checkedVisible.length > 0 && !allChecked;
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
 
-  // ── Search ──────────────────────────────────
+  // ── Checkboxes ───────────────────────────────
 
-  function handleSearchChange(value: string) {
-    setSearchInput(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const sp = new URLSearchParams();
-      if (value.trim()) sp.set("q", value.trim());
-      startTransition(() => router.push(`/categorize?${sp.toString()}`));
-    }, 350);
+  function toggleCheck(txId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(txId)) next.delete(txId);
+      else next.add(txId);
+      return next;
+    });
   }
 
-  function clearSearch() {
-    setSearchInput("");
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    startTransition(() => router.push("/categorize"));
+  function toggleAll(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (allChecked || someChecked) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(filtered.map((tx) => tx.id)));
+    }
+  }
+
+  // ── Bulk apply ───────────────────────────────
+
+  async function handleBulkApply() {
+    if (!bulkCategoryId || checkedVisible.length === 0) return;
+    const ids = checkedVisible.map((tx) => tx.id);
+    setIsBulking(true);
+    setCategorizedIds((prev) => new Set([...prev, ...ids]));
+    setCheckedIds(new Set());
+    setBulkCategoryId("");
+    try {
+      await bulkCategorizeByIds(ids, bulkCategoryId);
+    } catch {
+      setCategorizedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    } finally {
+      setIsBulking(false);
+    }
   }
 
   // ── Individual categorize ────────────────────
 
-  function handleCategorize(txId: string, categoryId: string) {
+  function handleCategorize(txId: string, categoryId: string, e?: React.SyntheticEvent) {
+    e?.stopPropagation();
     if (!categoryId) return;
     setCategorizedIds((prev) => new Set([...prev, txId]));
     startTransition(async () => {
@@ -523,72 +453,40 @@ export function CategorizeInbox({
     });
   }
 
-  // Shared handler for focus mode to optimistically hide rows
+  // ── Focus modal callbacks ────────────────────
+
   const handleFocusCategorized = useCallback((txId: string) => {
+    setCategorizedIds((prev) => new Set([...prev, txId]));
+  }, []);
+
+  const handleFocusReverted = useCallback((txId: string) => {
     setCategorizedIds((prev) => {
       const next = new Set(prev);
-      // Toggle: focus mode may call this to revert
-      if (next.has(txId)) next.delete(txId);
-      else next.add(txId);
+      next.delete(txId);
       return next;
     });
   }, []);
 
-  // ── Bulk categorize ──────────────────────────
-
-  async function handleBulkCategorize() {
-    if (!bulkCategoryId) return;
-    setIsBulking(true);
-    try {
-      await bulkCategorize(searchInput.trim(), bulkCategoryId);
-      setBulkCategoryId("");
-      setSearchInput("");
-      startTransition(() => router.push("/categorize"));
-    } finally {
-      setIsBulking(false);
-    }
+  function openFocus(index: number) {
+    setFocusState({ snapshot: filtered, index });
   }
 
-  // ── Pagination URLs ──────────────────────────
+  // ── Page size + pagination ───────────────────
+
+  function handlePageSizeChange(newSize: number) {
+    const sp = new URLSearchParams({ size: String(newSize) });
+    startTransition(() => router.push(`/categorize?${sp.toString()}`));
+  }
 
   function pageUrl(p: number) {
-    const sp = new URLSearchParams({ page: String(p) });
-    if (searchInput.trim()) sp.set("q", searchInput.trim());
+    const sp = new URLSearchParams({ page: String(p), size: String(pageSize) });
     return `/categorize?${sp.toString()}`;
-  }
-
-  // ── Formatters ───────────────────────────────
-
-  function formatAmount(tx: Transaction) {
-    return Number(tx.amount.toString()).toLocaleString(locale, {
-      style: "currency",
-      currency: tx.currency,
-    });
-  }
-
-  function formatDate(date: Date) {
-    return date.toLocaleDateString(locale, {
-      timeZone: timezone,
-      day: "numeric",
-      month: "short",
-    });
-  }
-
-  function txLabel(tx: Transaction) {
-    const isCredit = tx.direction === "CREDIT";
-    return tx.description ?? (isCredit ? tx.debtorName : tx.creditorName) ?? "Transaction";
-  }
-
-  function txCounterparty(tx: Transaction) {
-    const isCredit = tx.direction === "CREDIT";
-    return isCredit ? tx.debtorName : tx.creditorName;
   }
 
   // ── Empty states ─────────────────────────────
 
-  const allCaughtUp =
-    total === 0 && !searchInput.trim() && categorizedIds.size === 0;
-  const noResults = total === 0 && searchInput.trim().length > 0;
+  const allCaughtUp = total === 0 && categorizedIds.size === 0;
+  const noResults = filtered.length === 0 && available.length > 0 && searchInput.trim().length > 0;
 
   // ─────────────────────────────────────────────
   // Render
@@ -596,17 +494,16 @@ export function CategorizeInbox({
 
   return (
     <>
-      {/* ── Focus mode modal ── */}
-      {focusMode && visibleTransactions.length > 0 && (
-        <FocusMode
-          transactions={visibleTransactions}
+      {focusState && (
+        <FocusModal
+          snapshot={focusState.snapshot}
+          startIndex={focusState.index}
           categories={categories}
           locale={locale}
           timezone={timezone}
-          total={total}
-          pageOffset={(page - 1) * pageSize}
-          onClose={() => setFocusMode(false)}
+          onClose={() => setFocusState(null)}
           onCategorized={handleFocusCategorized}
+          onReverted={handleFocusReverted}
         />
       )}
 
@@ -619,46 +516,30 @@ export function CategorizeInbox({
               Classify transactions to get accurate reports.
             </p>
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            {total > 0 && (
-              <Badge variant="secondary" className="shrink-0 text-sm font-semibold">
-                {total} pending
-              </Badge>
-            )}
-            {visibleTransactions.length > 0 && categories.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setFocusMode(true)}
-                className="shrink-0 gap-1.5"
-              >
-                <CreditCard className="h-3.5 w-3.5" />
-                Focus
-              </Button>
-            )}
-          </div>
+          {total > 0 && (
+            <Badge variant="secondary" className="mt-1 shrink-0 text-sm font-semibold">
+              {total} pending
+            </Badge>
+          )}
         </div>
 
-        {/* ── Search bar ── */}
+        {/* ── Search (client-side filter) ── */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="search"
-            placeholder="Search by description, merchant, reference…"
+            placeholder="Filter by description, merchant, reference…"
             value={searchInput}
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-9 pr-4"
           />
-          {isPending && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-          )}
         </div>
 
-        {/* ── Bulk action bar (visible when search is active) ── */}
-        {searchInput.trim() && total > 0 && categories.length > 0 && (
+        {/* ── Bulk action bar (visible when items are checked) ── */}
+        {checkedVisible.length > 0 && categories.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30 px-4 py-3">
             <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300 shrink-0">
-              Categorize all {total} matches as:
+              {checkedVisible.length} selected — categorize as:
             </span>
             <select
               value={bulkCategoryId}
@@ -672,17 +553,18 @@ export function CategorizeInbox({
             </select>
             <Button
               size="sm"
-              onClick={handleBulkCategorize}
+              onClick={handleBulkApply}
               disabled={!bulkCategoryId || isBulking}
               className="bg-indigo-600 hover:bg-indigo-700 shrink-0"
             >
-              {isBulking ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Apply to all"
-              )}
+              {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
             </Button>
-            <Button variant="ghost" size="sm" onClick={clearSearch} className="shrink-0 text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCheckedIds(new Set())}
+              className="shrink-0 text-muted-foreground"
+            >
               Clear
             </Button>
           </div>
@@ -698,11 +580,10 @@ export function CategorizeInbox({
               <div>
                 <p className="font-semibold">All caught up!</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  No transactions pending categorization. Connect your bank accounts
-                  and transactions will appear here after the next sync.
+                  No transactions pending categorization.
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Tag className="h-3.5 w-3.5" />
                 <span>Transactions sync daily</span>
               </div>
@@ -710,7 +591,7 @@ export function CategorizeInbox({
           </Card>
         )}
 
-        {/* ── No results for search ── */}
+        {/* ── No filter results ── */}
         {noResults && (
           <Card className="border-dashed">
             <div className="flex flex-col items-center gap-3 py-10 text-center px-4">
@@ -720,25 +601,39 @@ export function CategorizeInbox({
               <div>
                 <p className="font-semibold">No matches</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  No uncategorized transactions match &quot;{searchInput}&quot;.
+                  No transactions on this page match &quot;{searchInput}&quot;.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={clearSearch}>
-                Clear search
+              <Button variant="outline" size="sm" onClick={() => setSearchInput("")}>
+                Clear filter
               </Button>
             </div>
           </Card>
         )}
 
         {/* ── Transaction list ── */}
-        {visibleTransactions.length > 0 && (
+        {filtered.length > 0 && (
           <>
-            {/* Range summary + view toggle */}
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                Showing {rangeStart}–{rangeEnd} of {total}
-                {searchInput.trim() ? ` matching "${searchInput}"` : ""}
-              </p>
+            {/* Controls row: range + page-size + pagination */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {searchInput.trim()
+                    ? `${filtered.length} of ${available.length} on this page`
+                    : `${rangeStart}–${rangeEnd} of ${total}`}
+                </p>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="h-6 rounded border border-input bg-background px-1 text-xs text-muted-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {pageSizeOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s} / page
+                    </option>
+                  ))}
+                </select>
+              </div>
               {totalPages > 1 && (
                 <div className="flex items-center gap-1">
                   {page > 1 ? (
@@ -770,20 +665,55 @@ export function CategorizeInbox({
               )}
             </div>
 
-            {/* Rows */}
+            {/* Table */}
             <Card>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {visibleTransactions.map((tx) => {
+                  {/* Select-all header row */}
+                  <div className="flex items-center gap-3 px-4 py-2 bg-muted/20">
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someChecked;
+                      }}
+                      onChange={() => {}}
+                      onClick={toggleAll}
+                      className="h-4 w-4 rounded border-gray-300 accent-indigo-600 cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {someChecked || allChecked
+                        ? `${checkedVisible.length} selected`
+                        : "Select all"}
+                    </span>
+                  </div>
+
+                  {/* Transaction rows */}
+                  {filtered.map((tx, i) => {
                     const isCredit = tx.direction === "CREDIT";
                     const label = txLabel(tx);
                     const counterparty = txCounterparty(tx);
+                    const checked = checkedIds.has(tx.id);
 
                     return (
                       <div
                         key={tx.id}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
+                        onClick={() => openFocus(i)}
+                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                          checked
+                            ? "bg-indigo-50 dark:bg-indigo-950/20 hover:bg-indigo-100 dark:hover:bg-indigo-950/30"
+                            : "hover:bg-muted/30"
+                        }`}
                       >
+                        {/* Checkbox */}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {}}
+                          onClick={(e) => toggleCheck(tx.id, e)}
+                          className="h-4 w-4 rounded border-gray-300 accent-indigo-600 cursor-pointer shrink-0"
+                        />
+
                         {/* Direction icon */}
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
@@ -806,9 +736,7 @@ export function CategorizeInbox({
                             {counterparty && counterparty !== label
                               ? `${counterparty} · `
                               : ""}
-                            {tx.bankAccount.name}
-                            {" · "}
-                            {formatDate(tx.bookingDate)}
+                            {tx.bankAccount.name} · {fmtDate(tx.bookingDate, locale, timezone)}
                           </p>
                         </div>
 
@@ -819,15 +747,17 @@ export function CategorizeInbox({
                           }`}
                         >
                           {isCredit ? "+" : "−"}
-                          {formatAmount(tx)}
+                          {fmtAmount(tx, locale)}
                         </p>
 
-                        {/* Category picker */}
+                        {/* Category picker (inline) */}
                         <select
                           value=""
                           onChange={(e) => {
-                            if (e.target.value) handleCategorize(tx.id, e.target.value);
+                            if (e.target.value)
+                              handleCategorize(tx.id, e.target.value, e);
                           }}
+                          onClick={(e) => e.stopPropagation()}
                           className="h-8 max-w-40 min-w-32 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer shrink-0"
                           aria-label={`Categorize: ${label}`}
                         >
@@ -881,8 +811,8 @@ export function CategorizeInbox({
           </>
         )}
 
-        {/* ── All on this page categorized (but more pages remain) ── */}
-        {visibleTransactions.length === 0 &&
+        {/* ── Page done ── */}
+        {filtered.length === 0 &&
           !allCaughtUp &&
           !noResults &&
           categorizedIds.size > 0 && (
@@ -894,8 +824,7 @@ export function CategorizeInbox({
                 <div>
                   <p className="font-semibold">Page done!</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    All transactions on this page categorized.
-                    {page < totalPages && " Continue with the next page."}
+                    {page < totalPages && "Continue with the next page."}
                   </p>
                 </div>
                 {page < totalPages && (
