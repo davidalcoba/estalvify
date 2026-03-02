@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       aspspCountry,
       psuIpAddress,
       state,
+      redirectUri: `${request.nextUrl.origin}/api/banking/callback`,
     });
 
     await prisma.bankConnection.create({
