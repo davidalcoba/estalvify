@@ -1,0 +1,430 @@
+// Estalvify - Personal Finance App
+// Database schema for Prisma + Neon PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // URL configured in prisma.config.ts (Prisma v7)
+}
+
+// ─────────────────────────────────────────────
+// AUTH (Auth.js v5 required models)
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // User preferences
+  timezone      String    @default("Europe/London")
+  currency      String    @default("EUR")
+  locale        String    @default("es-ES")
+
+  accounts        Account[]
+  sessions        Session[]
+  bankConnections BankConnection[]
+  bankAccounts    BankAccount[]
+  transactions    Transaction[]
+  categories      Category[]
+  categoryRules   CategoryRule[]
+  budgets         Budget[]
+  aiSuggestions   AiCategorySuggestion[]
+
+  @@map("users")
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────
+// BANKING - Enable Banking connections
+// ─────────────────────────────────────────────
+
+model BankConnection {
+  id     String @id @default(cuid())
+  userId String
+
+  // Bank identification
+  bankId   String // Enable Banking ASPSP ID
+  bankName String
+  country  String @default("ES")
+
+  // Enable Banking session
+  sessionId String  @unique // Enable Banking session ID
+  sessionData Json?   // Full session response for reference
+
+  // OAuth tokens (encrypted at rest in production)
+  accessToken      String?
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+
+  // PSD2 consent validity
+  consentExpiresAt DateTime?
+
+  status      BankConnectionStatus @default(ACTIVE)
+  lastSyncAt  DateTime?            // When the last successful sync completed
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccounts BankAccount[]
+
+  @@map("bank_connections")
+}
+
+enum BankConnectionStatus {
+  ACTIVE
+  SYNCING         // Sync in progress
+  EXPIRED         // Token expired, needs re-auth
+  PENDING_REAUTH  // User must re-authenticate with the bank (OAuth in progress)
+  PENDING_SETUP   // OAuth done, user is selecting which accounts to import
+  REVOKED         // User explicitly disconnected
+}
+
+model BankAccount {
+  id               String @id @default(cuid())
+  userId           String
+  bankConnectionId String
+
+  // Enable Banking account identifiers
+  externalAccountId String  @unique // ID from Enable Banking API
+  iban              String?
+  bban              String?
+
+  name     String
+  type     BankAccountType @default(CHECKING)
+  currency String          @default("EUR")
+  isActive Boolean         @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankConnection BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  balances       AccountBalance[]
+  transactions   Transaction[]
+
+  @@map("bank_accounts")
+}
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+  CREDIT
+  INVESTMENT
+  OTHER
+}
+
+// Daily balance snapshots (fetched by cron job)
+model AccountBalance {
+  id            String @id @default(cuid())
+  bankAccountId String
+
+  date          DateTime @db.Date // Day this balance corresponds to
+  balance       Decimal  @db.Decimal(15, 2)
+  available     Decimal? @db.Decimal(15, 2) // Available balance (differs from balance for credit)
+  currency      String   @default("EUR")
+  balanceType   String?  // e.g. "closingBooked", "expected" (from Enable Banking)
+
+  createdAt DateTime @default(now())
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([bankAccountId, date, balanceType])
+  @@map("account_balances")
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTIONS - Immutable, as received from bank
+// ─────────────────────────────────────────────
+
+model Transaction {
+  id            String @id @default(cuid())
+  userId        String
+  bankAccountId String
+
+  // Unique bank-side transaction ID (prevents duplicates within an account)
+  externalTransactionId String
+
+  // Core financial data
+  amount      Decimal @db.Decimal(15, 2)
+  currency    String  @default("EUR")
+  direction   TransactionDirection // DEBIT or CREDIT
+
+  // Dates
+  bookingDate DateTime  @db.Date // When posted to account
+  valueDate   DateTime? @db.Date // When money actually moved
+
+  // Descriptors from bank (raw, do not modify)
+  description          String?
+  creditorName         String?
+  debtorName           String?
+  creditorIban         String?
+  debtorIban           String?
+  remittanceInfo       String? // Payment reference
+  merchantCategoryCode String? // MCC code
+
+  // Full raw response from Enable Banking API (JSONB)
+  rawData Json
+
+  createdAt DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  categorization   TransactionCategorization?
+  aiSuggestion     AiCategorySuggestion?
+
+  @@unique([bankAccountId, externalTransactionId])
+  @@index([userId, bookingDate])
+  @@index([bankAccountId, bookingDate])
+  @@map("transactions")
+}
+
+enum TransactionDirection {
+  DEBIT  // Money out
+  CREDIT // Money in
+}
+
+// ─────────────────────────────────────────────
+// CATEGORIES - Hierarchical, user-editable
+// ─────────────────────────────────────────────
+
+model Category {
+  id     String  @id @default(cuid())
+  userId String? // null = system default (shared for all users)
+
+  name            String
+  description     String?
+  color           String  @default("#6366f1") // Hex color for UI
+  icon            String? // Icon name (Lucide icon key)
+  isNonComputable Boolean @default(false) // e.g. transfers, savings movements
+  isSystem        Boolean @default(false) // Predefined, cannot be deleted
+  isActive        Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  // Self-referential for subcategories
+  parentId  String?
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryHierarchy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                   User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryRules          CategoryRule[]
+  transactionCategories  TransactionCategorization[]
+  budgetItems            BudgetItem[]
+
+  @@map("categories")
+}
+
+// User-defined rules for automatic categorization
+model CategoryRule {
+  id         String @id @default(cuid())
+  userId     String
+  categoryId String
+
+  name       String
+  conditions Json   // Array of RuleCondition: [{field, operator, value}]
+  // Field options: "description", "creditorName", "debtorName", "amount", "direction", "mcc"
+  // Operator options: "contains", "equals", "startsWith", "endsWith", "greaterThan", "lessThan"
+
+  isActive    Boolean @default(true)
+  priority    Int     @default(0) // Higher priority rules applied first
+  applyRetroactively Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category              Category                  @relation(fields: [categoryId], references: [id])
+  transactionCategories TransactionCategorization[]
+
+  @@map("category_rules")
+}
+
+// The categorization of a transaction (one per transaction, approved by user)
+model TransactionCategorization {
+  id            String @id @default(cuid())
+  transactionId String @unique
+  categoryId    String
+
+  status    CategorizationStatus @default(PENDING)
+  source    CategorizationSource // How the categorization was suggested
+
+  // Which rule triggered this (if source = RULE)
+  categoryRuleId String?
+
+  // User approval
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  note       String? // Optional user note
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category      Category      @relation(fields: [categoryId], references: [id])
+  categoryRule  CategoryRule? @relation(fields: [categoryRuleId], references: [id])
+
+  @@map("transaction_categorizations")
+}
+
+enum CategorizationStatus {
+  PENDING   // Suggested, waiting for user approval
+  APPROVED  // User confirmed
+  REJECTED  // User rejected (will be re-queued for manual categorization)
+}
+
+enum CategorizationSource {
+  RULE   // Matched a user-defined rule
+  AI     // AI suggestion
+  MANUAL // User categorized manually
+}
+
+// AI categorization suggestions with confidence score
+model AiCategorySuggestion {
+  id            String @id @default(cuid())
+  transactionId String @unique
+  userId        String
+
+  suggestedCategoryId String?
+  suggestedCategoryName String? // In case category doesn't exist yet
+  confidence    Float   // 0.0 - 1.0
+  reasoning     String? // AI explanation
+
+  // Suggestion lifecycle
+  status        AiSuggestionStatus @default(PENDING)
+  processedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_category_suggestions")
+}
+
+enum AiSuggestionStatus {
+  PENDING    // Not yet reviewed
+  ACCEPTED   // User accepted the suggestion
+  REJECTED   // User rejected it
+  SUPERSEDED // A rule now covers this transaction
+}
+
+// ─────────────────────────────────────────────
+// BUDGETS - Monthly planning by category
+// ─────────────────────────────────────────────
+
+model Budget {
+  id     String @id @default(cuid())
+  userId String
+
+  year  Int
+  month Int // 1–12
+  name  String? // Optional label (e.g. "December holiday budget")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetItems BudgetItem[]
+
+  @@unique([userId, year, month])
+  @@map("budgets")
+}
+
+model BudgetItem {
+  id         String @id @default(cuid())
+  budgetId   String
+  categoryId String
+
+  plannedAmount Decimal @db.Decimal(15, 2)
+  currency      String  @default("EUR")
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  budget   Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([budgetId, categoryId])
+  @@map("budget_items")
+}
+
+// ─────────────────────────────────────────────
+// SYNC LOG - Track daily cron job runs
+// ─────────────────────────────────────────────
+
+model SyncLog {
+  id     String @id @default(cuid())
+  userId String?
+
+  syncDate     DateTime @db.Date // Which day's data was synced
+  status       SyncStatus
+  transactionsFetched Int @default(0)
+  accountsSynced      Int @default(0)
+  errorMessage        String?
+  durationMs          Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([syncDate])
+  @@map("sync_logs")
+}
+
+enum SyncStatus {
+  SUCCESS
+  PARTIAL // Some accounts failed
+  FAILED
+}

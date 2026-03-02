@@ -1,0 +1,18 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync",
+      "schedule": "0 1 * * *"
+    }
+  ],
+  "functions": {
+    "app/api/queues/sync-connection/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "sync-connection"
+        }
+      ]
+    }
+  }
+}
