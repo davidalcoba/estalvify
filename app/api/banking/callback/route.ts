@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin;
+  const appUrl = request.nextUrl.origin;
 
   if (error || !code || !state) {
     const errorMsg = error ?? "missing_code_or_state";

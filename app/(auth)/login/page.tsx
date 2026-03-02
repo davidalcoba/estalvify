@@ -3,6 +3,7 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +40,10 @@ export default async function LoginPage() {
         <form
           action={async () => {
             "use server";
-            await signIn("google", { redirectTo: "/dashboard" });
+            const headersList = await headers();
+            const host = headersList.get("x-forwarded-host") ?? headersList.get("host") ?? "";
+            const proto = headersList.get("x-forwarded-proto") ?? "https";
+            await signIn("google", { redirectTo: `${proto}://${host}/dashboard` });
           }}
         >
           <Button type="submit" variant="outline" className="w-full h-11 gap-2">
