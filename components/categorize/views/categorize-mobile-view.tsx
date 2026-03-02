@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Search, Tag, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Loader2, Search, Tag, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import {
   transactionMerchant,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
-import { type Category } from "@/components/categorize/category-options";
+import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 
 interface CategorizeMobileViewProps {
@@ -24,6 +24,10 @@ interface CategorizeMobileViewProps {
   onSearchInputChange: (value: string) => void;
   onCategorize: (txId: string, categoryId: string) => void;
   pageUrl: (page: number) => string;
+  isBulking?: boolean;
+  bulkQueryCategoryId?: string;
+  onBulkQueryCategoryChange?: (value: string) => void;
+  onBulkByQuery?: () => void;
 }
 
 function fmtDate(dateIso: string, locale: string, timezone: string) {
@@ -46,12 +50,17 @@ export function CategorizeMobileView({
   onSearchInputChange,
   onCategorize,
   pageUrl,
+  isBulking,
+  bulkQueryCategoryId,
+  onBulkQueryCategoryChange,
+  onBulkByQuery,
 }: CategorizeMobileViewProps) {
   const [activeTxId, setActiveTxId] = useState<string | null>(null);
 
-  const filtered = searchInput.trim()
+  const activeQuery = searchInput.trim();
+  const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => {
-        const lower = searchInput.toLowerCase();
+        const lower = activeQuery.toLowerCase();
         return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((f) =>
           f?.toLowerCase().includes(lower)
         );
@@ -75,7 +84,8 @@ export function CategorizeMobileView({
   }, [categories]);
 
   const allCaughtUp = total === 0;
-  const noResults = filtered.length === 0 && transactions.length > 0 && searchInput.trim().length > 0;
+  const noResults = filtered.length === 0 && transactions.length > 0 && activeQuery.length >= 3;
+  const showBulkByQuery = onBulkByQuery && activeQuery.length >= 3 && filtered.length > 0 && categories.length > 0;
 
   return (
     <div className="space-y-4">
@@ -101,6 +111,32 @@ export function CategorizeMobileView({
           className="pl-9"
         />
       </div>
+
+      {showBulkByQuery && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+          <span className="text-sm font-medium text-blue-700 w-full">
+            Categorize all {filtered.length} matching as:
+          </span>
+          <select
+            value={bulkQueryCategoryId ?? ""}
+            onChange={(e) => onBulkQueryCategoryChange?.(e.target.value)}
+            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="" disabled>
+              Pick a category…
+            </option>
+            <CategoryOptions categories={categories} />
+          </select>
+          <Button
+            size="sm"
+            onClick={onBulkByQuery}
+            disabled={!bulkQueryCategoryId || isBulking}
+            className="bg-blue-600 hover:bg-blue-700 h-8"
+          >
+            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+          </Button>
+        </div>
+      )}
 
       {allCaughtUp && (
         <Card className="border-dashed">

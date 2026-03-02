@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,8 @@ interface TransactionFiltersProps {
 export function TransactionFilters({ from, to, accountId, query, accounts }: TransactionFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [localQuery, setLocalQuery] = useState(query);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function navigate(params: Record<string, string>) {
     const next = new URLSearchParams(searchParams.toString());
@@ -58,6 +61,22 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
     if (fromVal && toVal) {
       navigate({ from: fromVal, to: toVal });
     }
+  }
+
+  function handleQueryChange(value: string) {
+    setLocalQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.length === 0 || value.length >= 3) {
+      debounceRef.current = setTimeout(() => {
+        navigate({ q: value.trim() });
+      }, 500);
+    }
+  }
+
+  function handleQuerySubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    navigate({ q: localQuery.trim() });
   }
 
   return (
@@ -102,19 +121,13 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
         </div>
       </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const fd = new FormData(e.currentTarget);
-          navigate({ q: (fd.get("q") as string).trim() });
-        }}
-        className="relative"
-      >
+      <form onSubmit={handleQuerySubmit} className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
           name="q"
-          defaultValue={query}
+          value={localQuery}
+          onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Filter by description, merchant, reference…"
           className="h-9 w-full pl-9 pr-3 text-sm"
         />

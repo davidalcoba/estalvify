@@ -24,9 +24,12 @@ interface CategorizeDesktopViewProps {
   onSearchInputChange: (value: string) => void;
   checkedIds: Set<string>;
   bulkCategoryId: string;
+  bulkQueryCategoryId: string;
   isBulking: boolean;
   onBulkCategoryChange: (value: string) => void;
+  onBulkQueryCategoryChange: (value: string) => void;
   onBulkApply: () => void;
+  onBulkByQuery: () => void;
   onClearSelection: () => void;
   onToggleAll: () => void;
   onToggleCheck: (txId: string) => void;
@@ -56,9 +59,12 @@ export function CategorizeDesktopView({
   onSearchInputChange,
   checkedIds,
   bulkCategoryId,
+  bulkQueryCategoryId,
   isBulking,
   onBulkCategoryChange,
+  onBulkQueryCategoryChange,
   onBulkApply,
+  onBulkByQuery,
   onClearSelection,
   onToggleAll,
   onToggleCheck,
@@ -66,9 +72,10 @@ export function CategorizeDesktopView({
   onOpenFocus,
   onPageSizeChange,
 }: CategorizeDesktopViewProps) {
-  const filtered = searchInput.trim()
+  const activeQuery = searchInput.trim();
+  const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => {
-        const lower = searchInput.toLowerCase();
+        const lower = activeQuery.toLowerCase();
         return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((f) =>
           f?.toLowerCase().includes(lower)
         );
@@ -85,7 +92,8 @@ export function CategorizeDesktopView({
   const pageQuery = new URLSearchParams({ size: String(pageSize) }).toString();
 
   const allCaughtUp = total === 0;
-  const noResults = filtered.length === 0 && transactions.length > 0 && searchInput.trim().length > 0;
+  const noResults = filtered.length === 0 && transactions.length > 0 && activeQuery.length >= 3;
+  const showBulkByQuery = activeQuery.length >= 3 && filtered.length > 0 && checkedVisible.length === 0 && categories.length > 0;
 
   return (
     <div className="space-y-4">
@@ -111,6 +119,32 @@ export function CategorizeDesktopView({
           className="h-9 pl-9 pr-4 text-sm"
         />
       </div>
+
+      {showBulkByQuery && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <span className="text-sm font-medium text-blue-700 shrink-0">
+            Categorize all {filtered.length} matching as:
+          </span>
+          <select
+            value={bulkQueryCategoryId}
+            onChange={(e) => onBulkQueryCategoryChange(e.target.value)}
+            className="flex-1 min-w-40 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="" disabled>
+              Pick a category…
+            </option>
+            <CategoryOptions categories={categories} />
+          </select>
+          <Button
+            size="sm"
+            onClick={onBulkByQuery}
+            disabled={!bulkQueryCategoryId || isBulking}
+            className="bg-blue-600 hover:bg-blue-700 shrink-0"
+          >
+            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+          </Button>
+        </div>
+      )}
 
       {checkedVisible.length > 0 && categories.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
@@ -181,7 +215,7 @@ export function CategorizeDesktopView({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground">
-                {searchInput.trim()
+                {activeQuery.length >= 3
                   ? `Showing ${filtered.length} of ${transactions.length} on this page`
                   : `Showing ${rangeStart}–${rangeEnd} of ${total} transactions`}
               </p>

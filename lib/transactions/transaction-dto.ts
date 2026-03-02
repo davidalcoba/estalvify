@@ -10,6 +10,7 @@ export interface TransactionListItemDTO {
   creditorName: string | null;
   debtorName: string | null;
   remittanceInfo: string | null;
+  categoryId: string | null;
   categoryName: string | null;
   categoryColor: string | null;
   bankAccount: {
@@ -33,6 +34,7 @@ interface TransactionRecordLike {
   debtorName: string | null;
   remittanceInfo?: string | null;
   categorization?: {
+    categoryId?: string;
     category?: {
       name: string;
       color?: string | null;
@@ -55,6 +57,7 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
     creditorName: tx.creditorName,
     debtorName: tx.debtorName,
     remittanceInfo: tx.remittanceInfo ?? null,
+    categoryId: tx.categorization?.categoryId ?? null,
     categoryName: tx.categorization?.category?.name ?? null,
     categoryColor: tx.categorization?.category?.color ?? null,
     bankAccount: {
