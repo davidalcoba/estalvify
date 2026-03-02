@@ -15,6 +15,7 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  X,
 } from "lucide-react";
 
 import {
@@ -29,6 +30,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -101,6 +103,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppSidebarProps) {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const initials = user.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -110,21 +113,35 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
     <Sidebar collapsible="icon">
       {/* ── Header ── */}
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
-                  <Sparkles className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Estalvify</span>
-                  <span className="text-xs text-muted-foreground">Personal Finance</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="flex items-center gap-2">
+          <SidebarMenu className="flex-1 min-w-0">
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <Link
+                  href="/dashboard"
+                  onClick={isMobile ? () => setOpenMobile(false) : undefined}
+                >
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
+                    <Sparkles className="size-4" />
+                  </div>
+                  <div className="flex flex-col gap-0.5 leading-none">
+                    <span className="font-semibold">Estalvify</span>
+                    <span className="text-xs text-muted-foreground">Personal Finance</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          {isMobile && (
+            <button
+              onClick={() => setOpenMobile(false)}
+              className="shrink-0 rounded-md p-2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <X className="size-5" />
+              <span className="sr-only">Close menu</span>
+            </button>
+          )}
+        </div>
       </SidebarHeader>
 
       {/* ── Navigation ── */}
@@ -141,7 +158,13 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
 
                   return (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.title}
+                        size={isMobile ? "lg" : "default"}
+                        onClick={isMobile ? () => setOpenMobile(false) : undefined}
+                      >
                         <Link href={item.url}>
                           <item.icon />
                           <span>{item.title}</span>
