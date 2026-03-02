@@ -11,6 +11,7 @@
 - Use server components by default
 - Add `"use client"` only when interactivity requires it
 - Keep client components focused on interaction and presentation
+- At server -> client boundaries, pass DTOs/plain objects only (no `Date`/`Decimal`/class instances)
 
 ## Data Access
 

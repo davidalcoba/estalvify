@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef } from "react";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -22,13 +22,13 @@ interface TransactionFiltersProps {
   from: string;
   to: string;
   accountId: string;
+  query: string;
   accounts: Account[];
 }
 
-export function TransactionFilters({ from, to, accountId, accounts }: TransactionFiltersProps) {
+export function TransactionFilters({ from, to, accountId, query, accounts }: TransactionFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const formRef = useRef<HTMLFormElement>(null);
 
   function navigate(params: Record<string, string>) {
     const next = new URLSearchParams(searchParams.toString());
@@ -42,7 +42,8 @@ export function TransactionFilters({ from, to, accountId, accounts }: Transactio
 
   function applyPreset(days: number) {
     const toDate = new Date();
-    const fromDate = new Date(Date.now() - days * 86_400_000);
+    const fromDate = new Date(toDate);
+    fromDate.setDate(fromDate.getDate() - days);
     navigate({
       from: fromDate.toISOString().split("T")[0],
       to: toDate.toISOString().split("T")[0],
@@ -54,18 +55,19 @@ export function TransactionFilters({ from, to, accountId, accounts }: Transactio
     const fd = new FormData(e.currentTarget);
     const fromVal = fd.get("from") as string;
     const toVal = fd.get("to") as string;
-    if (fromVal && toVal) navigate({ from: fromVal, to: toVal });
+    if (fromVal && toVal) {
+      navigate({ from: fromVal, to: toVal });
+    }
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Account selector */}
-      {accounts.length > 1 && (
-        <>
+    <div className="space-y-3 rounded-xl border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {accounts.length > 1 && (
           <select
             value={accountId}
             onChange={(e) => navigate({ accountId: e.target.value })}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 w-full sm:w-[280px] min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="">All accounts</option>
             {accounts.map((a) => (
@@ -75,45 +77,48 @@ export function TransactionFilters({ from, to, accountId, accounts }: Transactio
               </option>
             ))}
           </select>
-          <div className="w-px h-5 bg-border mx-1 hidden sm:block" />
-        </>
-      )}
+        )}
 
-      {/* Date presets */}
-      {PRESETS.map((p) => (
-        <Button
-          key={p.label}
-          variant="outline"
-          size="sm"
-          onClick={() => applyPreset(p.days)}
-          className="h-8 text-xs"
-        >
-          {p.label}
-        </Button>
-      ))}
+        <div className="flex flex-wrap gap-2">
+          <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
+            {PRESETS.map((p) => (
+              <Button
+                key={p.label}
+                variant="outline"
+                size="sm"
+                onClick={() => applyPreset(p.days)}
+                className="h-9 text-sm"
+              >
+                {p.label}
+              </Button>
+            ))}
+            <div className="mx-1 hidden h-5 w-px bg-border lg:block" />
+            <Input type="date" name="from" defaultValue={from} className="h-9 w-full sm:w-[180px] text-sm" />
+            <Input type="date" name="to" defaultValue={to} className="h-9 w-full sm:w-[180px] text-sm" />
+            <Button type="submit" size="sm" className="h-9 px-4 text-sm">
+              Apply
+            </Button>
+          </form>
+        </div>
+      </div>
 
-      <div className="w-px h-5 bg-border mx-1 hidden sm:block" />
-
-      {/* Custom date range */}
-      <form ref={formRef} onSubmit={handleSubmit} className="flex items-center gap-1.5">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          navigate({ q: (fd.get("q") as string).trim() });
+        }}
+        className="relative"
+      >
+        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          type="date"
-          name="from"
-          defaultValue={from}
-          className="h-8 w-36 text-xs"
+          type="search"
+          name="q"
+          defaultValue={query}
+          placeholder="Filter by description, merchant, reference…"
+          className="h-9 w-full pl-9 pr-3 text-sm"
         />
-        <span className="text-muted-foreground text-xs">–</span>
-        <Input
-          type="date"
-          name="to"
-          defaultValue={to}
-          className="h-8 w-36 text-xs"
-        />
-        <Button type="submit" size="sm" className="h-8 text-xs">
-          Apply
-        </Button>
       </form>
     </div>
   );
 }
-

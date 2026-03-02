@@ -3,7 +3,8 @@
 
 import type { Metadata } from "next";
 import { auth } from "@/auth";
-import { getUserPrefs, formatDate } from "@/lib/user-prefs";
+import { getUserPrefs } from "@/lib/user-prefs";
+import { formatDate } from "@/lib/formatters";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PiggyBank, Plus } from "lucide-react";

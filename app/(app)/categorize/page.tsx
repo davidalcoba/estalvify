@@ -4,8 +4,9 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
-import { CategorizeInbox } from "@/components/categorize/categorize-inbox";
+import { CategorizeView } from "@/components/categorize/categorize-view";
 import { buildUncategorizedWhere } from "@/lib/categorize";
+import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
 export const metadata: Metadata = { title: "Categorize" };
 
@@ -33,7 +34,7 @@ export default async function CategorizePage({ searchParams }: PageProps) {
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
-      include: { bankAccount: { select: { name: true } } },
+      include: { bankAccount: { select: { id: true, name: true } } },
       orderBy: [{ bookingDate: "desc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -46,15 +47,14 @@ export default async function CategorizePage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <CategorizeInbox
-      transactions={transactions}
+    <CategorizeView
+      transactions={transactions.map(toTransactionListItemDTO)}
       categories={categories}
       total={total}
       page={page}
       pageSize={pageSize}
       pageSizeOptions={[...PAGE_SIZES]}
       locale={prefs.locale}
-      currency={prefs.currency}
       timezone={prefs.timezone}
     />
   );

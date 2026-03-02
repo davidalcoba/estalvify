@@ -5,7 +5,8 @@
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getUserPrefs, formatDate, formatCurrency } from "@/lib/user-prefs";
+import { getUserPrefs } from "@/lib/user-prefs";
+import { formatDate, formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Building2, AlertTriangle, CheckCircle2, RefreshCw, XCircle, CheckCircle } from "lucide-react";

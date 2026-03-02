@@ -1,5 +1,8 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
-CREATE TYPE "BankConnectionStatus" AS ENUM ('ACTIVE', 'EXPIRED', 'PENDING_REAUTH', 'REVOKED');
+CREATE TYPE "BankConnectionStatus" AS ENUM ('ACTIVE', 'SYNCING', 'EXPIRED', 'PENDING_REAUTH', 'PENDING_SETUP', 'REVOKED');
 
 -- CreateEnum
 CREATE TYPE "BankAccountType" AS ENUM ('CHECKING', 'SAVINGS', 'CREDIT', 'INVESTMENT', 'OTHER');
@@ -28,6 +31,9 @@ CREATE TABLE "users" (
     "image" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'Europe/London',
+    "currency" TEXT NOT NULL DEFAULT 'EUR',
+    "locale" TEXT NOT NULL DEFAULT 'es-ES',
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
@@ -83,6 +89,7 @@ CREATE TABLE "bank_connections" (
     "tokenExpiresAt" TIMESTAMP(3),
     "consentExpiresAt" TIMESTAMP(3),
     "status" "BankConnectionStatus" NOT NULL DEFAULT 'ACTIVE',
+    "lastSyncAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -271,13 +278,13 @@ CREATE UNIQUE INDEX "bank_accounts_externalAccountId_key" ON "bank_accounts"("ex
 CREATE UNIQUE INDEX "account_balances_bankAccountId_date_balanceType_key" ON "account_balances"("bankAccountId", "date", "balanceType");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "transactions_externalTransactionId_key" ON "transactions"("externalTransactionId");
-
--- CreateIndex
 CREATE INDEX "transactions_userId_bookingDate_idx" ON "transactions"("userId", "bookingDate");
 
 -- CreateIndex
 CREATE INDEX "transactions_bankAccountId_bookingDate_idx" ON "transactions"("bankAccountId", "bookingDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "transactions_bankAccountId_externalTransactionId_key" ON "transactions"("bankAccountId", "externalTransactionId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "transaction_categorizations_transactionId_key" ON "transaction_categorizations"("transactionId");
@@ -353,3 +360,4 @@ ALTER TABLE "budget_items" ADD CONSTRAINT "budget_items_budgetId_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "budget_items" ADD CONSTRAINT "budget_items_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+

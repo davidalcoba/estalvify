@@ -26,6 +26,7 @@
   - Compose feature sections
   - Fetch/orchestrate data
   - Delegate interactions to components and actions
+  - Serialize server data before passing it to client components
 
 - `components/ui/*`
   - Base visual primitives used across the app
@@ -33,6 +34,10 @@
 
 - `components/<domain>/*`
   - Domain-aware UI components (accounts, settings, transactions, categorize)
+  - Prefer explicit device views when UX differs by form factor:
+    - `FeatureDesktopView`
+    - `FeatureMobileView`
+    - `FeatureView` switcher and `shared/*` building blocks
 
 - `lib/*`
   - Non-visual domain logic
@@ -63,3 +68,13 @@ Rules:
 - Keep UI responsive while jobs run in background
 - Reflect processing state to users
 - Ensure retries are safe and idempotent where possible
+
+## Server to Client DTO Boundary
+
+Do not pass ORM-rich objects directly to client components.
+
+Rules:
+
+- Use DTO mappers in `lib/**` for server -> client payloads.
+- Convert non-serializable values (`Date`, `Decimal`, class instances) to plain values.
+- Keep DTOs stable and reusable across desktop/mobile views for the same feature.

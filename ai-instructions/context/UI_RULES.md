@@ -42,6 +42,18 @@ Recommended naming for feature UIs:
 - `FeatureMobileView`
 - Shared pieces in `shared/`
 
+When a desktop/mobile switcher is needed:
+
+- Keep one orchestration component (`FeatureView` or feature container) for state/actions
+- Render desktop and mobile views from that orchestrator
+- Avoid hydration glitches and layout jumps during initial mount
+
+For related transaction workflows (for example `transactions` and `categorize`):
+
+- Keep shared visual language aligned: date headers, amount formatting, row/card rhythm
+- Keep top-level structure aligned: title/subtitle, filter area, summary/pagination
+- Diverge only where behavior is intentionally different (read-only vs classify actions)
+
 ## Future Native Readiness
 
 Even though native app work is not in scope now, UI decisions should keep migration simple:

@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { disconnectBankGroup } from "@/app/(app)/accounts/actions";
+import { useHydrated } from "@/lib/use-hydrated";
 
 interface DisconnectBankButtonProps {
   connectionIds: string[];
@@ -20,6 +21,7 @@ interface DisconnectBankButtonProps {
 }
 
 export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBankButtonProps) {
+  const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -28,6 +30,14 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
       await disconnectBankGroup(connectionIds);
       setOpen(false);
     });
+  }
+
+  if (!hydrated) {
+    return (
+      <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" disabled>
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    );
   }
 
   return (

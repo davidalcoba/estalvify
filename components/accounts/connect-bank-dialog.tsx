@@ -4,7 +4,6 @@
 // User searches for their bank, clicks Connect, gets redirected to bank auth page
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Plus, Search, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useHydrated } from "@/lib/use-hydrated";
 
 // Spanish banks available via Enable Banking
 // In the future this list can be fetched from /api/banking/banks
@@ -36,7 +36,7 @@ const SUPPORTED_BANKS = [
 ];
 
 export function ConnectBankDialog() {
-  const router = useRouter();
+  const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -77,6 +77,15 @@ export function ConnectBankDialog() {
         setConnectingBank(null);
       }
     });
+  }
+
+  if (!hydrated) {
+    return (
+      <Button disabled>
+        <Plus className="mr-2 h-4 w-4" />
+        Connect bank
+      </Button>
+    );
   }
 
   return (
