@@ -1,14 +1,9 @@
-import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Inbox, Loader2, Search, Tag, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  transactionMerchant,
-  type TransactionListItemDTO,
-} from "@/lib/transactions/transaction-dto";
+import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 
@@ -55,8 +50,6 @@ export function CategorizeMobileView({
   onBulkQueryCategoryChange,
   onBulkByQuery,
 }: CategorizeMobileViewProps) {
-  const [activeTxId, setActiveTxId] = useState<string | null>(null);
-
   const activeQuery = searchInput.trim();
   const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => {
@@ -70,18 +63,6 @@ export function CategorizeMobileView({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
-  const activeTx = useMemo(
-    () => filtered.find((tx) => tx.id === activeTxId) ?? null,
-    [filtered, activeTxId]
-  );
-
-  const categorySections = useMemo(() => {
-    const parents = categories.filter((category) => !category.parentId);
-    return parents.map((parent) => {
-      const children = categories.filter((category) => category.parentId === parent.id);
-      return { parent, children };
-    });
-  }, [categories]);
 
   const allCaughtUp = total === 0;
   const noResults = filtered.length === 0 && transactions.length > 0 && activeQuery.length >= 3;
@@ -122,9 +103,7 @@ export function CategorizeMobileView({
             onChange={(e) => onBulkQueryCategoryChange?.(e.target.value)}
             className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <option value="" disabled>
-              Pick a category…
-            </option>
+            <option value="" disabled>Pick a category…</option>
             <CategoryOptions categories={categories} />
           </select>
           <Button
@@ -199,88 +178,30 @@ export function CategorizeMobileView({
           </div>
 
           <div className="space-y-3">
-            {filtered.map((tx) => {
-              return (
-                <Card key={tx.id} className="py-0 gap-0 overflow-hidden">
-                  <CardContent className="p-0">
-                    <TransactionItem
-                      tx={tx}
-                      locale={locale}
-                      dateText={fmtDate(tx.bookingDate, locale, timezone)}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="m-3 mt-0 w-[calc(100%-1.5rem)]"
-                      onClick={() => setActiveTxId(tx.id)}
+            {filtered.map((tx) => (
+              <Card key={tx.id} className="py-0 gap-0 overflow-hidden">
+                <CardContent className="p-0">
+                  <TransactionItem
+                    tx={tx}
+                    locale={locale}
+                    dateText={fmtDate(tx.bookingDate, locale, timezone)}
+                  />
+                  <div className="px-3 pb-3">
+                    <select
+                      defaultValue=""
+                      onChange={(e) => { if (e.target.value) onCategorize(tx.id, e.target.value); }}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                     >
-                      Categorize
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      <option value="" disabled>Category…</option>
+                      <CategoryOptions categories={categories} />
+                    </select>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </>
       )}
-
-      <Sheet open={Boolean(activeTx)} onOpenChange={(open) => !open && setActiveTxId(null)}>
-        <SheetContent side="bottom" className="max-h-[75vh]">
-          <SheetHeader className="pb-2">
-            <SheetTitle>Choose a category</SheetTitle>
-            <SheetDescription className="line-clamp-2">
-              {activeTx ? transactionMerchant(activeTx) : "Select a category for this transaction."}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="overflow-y-auto px-4 pb-5 space-y-4">
-            {categorySections.map(({ parent, children }) => (
-              <div key={parent.id} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {parent.name}
-                </p>
-
-                {children.length === 0 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => {
-                      if (activeTx) {
-                        onCategorize(activeTx.id, parent.id);
-                        setActiveTxId(null);
-                      }
-                    }}
-                  >
-                    {parent.name}
-                  </Button>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2">
-                    {children.map((child) => (
-                      <Button
-                        key={child.id}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start"
-                        onClick={() => {
-                          if (activeTx) {
-                            onCategorize(activeTx.id, child.id);
-                            setActiveTxId(null);
-                          }
-                        }}
-                      >
-                        {child.name}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
