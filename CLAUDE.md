@@ -13,3 +13,7 @@ This file is an index. Use `ai-instructions/` as the source of truth.
 
 ## Skills
 - `./ai-instructions/skills/frontend-design/SKILL.md`
+
+## Auto-Applied Skills
+
+When working on any frontend or UI task — components, pages, layouts, styles, or visual redesigns — **always apply the guidelines from `./ai-instructions/skills/frontend-design/SKILL.md` automatically**, without needing to be explicitly asked.
