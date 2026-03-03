@@ -42,7 +42,6 @@ next-env.d.ts
 
 # prisma generated client (configured at prisma/schema.prisma -> generator output)
 /app/generated/
-/app/generated/prisma
 
 # Certificates & private keys
 certificates/
