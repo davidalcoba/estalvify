@@ -77,8 +77,8 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
       )}
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
-        <Input type="date" name="from" defaultValue={from} className="h-9 flex-1 min-w-0 text-sm" />
-        <Input type="date" name="to" defaultValue={to} className="h-9 flex-1 min-w-0 text-sm" />
+        <Input type="date" name="from" defaultValue={from} className="h-9 w-full sm:w-[150px] text-sm" />
+        <Input type="date" name="to" defaultValue={to} className="h-9 w-full sm:w-[150px] text-sm" />
         <Button type="submit" size="sm" className="h-9 px-4 text-sm shrink-0">
           Apply
         </Button>
