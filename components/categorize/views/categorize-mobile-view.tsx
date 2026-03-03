@@ -1,9 +1,19 @@
-import { ChevronLeft, ChevronRight, Inbox, Loader2, Tag, CheckCircle } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, Inbox, Loader2, Tag, CheckCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
+import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 
 interface CategorizeMobileViewProps {
   transactions: TransactionListItemDTO[];
@@ -21,6 +31,11 @@ interface CategorizeMobileViewProps {
   bulkQueryCategoryId?: string;
   onBulkQueryCategoryChange?: (value: string) => void;
   onBulkByQuery?: () => void;
+}
+
+interface SheetState {
+  tx: TransactionListItemDTO;
+  pendingCategoryId: string;
 }
 
 function fmtDate(dateIso: string, locale: string, timezone: string) {
@@ -48,6 +63,9 @@ export function CategorizeMobileView({
   onBulkQueryCategoryChange,
   onBulkByQuery,
 }: CategorizeMobileViewProps) {
+  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const [quickRule, setQuickRule] = useState<{ tx: TransactionListItemDTO; categoryId: string; categoryName: string } | null>(null);
+
   const activeQuery = searchInput.trim();
   const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => {
@@ -65,6 +83,23 @@ export function CategorizeMobileView({
   const allCaughtUp = total === 0;
   const noResults = filtered.length === 0 && transactions.length > 0 && activeQuery.length >= 3;
   const showBulkByQuery = onBulkByQuery && activeQuery.length >= 3 && filtered.length > 0 && categories.length > 0;
+
+  function handleCategorySelect(tx: TransactionListItemDTO, categoryId: string) {
+    setSheet((prev) => prev ? { ...prev, pendingCategoryId: categoryId } : prev);
+  }
+
+  function handleConfirmCategorize() {
+    if (!sheet || !sheet.pendingCategoryId) return;
+    onCategorize(sheet.tx.id, sheet.pendingCategoryId);
+    setSheet(null);
+  }
+
+  function handleOpenQuickRule() {
+    if (!sheet?.pendingCategoryId) return;
+    const cat = categories.find((c) => c.id === sheet.pendingCategoryId);
+    setQuickRule({ tx: sheet.tx, categoryId: sheet.pendingCategoryId, categoryName: cat?.name ?? "" });
+    setSheet(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -154,28 +189,85 @@ export function CategorizeMobileView({
 
           <div className="space-y-3">
             {filtered.map((tx) => (
-              <Card key={tx.id} className="py-0 gap-0 overflow-hidden">
+              <Card
+                key={tx.id}
+                className="py-0 gap-0 overflow-hidden cursor-pointer active:opacity-80 transition-opacity"
+                onClick={() => setSheet({ tx, pendingCategoryId: "" })}
+              >
                 <CardContent className="p-0">
                   <TransactionItem
                     tx={tx}
                     locale={locale}
                     dateText={fmtDate(tx.bookingDate, locale, timezone)}
                   />
-                  <div className="px-3 pb-3">
-                    <select
-                      defaultValue=""
-                      onChange={(e) => { if (e.target.value) onCategorize(tx.id, e.target.value); }}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="" disabled>Category…</option>
-                      <CategoryOptions categories={categories} />
-                    </select>
-                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         </>
+      )}
+
+      {/* Categorize sheet */}
+      <Sheet open={!!sheet} onOpenChange={(open) => { if (!open) setSheet(null); }}>
+        <SheetContent side="bottom" className="rounded-t-xl pb-8">
+          {sheet && (
+            <>
+              <SheetHeader className="pb-2">
+                <SheetTitle className="text-base">Categorize</SheetTitle>
+              </SheetHeader>
+
+              <div className="px-4 pb-2">
+                <TransactionItem
+                  tx={sheet.tx}
+                  locale={locale}
+                  dateText={fmtDate(sheet.tx.bookingDate, locale, timezone)}
+                />
+              </div>
+
+              <div className="px-4 space-y-3">
+                <select
+                  value={sheet.pendingCategoryId}
+                  onChange={(e) => handleCategorySelect(sheet.tx, e.target.value)}
+                  className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="" disabled>Select a category…</option>
+                  <CategoryOptions categories={categories} />
+                </select>
+
+                <Button
+                  className="w-full h-11"
+                  disabled={!sheet.pendingCategoryId}
+                  onClick={handleConfirmCategorize}
+                >
+                  Confirm
+                </Button>
+
+                {sheet.pendingCategoryId && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-10 gap-2 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    onClick={handleOpenQuickRule}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Create rule for this
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Quick rule dialog */}
+      {quickRule && (
+        <QuickRuleDialog
+          open={!!quickRule}
+          onClose={() => setQuickRule(null)}
+          transaction={quickRule.tx}
+          categoryId={quickRule.categoryId}
+          categoryName={quickRule.categoryName}
+          categories={categories}
+        />
       )}
     </div>
   );

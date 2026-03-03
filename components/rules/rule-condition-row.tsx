@@ -16,9 +16,6 @@ const ALL_FIELDS: RuleConditionField[] = [
   "description",
   "creditorName",
   "debtorName",
-  "remittanceInfo",
-  "amount",
-  "direction",
 ];
 
 interface RuleConditionRowProps {
@@ -78,26 +75,13 @@ export function RuleConditionRow({
         ))}
       </select>
 
-      {condition.field === "direction" ? (
-        <select
-          value={condition.value}
-          onChange={(e) => handleValueChange(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-w-[120px] flex-1"
-        >
-          <option value="DEBIT">Debit (expense)</option>
-          <option value="CREDIT">Credit (income)</option>
-        </select>
-      ) : (
-        <input
-          type={condition.field === "amount" ? "number" : "text"}
-          value={condition.value}
-          onChange={(e) => handleValueChange(e.target.value)}
-          placeholder={condition.field === "amount" ? "0.00" : "Value..."}
-          min={condition.field === "amount" ? "0" : undefined}
-          step={condition.field === "amount" ? "0.01" : undefined}
-          className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 flex-1 min-w-[140px]"
-        />
-      )}
+      <input
+        type="text"
+        value={condition.value}
+        onChange={(e) => handleValueChange(e.target.value)}
+        placeholder="Value..."
+        className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 flex-1 min-w-[140px]"
+      />
 
       <Button
         type="button"

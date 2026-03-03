@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Inbox, Loader2, Tag, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +11,7 @@ import {
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 
 interface CategorizeDesktopViewProps {
   transactions: TransactionListItemDTO[];
@@ -70,6 +74,19 @@ export function CategorizeDesktopView({
   onOpenFocus,
   onPageSizeChange,
 }: CategorizeDesktopViewProps) {
+  const [pendingRule, setPendingRule] = useState<{
+    tx: TransactionListItemDTO;
+    categoryId: string;
+    categoryName: string;
+  } | null>(null);
+
+  function handleCategorize(txId: string, categoryId: string) {
+    const tx = transactions.find((t) => t.id === txId);
+    const cat = categories.find((c) => c.id === categoryId);
+    if (tx && cat) setPendingRule({ tx, categoryId, categoryName: cat.name });
+    onCategorize(txId, categoryId);
+  }
+
   const activeQuery = searchInput.trim();
   const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => {
@@ -270,7 +287,7 @@ export function CategorizeDesktopView({
                           value=""
                           onChange={(e) => {
                             if (e.target.value) {
-                              onCategorize(tx.id, e.target.value);
+                              handleCategorize(tx.id, e.target.value);
                             }
                           }}
                           onClick={(e) => e.stopPropagation()}
@@ -290,6 +307,17 @@ export function CategorizeDesktopView({
             </CardContent>
           </Card>
         </>
+      )}
+
+      {pendingRule && (
+        <QuickRuleDialog
+          open={!!pendingRule}
+          onClose={() => setPendingRule(null)}
+          transaction={pendingRule.tx}
+          categoryId={pendingRule.categoryId}
+          categoryName={pendingRule.categoryName}
+          categories={categories}
+        />
       )}
     </div>
   );

@@ -33,7 +33,6 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
   const [conditions, setConditions] = useState<RuleCondition[]>([
     defaultCondition(),
   ]);
-  const [sourceCategoryId, setSourceCategoryId] = useState<string>("");
   const [targetCategoryId, setTargetCategoryId] = useState<string>("");
   const [ruleName, setRuleName] = useState<string>("");
 
@@ -73,7 +72,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
       try {
         const result = await previewRuleTransactions(
           conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
-          sourceCategoryId || null
+          null
         );
         setPreview(result);
       } catch {
@@ -93,7 +92,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
       try {
         const result = await executeRuleOnce({
           conditions: conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
-          sourceCategoryId: sourceCategoryId || null,
+          sourceCategoryId: null,
           categoryId: targetCategoryId,
           ruleName: ruleName.trim() || null,
         });
@@ -105,7 +104,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
         if (result.categorized > 0) {
           const updated = await previewRuleTransactions(
             conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
-            sourceCategoryId || null
+            null
           );
           setPreview(updated);
         }
@@ -138,7 +137,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
             />
           </div>
 
-          {/* Conditions */}
+          {/* Conditions + target category */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
               Conditions{" "}
@@ -170,45 +169,14 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               <Plus className="h-3.5 w-3.5" />
               Add condition
             </Button>
-          </div>
 
-          {/* Source + Target categories */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Source category{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional)
-                </span>
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Only re-categorize from this category
-              </p>
-              <select
-                value={sourceCategoryId}
-                onChange={(e) => {
-                  setSourceCategoryId(e.target.value);
-                  setPreview(null);
-                }}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="">— Any category —</option>
-                <CategoryOptions categories={categories} />
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Target category{" "}
-                <span className="text-destructive">*</span>
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Category to assign when executing
-              </p>
+            {/* Target category — visually part of the rule definition */}
+            <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+              <span className="text-sm text-muted-foreground shrink-0">→ Categorize as</span>
               <select
                 value={targetCategoryId}
                 onChange={(e) => setTargetCategoryId(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className="flex-1 min-w-[180px] h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 <option value="">— Select category —</option>
                 <CategoryOptions categories={categories} />
