@@ -19,13 +19,14 @@ interface QuickRuleDialogProps {
   open: boolean;
   onClose: () => void;
   transaction: TransactionListItemDTO;
-  categoryId: string;
-  categoryName: string;
   categories: Category[];
+  /** Pre-selected target category. Leave empty to let user pick. */
+  categoryId?: string;
+  categoryName?: string;
 }
 
 function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
-  // Prefer creditorName as it's the most stable merchant identifier
+  // Prefer creditorName as the most stable merchant identifier
   if (tx.creditorName) {
     return { field: "creditorName", operator: getDefaultOperator("creditorName"), value: tx.creditorName };
   }
@@ -39,9 +40,9 @@ export function QuickRuleDialog({
   open,
   onClose,
   transaction,
-  categoryId,
-  categoryName,
   categories,
+  categoryId = "",
+  categoryName = "",
 }: QuickRuleDialogProps) {
   const [condition, setCondition] = useState<RuleCondition>(() =>
     buildInitialCondition(transaction)
@@ -72,7 +73,7 @@ export function QuickRuleDialog({
         const msg =
           res.categorized > 0
             ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized${res.savedRuleId ? " — rule saved" : ""}.`
-            : `Rule saved — no new transactions matched.`;
+            : "Rule saved — no new transactions matched.";
         setResult(msg);
       } catch {
         setError("Failed to save rule. Please try again.");
@@ -80,14 +81,10 @@ export function QuickRuleDialog({
     });
   }
 
-  function handleOpenChange(open: boolean) {
-    if (!open) onClose();
-  }
-
   const canSave = condition.value.trim() !== "" && !!targetCategoryId && !isPending;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -110,7 +107,7 @@ export function QuickRuleDialog({
           </div>
 
           {/* Target category */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
             <span className="text-sm text-muted-foreground shrink-0">→ Categorize as</span>
             <select
               value={targetCategoryId}
@@ -131,7 +128,7 @@ export function QuickRuleDialog({
               type="text"
               value={ruleName}
               onChange={(e) => setRuleName(e.target.value)}
-              placeholder={`e.g. ${categoryName}`}
+              placeholder={categoryName ? `e.g. ${categoryName}` : "e.g. Netflix, Groceries…"}
               className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>

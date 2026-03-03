@@ -64,17 +64,22 @@ export function CategorizeMobileView({
   onBulkByQuery,
 }: CategorizeMobileViewProps) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
-  const [quickRule, setQuickRule] = useState<{ tx: TransactionListItemDTO; categoryId: string; categoryName: string } | null>(null);
+  const [quickRule, setQuickRule] = useState<{
+    tx: TransactionListItemDTO;
+    categoryId: string;
+    categoryName: string;
+  } | null>(null);
 
   const activeQuery = searchInput.trim();
-  const filtered = activeQuery.length >= 3
-    ? transactions.filter((tx) => {
-        const lower = activeQuery.toLowerCase();
-        return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((f) =>
-          f?.toLowerCase().includes(lower)
-        );
-      })
-    : transactions;
+  const filtered =
+    activeQuery.length >= 3
+      ? transactions.filter((tx) => {
+          const lower = activeQuery.toLowerCase();
+          return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((f) =>
+            f?.toLowerCase().includes(lower)
+          );
+        })
+      : transactions;
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -82,14 +87,11 @@ export function CategorizeMobileView({
 
   const allCaughtUp = total === 0;
   const noResults = filtered.length === 0 && transactions.length > 0 && activeQuery.length >= 3;
-  const showBulkByQuery = onBulkByQuery && activeQuery.length >= 3 && filtered.length > 0 && categories.length > 0;
-
-  function handleCategorySelect(tx: TransactionListItemDTO, categoryId: string) {
-    setSheet((prev) => prev ? { ...prev, pendingCategoryId: categoryId } : prev);
-  }
+  const showBulkByQuery =
+    onBulkByQuery && activeQuery.length >= 3 && filtered.length > 0 && categories.length > 0;
 
   function handleConfirmCategorize() {
-    if (!sheet || !sheet.pendingCategoryId) return;
+    if (!sheet?.pendingCategoryId) return;
     onCategorize(sheet.tx.id, sheet.pendingCategoryId);
     setSheet(null);
   }
@@ -113,7 +115,9 @@ export function CategorizeMobileView({
             onChange={(e) => onBulkQueryCategoryChange?.(e.target.value)}
             className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <option value="" disabled>Pick a category…</option>
+            <option value="" disabled>
+              Pick a category…
+            </option>
             <CategoryOptions categories={categories} />
           </select>
           <Button
@@ -135,7 +139,9 @@ export function CategorizeMobileView({
             </div>
             <div>
               <p className="font-semibold">All caught up!</p>
-              <p className="text-sm text-muted-foreground mt-1">No transactions pending categorization.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                No transactions pending categorization.
+              </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Tag className="h-3.5 w-3.5" />
@@ -153,9 +159,13 @@ export function CategorizeMobileView({
             </div>
             <div>
               <p className="font-semibold">No matches</p>
-              <p className="text-sm text-muted-foreground mt-1">No transactions match your filter.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                No transactions match your filter.
+              </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => onSearchInputChange("")}>Clear</Button>
+            <Button variant="outline" size="sm" onClick={() => onSearchInputChange("")}>
+              Clear
+            </Button>
           </div>
         </Card>
       )}
@@ -163,21 +173,29 @@ export function CategorizeMobileView({
       {filtered.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{rangeStart}–{rangeEnd} of {total}</p>
+            <p className="text-xs text-muted-foreground">
+              {rangeStart}–{rangeEnd} of {total}
+            </p>
             <div className="flex items-center gap-1">
               {page > 1 ? (
                 <Button variant="outline" size="sm" asChild className="h-7 w-7 p-0">
-                  <a href={pageUrl(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></a>
+                  <a href={pageUrl(page - 1)}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </a>
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled>
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
               )}
-              <span className="text-xs px-1.5 tabular-nums text-muted-foreground">{page}/{totalPages}</span>
+              <span className="text-xs px-1.5 tabular-nums text-muted-foreground">
+                {page}/{totalPages}
+              </span>
               {page < totalPages ? (
                 <Button variant="outline" size="sm" asChild className="h-7 w-7 p-0">
-                  <a href={pageUrl(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></a>
+                  <a href={pageUrl(page + 1)}>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </a>
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled>
@@ -209,14 +227,14 @@ export function CategorizeMobileView({
 
       {/* Categorize sheet */}
       <Sheet open={!!sheet} onOpenChange={(open) => { if (!open) setSheet(null); }}>
-        <SheetContent side="bottom" className="rounded-t-xl pb-8">
+        <SheetContent side="bottom" className="rounded-t-xl pb-4">
           {sheet && (
             <>
-              <SheetHeader className="pb-2">
+              <SheetHeader className="pb-1">
                 <SheetTitle className="text-base">Categorize</SheetTitle>
               </SheetHeader>
 
-              <div className="px-4 pb-2">
+              <div className="px-4 pb-3 border-b mb-4">
                 <TransactionItem
                   tx={sheet.tx}
                   locale={locale}
@@ -227,10 +245,16 @@ export function CategorizeMobileView({
               <div className="px-4 space-y-3">
                 <select
                   value={sheet.pendingCategoryId}
-                  onChange={(e) => handleCategorySelect(sheet.tx, e.target.value)}
+                  onChange={(e) =>
+                    setSheet((prev) =>
+                      prev ? { ...prev, pendingCategoryId: e.target.value } : prev
+                    )
+                  }
                   className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="" disabled>Select a category…</option>
+                  <option value="" disabled>
+                    Select a category…
+                  </option>
                   <CategoryOptions categories={categories} />
                 </select>
 
@@ -258,10 +282,10 @@ export function CategorizeMobileView({
         </SheetContent>
       </Sheet>
 
-      {/* Quick rule dialog */}
+      {/* Quick rule dialog — opens after tapping "Create rule for this" */}
       {quickRule && (
         <QuickRuleDialog
-          open={!!quickRule}
+          open
           onClose={() => setQuickRule(null)}
           transaction={quickRule.tx}
           categoryId={quickRule.categoryId}

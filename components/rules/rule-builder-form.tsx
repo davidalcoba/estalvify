@@ -30,9 +30,7 @@ interface RuleBuilderFormProps {
 }
 
 export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
-  const [conditions, setConditions] = useState<RuleCondition[]>([
-    defaultCondition(),
-  ]);
+  const [conditions, setConditions] = useState<RuleCondition[]>([defaultCondition()]);
   const [targetCategoryId, setTargetCategoryId] = useState<string>("");
   const [ruleName, setRuleName] = useState<string>("");
 
@@ -137,13 +135,11 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
             />
           </div>
 
-          {/* Conditions + target category */}
+          {/* Conditions + target category in one visual block */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
               Conditions{" "}
-              <span className="text-muted-foreground font-normal">
-                (all must match)
-              </span>
+              <span className="text-muted-foreground font-normal">(all must match)</span>
             </label>
 
             <div className="space-y-2">
@@ -170,13 +166,13 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               Add condition
             </Button>
 
-            {/* Target category — visually part of the rule definition */}
-            <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+            {/* Target category — inline with conditions block */}
+            <div className="flex items-center gap-3 pt-1 flex-wrap sm:flex-nowrap">
               <span className="text-sm text-muted-foreground shrink-0">→ Categorize as</span>
               <select
                 value={targetCategoryId}
                 onChange={(e) => setTargetCategoryId(e.target.value)}
-                className="flex-1 min-w-[180px] h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className="flex-1 min-w-[200px] h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 <option value="">— Select category —</option>
                 <CategoryOptions categories={categories} />
@@ -227,9 +223,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
       {isSearching && (
         <div className="rounded-xl border p-6 text-center">
           <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-          <p className="text-sm text-muted-foreground mt-2">
-            Searching transactions...
-          </p>
+          <p className="text-sm text-muted-foreground mt-2">Searching transactions...</p>
         </div>
       )}
 

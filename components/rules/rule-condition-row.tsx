@@ -34,9 +34,7 @@ export function RuleConditionRow({
   canRemove,
 }: RuleConditionRowProps) {
   function handleFieldChange(field: RuleConditionField) {
-    const operator = getDefaultOperator(field);
-    const value = field === "direction" ? "DEBIT" : condition.value;
-    onChange(index, { field, operator, value });
+    onChange(index, { field, operator: getDefaultOperator(field), value: condition.value });
   }
 
   function handleOperatorChange(operator: RuleConditionOperator) {
@@ -49,12 +47,17 @@ export function RuleConditionRow({
 
   const operators = getOperatorsForField(condition.field);
 
+  const selectCls = "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+  const inputCls = "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+
   return (
-    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+    // Mobile: 2-column grid (field+operator top row, value+delete bottom row)
+    // Desktop (sm+): single flex row
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-nowrap sm:items-center sm:gap-2">
       <select
         value={condition.field}
         onChange={(e) => handleFieldChange(e.target.value as RuleConditionField)}
-        className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-w-[130px] flex-1 sm:flex-none"
+        className={`${selectCls} col-span-1`}
       >
         {ALL_FIELDS.map((f) => (
           <option key={f} value={f}>
@@ -66,7 +69,7 @@ export function RuleConditionRow({
       <select
         value={condition.operator}
         onChange={(e) => handleOperatorChange(e.target.value as RuleConditionOperator)}
-        className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-w-[130px] flex-1 sm:flex-none"
+        className={`${selectCls} col-span-1`}
       >
         {operators.map((op) => (
           <option key={op} value={op}>
@@ -80,7 +83,7 @@ export function RuleConditionRow({
         value={condition.value}
         onChange={(e) => handleValueChange(e.target.value)}
         placeholder="Value..."
-        className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 flex-1 min-w-[140px]"
+        className={`${inputCls} col-span-1 sm:flex-1`}
       />
 
       <Button
@@ -89,7 +92,7 @@ export function RuleConditionRow({
         size="icon"
         onClick={() => onRemove(index)}
         disabled={!canRemove}
-        className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive"
+        className="col-span-1 justify-self-end h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
         aria-label="Remove condition"
       >
         <Trash2 className="h-4 w-4" />

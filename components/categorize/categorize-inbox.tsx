@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +18,7 @@ import { CategoryOptions, type Category } from "@/components/categorize/category
 import { CategorizeDesktopView } from "@/components/categorize/views/categorize-desktop-view";
 import { CategorizeMobileView } from "@/components/categorize/views/categorize-mobile-view";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
+import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import {
   transactionMerchant,
   transactionOperationType,
@@ -81,6 +83,7 @@ function FocusModal({
   const [queue, setQueue] = useState<TransactionListItemDTO[]>(snapshot);
   const [index, setIndex] = useState(Math.min(startIndex, Math.max(0, snapshot.length - 1)));
   const [savingCount, setSavingCount] = useState(0);
+  const [quickRuleTx, setQuickRuleTx] = useState<TransactionListItemDTO | null>(null);
 
   const current = queue[index] ?? null;
   const total = snapshot.length;
@@ -115,6 +118,7 @@ function FocusModal({
   }
 
   return (
+    <>
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] p-0 gap-0 overflow-hidden">
         <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
@@ -195,17 +199,29 @@ function FocusModal({
                 </div>
               </div>
 
-              <select
-                key={current.id}
-                defaultValue=""
-                onChange={(e) => handleCategorySelect(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-              >
-                <option value="" disabled>
-                  Pick a category…
-                </option>
-                <CategoryOptions categories={categories} />
-              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  key={current.id}
+                  defaultValue=""
+                  onChange={(e) => handleCategorySelect(e.target.value)}
+                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                >
+                  <option value="" disabled>
+                    Pick a category…
+                  </option>
+                  <CategoryOptions categories={categories} />
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                  onClick={() => setQuickRuleTx(current)}
+                  title="Create rule for this transaction"
+                >
+                  <Zap className="h-4 w-4" />
+                </Button>
+              </div>
 
               <div className="flex items-center justify-between">
                 <Button
@@ -230,6 +246,16 @@ function FocusModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    {quickRuleTx && (
+      <QuickRuleDialog
+        open
+        onClose={() => setQuickRuleTx(null)}
+        transaction={quickRuleTx}
+        categories={categories}
+      />
+    )}
+  </>
   );
 }
 
