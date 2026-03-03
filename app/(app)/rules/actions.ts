@@ -107,7 +107,7 @@ export async function executeRule(
   return applyRuleConditions(
     userId,
     ruleId,
-    rule.conditions as RuleCondition[],
+    rule.conditions as unknown as RuleCondition[],
     rule.sourceCategoryId,
     rule.categoryId
   );
