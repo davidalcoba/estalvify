@@ -260,7 +260,8 @@ model Category {
   updatedAt DateTime @updatedAt
 
   user                   User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoryRules          CategoryRule[]
+  categoryRules          CategoryRule[]          @relation("TargetCategoryRules")
+  sourceCategoryRules    CategoryRule[]          @relation("SourceCategoryRules")
   transactionCategories  TransactionCategorization[]
   budgetItems            BudgetItem[]
 
@@ -271,12 +272,15 @@ model Category {
 model CategoryRule {
   id         String @id @default(cuid())
   userId     String
-  categoryId String
+  categoryId String // Target category for matched transactions
 
   name       String
   conditions Json   // Array of RuleCondition: [{field, operator, value}]
-  // Field options: "description", "creditorName", "debtorName", "amount", "direction", "mcc"
+  // Field options: "description", "creditorName", "debtorName", "amount", "direction", "remittanceInfo"
   // Operator options: "contains", "equals", "startsWith", "endsWith", "greaterThan", "lessThan"
+
+  // Optional: only match transactions already in this category (re-categorization)
+  sourceCategoryId String?
 
   isActive    Boolean @default(true)
   priority    Int     @default(0) // Higher priority rules applied first
@@ -286,7 +290,8 @@ model CategoryRule {
   updatedAt DateTime @updatedAt
 
   user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category              Category                  @relation(fields: [categoryId], references: [id])
+  category              Category                  @relation("TargetCategoryRules", fields: [categoryId], references: [id])
+  sourceCategory        Category?                 @relation("SourceCategoryRules", fields: [sourceCategoryId], references: [id])
   transactionCategories TransactionCategorization[]
 
   @@map("category_rules")
