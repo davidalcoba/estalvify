@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Plus,
   X,
   Zap,
 } from "lucide-react";
@@ -99,11 +100,7 @@ function FocusModal({
 
   // Inline rule form state
   const [showRuleForm, setShowRuleForm] = useState(false);
-  const [ruleCondition, setRuleCondition] = useState<RuleCondition>(() => ({
-    field: "description",
-    operator: getDefaultOperator("description"),
-    value: "",
-  }));
+  const [ruleConditions, setRuleConditions] = useState<RuleCondition[]>([]);
   const [ruleCategoryId, setRuleCategoryId] = useState("");
   const [ruleName, setRuleName] = useState("");
   const [ruleResult, setRuleResult] = useState<{ msg: string; categorized: number } | null>(null);
@@ -144,7 +141,7 @@ function FocusModal({
 
   function openRuleForm() {
     if (!current) return;
-    setRuleCondition(buildInitialCondition(current));
+    setRuleConditions([buildInitialCondition(current)]);
     setRuleCategoryId("");
     setRuleName("");
     setRuleResult(null);
@@ -153,13 +150,14 @@ function FocusModal({
   }
 
   function handleApplyRule() {
-    if (!ruleCondition.value.trim() || !ruleCategoryId) return;
+    const allFilled = ruleConditions.length > 0 && ruleConditions.every((c) => c.value.trim() !== "");
+    if (!allFilled || !ruleCategoryId) return;
     setRuleError(null);
     setRuleResult(null);
     startRuleTransition(async () => {
       try {
         const res = await executeRuleOnce({
-          conditions: [ruleCondition],
+          conditions: ruleConditions,
           sourceCategoryId: null,
           categoryId: ruleCategoryId,
           ruleName: ruleName.trim() || null,
@@ -229,13 +227,33 @@ function FocusModal({
 
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">When…</p>
-                <RuleConditionRow
-                  condition={ruleCondition}
-                  index={0}
-                  onChange={(_i, updated) => { setRuleCondition(updated); setRuleResult(null); }}
-                  onRemove={() => {}}
-                  canRemove={false}
-                />
+                {ruleConditions.map((cond, i) => (
+                  <RuleConditionRow
+                    key={i}
+                    condition={cond}
+                    index={i}
+                    onChange={(idx, updated) => {
+                      setRuleConditions((prev) => prev.map((c, j) => (j === idx ? updated : c)));
+                      setRuleResult(null);
+                    }}
+                    onRemove={(idx) => setRuleConditions((prev) => prev.filter((_, j) => j !== idx))}
+                    canRemove={ruleConditions.length > 1}
+                  />
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setRuleConditions((prev) => [
+                      ...prev,
+                      { field: "description", operator: getDefaultOperator("description"), value: "" },
+                    ])
+                  }
+                  className="h-8 gap-1 text-muted-foreground px-2"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add condition
+                </Button>
               </div>
 
               <div className="space-y-2">
@@ -287,7 +305,7 @@ function FocusModal({
                   <Button
                     className="flex-1 gap-2"
                     onClick={handleApplyRule}
-                    disabled={!ruleCondition.value.trim() || !ruleCategoryId || isApplyingRule}
+                    disabled={!ruleConditions.every((c) => c.value.trim()) || !ruleCategoryId || isApplyingRule}
                   >
                     {isApplyingRule ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                     Apply rule

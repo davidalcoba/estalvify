@@ -86,6 +86,7 @@ export function QuickRuleDialog({
     <Primitive.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <Primitive.Portal>
         <Primitive.Content
+          onOpenAutoFocus={(e) => e.preventDefault()}
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl border-t shadow-xl",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",

@@ -252,7 +252,7 @@ export function CategorizeMobileView({
 
       {/* Categorize sheet — stays open while advancing through transactions */}
       <Sheet open={sheetOpen} onOpenChange={(open) => { if (!open) closeSheet(); }}>
-        <SheetContent side="bottom" className="rounded-t-xl pb-4">
+        <SheetContent side="bottom" className="rounded-t-xl pb-4" onOpenAutoFocus={(e) => e.preventDefault()}>
           {currentTx && (
             <>
               <SheetHeader className="pb-1">

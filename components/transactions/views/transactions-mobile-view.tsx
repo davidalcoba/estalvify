@@ -144,7 +144,7 @@ export function TransactionsMobileView({
 
       {/* Transaction detail — bottom sheet on mobile */}
       <Sheet open={!!activeTx} onOpenChange={(open) => { if (!open) setActiveTx(null); }}>
-        <SheetContent side="bottom" className="rounded-t-xl pb-4">
+        <SheetContent side="bottom" className="rounded-t-xl pb-4" onOpenAutoFocus={(e) => e.preventDefault()}>
           {activeTx && (
             <>
               <SheetHeader className="pb-1">
