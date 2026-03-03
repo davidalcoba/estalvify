@@ -57,7 +57,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       : {}),
   };
 
-  const [total, transactions, accounts, prefs] = await Promise.all([
+  const [total, transactions, accounts, prefs, categories] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -75,6 +75,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       orderBy: { name: "asc" },
     }),
     getUserPrefs(session!.user.id),
+    prisma.category.findMany({
+      where: { userId: session!.user.id, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -137,6 +141,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           userLocale={prefs.locale}
           userTimezone={prefs.timezone}
           pageQuery={pageQuery}
+          categories={categories}
         />
       )}
     </div>
