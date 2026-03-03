@@ -30,7 +30,7 @@ export default async function SettingsPage() {
 
   // Seed default categories for new users
   if (categories.length === 0) {
-    await seedDefaultCategories(userId);
+    await seedDefaultCategories();
     const seeded = await prisma.category.findMany({
       where: { userId, parentId: null, isActive: true },
       include: {

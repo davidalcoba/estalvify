@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import type { Category } from "@/components/categorize/category-options";
 import { TransactionsDesktopView } from "@/components/transactions/views/transactions-desktop-view";
 import { TransactionsMobileView } from "@/components/transactions/views/transactions-mobile-view";
 import { TransactionDetailDialog } from "@/components/transactions/shared/transaction-detail-dialog";
@@ -16,6 +17,7 @@ interface TransactionsViewProps {
   userLocale: string;
   userTimezone: string;
   pageQuery: string;
+  categories: Category[];
 }
 
 export function TransactionsView(props: TransactionsViewProps) {
@@ -35,9 +37,11 @@ export function TransactionsView(props: TransactionsViewProps) {
   return (
     <>
       <TransactionDetailDialog
+        key={activeTransactionId ?? "none"}
         transaction={activeTransaction}
         locale={props.userLocale}
         timezone={props.userTimezone}
+        categories={props.categories}
         onClose={() => setActiveTransactionId(null)}
       />
 

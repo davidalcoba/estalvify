@@ -1,9 +1,13 @@
 "use client";
 
-import { Calendar, CreditCard, Tag } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Calendar, CreditCard, Loader2, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
+import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
   transactionMerchant,
   transactionOperationType,
@@ -14,6 +18,7 @@ interface TransactionDetailDialogProps {
   transaction: TransactionListItemDTO | null;
   locale: string;
   timezone: string;
+  categories: Category[];
   onClose: () => void;
 }
 
@@ -21,13 +26,31 @@ export function TransactionDetailDialog({
   transaction,
   locale,
   timezone,
+  categories,
   onClose,
 }: TransactionDetailDialogProps) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+
   if (!transaction) return null;
+
+  async function handleRecategorize(categoryId: string) {
+    if (!categoryId || !transaction) return;
+    setSaving(true);
+    try {
+      await categorizeTransaction(transaction.id, categoryId);
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[min(96vw,680px)] max-h-[85vh] overflow-hidden p-0 gap-0">
+      <DialogContent
+        className="w-[min(96vw,680px)] max-h-[85vh] overflow-hidden p-0 gap-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogTitle className="sr-only">Transaction details</DialogTitle>
 
         <div className="px-5 py-4 border-b">
@@ -70,12 +93,25 @@ export function TransactionDetailDialog({
             )}
           </div>
 
-          {transaction.description && (
-            <div className="rounded-md border bg-muted/30 p-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                Raw description
+          {categories.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {transaction.categoryName ? "Change category" : "Categorize"}
               </p>
-              <p className="text-sm break-words">{transaction.description}</p>
+              <div className="flex items-center gap-2">
+                <select
+                  key={transaction.id}
+                  defaultValue={transaction.categoryId ?? ""}
+                  onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                  disabled={saving}
+                  tabIndex={-1}
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                >
+                  <option value="" disabled>Pick a category…</option>
+                  <CategoryOptions categories={categories} />
+                </select>
+                {saving && <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />}
+              </div>
             </div>
           )}
         </div>

@@ -23,6 +23,7 @@ import {
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
 import {
+  bulkCategorize,
   bulkCategorizeByIds,
   categorizeTransaction,
 } from "@/app/(app)/categorize/actions";
@@ -247,6 +248,7 @@ export function CategorizeInbox({
   const [searchInput, setSearchInput] = useState("");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkQueryCategoryId, setBulkQueryCategoryId] = useState("");
   const [isBulking, setIsBulking] = useState(false);
   const [categorizedIds, setCategorizedIds] = useState<Set<string>>(new Set());
   const [focusState, setFocusState] = useState<{ snapshot: TransactionListItemDTO[]; index: number } | null>(null);
@@ -258,7 +260,7 @@ export function CategorizeInbox({
 
   const filtered = useMemo(() => {
     const query = searchInput.trim();
-    if (!query) return available;
+    if (query.length < 3) return available;
     return available.filter((tx) => matchesSearch(tx, query));
   }, [available, searchInput]);
 
@@ -300,6 +302,29 @@ export function CategorizeInbox({
       setCategorizedIds((prev) => {
         const next = new Set(prev);
         ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    } finally {
+      setIsBulking(false);
+    }
+  }
+
+  async function handleBulkByQuery() {
+    const query = searchInput.trim();
+    if (!bulkQueryCategoryId || query.length < 3) return;
+
+    setIsBulking(true);
+    const visibleIds = filtered.map((tx) => tx.id);
+    setCategorizedIds((prev) => new Set([...prev, ...visibleIds]));
+    setBulkQueryCategoryId("");
+
+    try {
+      await bulkCategorize(query, bulkQueryCategoryId);
+      startTransition(() => router.refresh());
+    } catch {
+      setCategorizedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.delete(id));
         return next;
       });
     } finally {
@@ -383,9 +408,12 @@ export function CategorizeInbox({
             onSearchInputChange={setSearchInput}
             checkedIds={checkedIds}
             bulkCategoryId={bulkCategoryId}
+            bulkQueryCategoryId={bulkQueryCategoryId}
             isBulking={isBulking}
             onBulkCategoryChange={setBulkCategoryId}
+            onBulkQueryCategoryChange={setBulkQueryCategoryId}
             onBulkApply={handleBulkApply}
+            onBulkByQuery={handleBulkByQuery}
             onClearSelection={() => setCheckedIds(new Set())}
             onToggleAll={toggleAll}
             onToggleCheck={toggleCheck}
@@ -407,6 +435,10 @@ export function CategorizeInbox({
             onSearchInputChange={setSearchInput}
             onCategorize={handleCategorize}
             pageUrl={pageUrl}
+            isBulking={isBulking}
+            bulkQueryCategoryId={bulkQueryCategoryId}
+            onBulkQueryCategoryChange={setBulkQueryCategoryId}
+            onBulkByQuery={handleBulkByQuery}
           />
         </div>
       </div>
