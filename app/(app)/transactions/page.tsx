@@ -26,24 +26,20 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const session = await auth();
   const params = await searchParams;
 
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  const defaultFrom = new Date(today);
-  defaultFrom.setDate(defaultFrom.getDate() - 30);
-  defaultFrom.setHours(0, 0, 0, 0);
-
-  const fromDate = params.from ? new Date(params.from + "T00:00:00") : defaultFrom;
-  const toDate = params.to ? new Date(params.to + "T23:59:59") : today;
+  const fromDate = params.from ? new Date(params.from + "T00:00:00") : null;
+  const toDate = params.to ? new Date(params.to + "T23:59:59") : null;
   const page = Math.max(1, parseInt(params.page ?? "1") || 1);
   const accountId = params.accountId ?? "";
   const query = (params.q ?? "").trim();
 
-  const fromStr = fromDate.toISOString().split("T")[0];
-  const toStr = toDate.toISOString().split("T")[0];
+  const fromStr = params.from ?? "";
+  const toStr = params.to ?? "";
 
   const where = {
     userId: session!.user.id,
-    bookingDate: { gte: fromDate, lte: toDate },
+    ...(fromDate || toDate
+      ? { bookingDate: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } }
+      : {}),
     ...(accountId ? { bankAccountId: accountId } : {}),
     ...(query
       ? {
@@ -88,8 +84,8 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const rangeEnd = Math.min(effectivePage * PAGE_SIZE, total);
 
   const pageQuery = new URLSearchParams({
-    from: fromStr,
-    to: toStr,
+    ...(fromStr ? { from: fromStr } : {}),
+    ...(toStr ? { to: toStr } : {}),
     ...(accountId ? { accountId } : {}),
     ...(query ? { q: query } : {}),
   }).toString();

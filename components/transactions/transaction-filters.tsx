@@ -39,11 +39,7 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const fromVal = fd.get("from") as string;
-    const toVal = fd.get("to") as string;
-    if (fromVal && toVal) {
-      navigate({ from: fromVal, to: toVal });
-    }
+    navigate({ from: fd.get("from") as string, to: fd.get("to") as string });
   }
 
   function handleQueryChange(value: string) {
