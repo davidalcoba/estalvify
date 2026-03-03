@@ -97,8 +97,8 @@ export function CategorizeMobileView({
   }
 
   function handleOpenQuickRule() {
-    if (!sheet?.pendingCategoryId) return;
-    const cat = categories.find((c) => c.id === sheet.pendingCategoryId);
+    if (!sheet) return;
+    const cat = sheet.pendingCategoryId ? categories.find((c) => c.id === sheet.pendingCategoryId) : undefined;
     setQuickRule({ tx: sheet.tx, categoryId: sheet.pendingCategoryId, categoryName: cat?.name ?? "" });
     setSheet(null);
   }
@@ -243,20 +243,32 @@ export function CategorizeMobileView({
               </div>
 
               <div className="px-4 space-y-3">
-                <select
-                  value={sheet.pendingCategoryId}
-                  onChange={(e) =>
-                    setSheet((prev) =>
-                      prev ? { ...prev, pendingCategoryId: e.target.value } : prev
-                    )
-                  }
-                  className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="" disabled>
-                    Select a category…
-                  </option>
-                  <CategoryOptions categories={categories} />
-                </select>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={sheet.pendingCategoryId}
+                    onChange={(e) =>
+                      setSheet((prev) =>
+                        prev ? { ...prev, pendingCategoryId: e.target.value } : prev
+                      )
+                    }
+                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="" disabled>
+                      Select a category…
+                    </option>
+                    <CategoryOptions categories={categories} />
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    onClick={handleOpenQuickRule}
+                    title="Create rule for this transaction"
+                  >
+                    <Zap className="h-4 w-4" />
+                  </Button>
+                </div>
 
                 <Button
                   className="w-full h-11"
@@ -265,17 +277,6 @@ export function CategorizeMobileView({
                 >
                   Confirm
                 </Button>
-
-                {sheet.pendingCategoryId && (
-                  <Button
-                    variant="outline"
-                    className="w-full h-10 gap-2 text-amber-600 border-amber-200 hover:bg-amber-50"
-                    onClick={handleOpenQuickRule}
-                  >
-                    <Zap className="h-4 w-4" />
-                    Create rule for this
-                  </Button>
-                )}
               </div>
             </>
           )}

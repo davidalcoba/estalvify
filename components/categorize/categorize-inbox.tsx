@@ -239,7 +239,7 @@ function FocusModal({
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">→ Categorize as</p>
+                <p className="text-sm font-semibold">Categorize As</p>
                 <select
                   value={ruleCategoryId}
                   onChange={(e) => setRuleCategoryId(e.target.value)}

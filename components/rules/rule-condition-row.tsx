@@ -51,7 +51,7 @@ export function RuleConditionRow({
   const inputCls = "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
   return (
-    // Mobile: 2-column grid (field+operator top row, value+delete bottom row)
+    // Mobile: 2-column grid (field+operator row 1, value full-width row 2)
     // Desktop (sm+): single flex row
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-nowrap sm:items-center sm:gap-2">
       <select
@@ -83,20 +83,21 @@ export function RuleConditionRow({
         value={condition.value}
         onChange={(e) => handleValueChange(e.target.value)}
         placeholder="Value..."
-        className={`${inputCls} col-span-1 sm:flex-1`}
+        className={`${inputCls} col-span-2 sm:col-span-1 sm:flex-1`}
       />
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={() => onRemove(index)}
-        disabled={!canRemove}
-        className="col-span-1 justify-self-end h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
-        aria-label="Remove condition"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {canRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => onRemove(index)}
+          className="col-span-2 justify-self-end h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+          aria-label="Remove condition"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }
