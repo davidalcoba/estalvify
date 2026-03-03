@@ -27,6 +27,7 @@ import {
   bulkCategorizeByIds,
   categorizeTransaction,
 } from "@/app/(app)/categorize/actions";
+import { useCategorizeSearch } from "@/components/categorize/search-context";
 
 interface Props {
   transactions: TransactionListItemDTO[];
@@ -245,7 +246,7 @@ export function CategorizeInbox({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [searchInput, setSearchInput] = useState("");
+  const { searchInput, setSearchInput } = useCategorizeSearch();
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [bulkQueryCategoryId, setBulkQueryCategoryId] = useState("");
