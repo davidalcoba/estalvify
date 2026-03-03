@@ -1,14 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Zap, Loader2 } from "lucide-react";
+import { Zap, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog as Primitive } from "radix-ui";
+import { cn } from "@/lib/utils";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
 import { type RuleCondition, getDefaultOperator } from "@/lib/rules/rule-dto";
@@ -23,10 +19,11 @@ interface QuickRuleDialogProps {
   /** Pre-selected target category. Leave empty to let user pick. */
   categoryId?: string;
   categoryName?: string;
+  /** Called after a successful rule execution that categorized ≥1 tx. */
+  onSuccess?: () => void;
 }
 
 function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
-  // Prefer creditorName as the most stable merchant identifier
   if (tx.creditorName) {
     return { field: "creditorName", operator: getDefaultOperator("creditorName"), value: tx.creditorName };
   }
@@ -43,13 +40,12 @@ export function QuickRuleDialog({
   categories,
   categoryId = "",
   categoryName = "",
+  onSuccess,
 }: QuickRuleDialogProps) {
-  const [condition, setCondition] = useState<RuleCondition>(() =>
-    buildInitialCondition(transaction)
-  );
+  const [condition, setCondition] = useState<RuleCondition>(() => buildInitialCondition(transaction));
   const [targetCategoryId, setTargetCategoryId] = useState(categoryId);
   const [ruleName, setRuleName] = useState("");
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<{ msg: string; categorized: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -73,10 +69,11 @@ export function QuickRuleDialog({
         const msg =
           res.categorized > 0
             ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized${res.savedRuleId ? " — rule saved" : ""}.`
-            : "Rule saved — no new transactions matched.";
-        setResult(msg);
+            : "Rule applied — no new transactions matched.";
+        setResult({ msg, categorized: res.categorized });
+        if (res.categorized > 0) onSuccess?.();
       } catch {
-        setError("Failed to save rule. Please try again.");
+        setError("Failed to apply rule. Please try again.");
       }
     });
   }
@@ -84,71 +81,101 @@ export function QuickRuleDialog({
   const canSave = condition.value.trim() !== "" && !!targetCategoryId && !isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-amber-500" />
-            Create rule
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 pt-1">
-          {/* Condition */}
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">When…</p>
-            <RuleConditionRow
-              condition={condition}
-              index={0}
-              onChange={handleConditionChange}
-              onRemove={() => {}}
-              canRemove={false}
-            />
+    // Use Radix Dialog primitives directly so we can omit the overlay
+    // (avoids stacking a second dark backdrop over an existing modal)
+    <Primitive.Root open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <Primitive.Portal>
+        <Primitive.Content
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl border-t shadow-xl",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom",
+            "duration-300"
+          )}
+        >
+          {/* Handle bar */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />
           </div>
 
-          {/* Target category */}
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-            <span className="text-sm text-muted-foreground shrink-0">→ Categorize as</span>
-            <select
-              value={targetCategoryId}
-              onChange={(e) => setTargetCategoryId(e.target.value)}
-              className="flex-1 min-w-[160px] h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value="">— Select category —</option>
-              <CategoryOptions categories={categories} />
-            </select>
-          </div>
+          <div className="px-5 pb-6 space-y-5">
+            {/* Header */}
+            <div className="flex items-center gap-2 pt-1">
+              <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+              <h2 className="font-semibold text-base">Create rule</h2>
+            </div>
 
-          {/* Rule name */}
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">
-              Rule name <span className="font-normal">(optional — fill to save it)</span>
-            </label>
-            <input
-              type="text"
-              value={ruleName}
-              onChange={(e) => setRuleName(e.target.value)}
-              placeholder={categoryName ? `e.g. ${categoryName}` : "e.g. Netflix, Groceries…"}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            />
-          </div>
+            {/* Condition */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">When…</p>
+              <RuleConditionRow
+                condition={condition}
+                index={0}
+                onChange={handleConditionChange}
+                onRemove={() => {}}
+                canRemove={false}
+              />
+            </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {result && <p className="text-sm text-green-600 font-medium">{result}</p>}
+            {/* Target category */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                → Categorize as
+              </p>
+              <select
+                value={targetCategoryId}
+                onChange={(e) => setTargetCategoryId(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">— Select category —</option>
+                <CategoryOptions categories={categories} />
+              </select>
+            </div>
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>
-              {result ? "Close" : "Cancel"}
-            </Button>
-            {!result && (
-              <Button onClick={handleSave} disabled={!canSave} className="gap-2">
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                Apply rule
-              </Button>
+            {/* Rule name */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Rule name <span className="normal-case font-normal">(optional — fill to save it)</span>
+              </p>
+              <input
+                type="text"
+                value={ruleName}
+                onChange={(e) => setRuleName(e.target.value)}
+                placeholder={categoryName ? `e.g. ${categoryName}` : "e.g. Netflix, Groceries…"}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            {result ? (
+              <div className="space-y-3">
+                <p className="text-sm text-green-600 font-medium">{result.msg}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={onClose}>
+                    Close
+                  </Button>
+                  {result.categorized > 0 && (
+                    <Button className="flex-1 gap-1" onClick={onClose}>
+                      Next <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
+                  Cancel
+                </Button>
+                <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave}>
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  Apply rule
+                </Button>
+              </div>
             )}
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </Primitive.Content>
+      </Primitive.Portal>
+    </Primitive.Root>
   );
 }

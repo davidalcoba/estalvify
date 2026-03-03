@@ -9,6 +9,7 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   X,
   Zap,
 } from "lucide-react";
@@ -18,7 +19,8 @@ import { CategoryOptions, type Category } from "@/components/categorize/category
 import { CategorizeDesktopView } from "@/components/categorize/views/categorize-desktop-view";
 import { CategorizeMobileView } from "@/components/categorize/views/categorize-mobile-view";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
-import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
+import { RuleConditionRow } from "@/components/rules/rule-condition-row";
+import { type RuleCondition, getDefaultOperator } from "@/lib/rules/rule-dto";
 import {
   transactionMerchant,
   transactionOperationType,
@@ -29,6 +31,7 @@ import {
   bulkCategorizeByIds,
   categorizeTransaction,
 } from "@/app/(app)/categorize/actions";
+import { executeRuleOnce } from "@/app/(app)/rules/actions";
 import { useCategorizeSearch } from "@/components/categorize/search-context";
 
 interface Props {
@@ -70,6 +73,16 @@ function fmtDateLong(dateIso: string, locale: string, timezone: string): string 
   });
 }
 
+function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
+  if (tx.creditorName) {
+    return { field: "creditorName", operator: getDefaultOperator("creditorName"), value: tx.creditorName };
+  }
+  if (tx.debtorName) {
+    return { field: "debtorName", operator: getDefaultOperator("debtorName"), value: tx.debtorName };
+  }
+  return { field: "description", operator: getDefaultOperator("description"), value: tx.description ?? "" };
+}
+
 function FocusModal({
   snapshot,
   startIndex,
@@ -83,7 +96,19 @@ function FocusModal({
   const [queue, setQueue] = useState<TransactionListItemDTO[]>(snapshot);
   const [index, setIndex] = useState(Math.min(startIndex, Math.max(0, snapshot.length - 1)));
   const [savingCount, setSavingCount] = useState(0);
-  const [quickRuleTx, setQuickRuleTx] = useState<TransactionListItemDTO | null>(null);
+
+  // Inline rule form state
+  const [showRuleForm, setShowRuleForm] = useState(false);
+  const [ruleCondition, setRuleCondition] = useState<RuleCondition>(() => ({
+    field: "description",
+    operator: getDefaultOperator("description"),
+    value: "",
+  }));
+  const [ruleCategoryId, setRuleCategoryId] = useState("");
+  const [ruleName, setRuleName] = useState("");
+  const [ruleResult, setRuleResult] = useState<{ msg: string; categorized: number } | null>(null);
+  const [ruleError, setRuleError] = useState<string | null>(null);
+  const [isApplyingRule, startRuleTransition] = useTransition();
 
   const current = queue[index] ?? null;
   const total = snapshot.length;
@@ -117,21 +142,75 @@ function FocusModal({
       });
   }
 
+  function openRuleForm() {
+    if (!current) return;
+    setRuleCondition(buildInitialCondition(current));
+    setRuleCategoryId("");
+    setRuleName("");
+    setRuleResult(null);
+    setRuleError(null);
+    setShowRuleForm(true);
+  }
+
+  function handleApplyRule() {
+    if (!ruleCondition.value.trim() || !ruleCategoryId) return;
+    setRuleError(null);
+    setRuleResult(null);
+    startRuleTransition(async () => {
+      try {
+        const res = await executeRuleOnce({
+          conditions: [ruleCondition],
+          sourceCategoryId: null,
+          categoryId: ruleCategoryId,
+          ruleName: ruleName.trim() || null,
+        });
+        const msg =
+          res.categorized > 0
+            ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized${res.savedRuleId ? " — rule saved" : ""}.`
+            : "Rule applied — no new transactions matched.";
+        setRuleResult({ msg, categorized: res.categorized });
+        if (res.categorized > 0 && current) {
+          onCategorized(current.id);
+        }
+      } catch {
+        setRuleError("Failed to apply rule. Please try again.");
+      }
+    });
+  }
+
+  function handleRuleNext() {
+    if (!current) return;
+    const newQueue = queue.filter((tx) => tx.id !== current.id);
+    const newIndex = Math.min(index, Math.max(0, newQueue.length - 1));
+    setQueue(newQueue);
+    setIndex(newIndex);
+    setShowRuleForm(false);
+    setRuleResult(null);
+  }
+
   return (
-    <>
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] p-0 gap-0 overflow-hidden">
         <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
         <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b">
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {done ? "All done!" : `${index + 1} / ${queue.length}`}
-            {categorizedCount > 0 && !done && (
-              <span className="ml-2 text-green-600 font-medium">✓ {categorizedCount}</span>
-            )}
-            {savingCount > 0 && (
-              <span className="ml-2 text-muted-foreground">Saving {savingCount}…</span>
-            )}
-          </span>
+          {showRuleForm ? (
+            <button
+              onClick={() => setShowRuleForm(false)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" /> Back
+            </button>
+          ) : (
+            <span className="text-sm text-muted-foreground tabular-nums">
+              {done ? "All done!" : `${index + 1} / ${queue.length}`}
+              {categorizedCount > 0 && !done && (
+                <span className="ml-2 text-green-600 font-medium">✓ {categorizedCount}</span>
+              )}
+              {savingCount > 0 && (
+                <span className="ml-2 text-muted-foreground">Saving {savingCount}…</span>
+              )}
+            </span>
+          )}
           <button
             onClick={onClose}
             className="rounded-sm opacity-70 hover:opacity-100 transition-opacity"
@@ -141,7 +220,82 @@ function FocusModal({
         </div>
 
         <div className="px-4 py-4 space-y-4 overflow-y-auto">
-          {done ? (
+          {showRuleForm && current ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+                <h2 className="font-semibold text-base">Create rule</h2>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">When…</p>
+                <RuleConditionRow
+                  condition={ruleCondition}
+                  index={0}
+                  onChange={(_i, updated) => { setRuleCondition(updated); setRuleResult(null); }}
+                  onRemove={() => {}}
+                  canRemove={false}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">→ Categorize as</p>
+                <select
+                  value={ruleCategoryId}
+                  onChange={(e) => setRuleCategoryId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">— Select category —</option>
+                  <CategoryOptions categories={categories} />
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Rule name <span className="normal-case font-normal">(optional — fill to save it)</span>
+                </p>
+                <input
+                  type="text"
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  placeholder="e.g. Netflix, Groceries…"
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              {ruleError && <p className="text-sm text-destructive">{ruleError}</p>}
+
+              {ruleResult ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-green-600 font-medium">{ruleResult.msg}</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowRuleForm(false)}>
+                      Back
+                    </Button>
+                    {ruleResult.categorized > 0 && (
+                      <Button className="flex-1 gap-1" onClick={handleRuleNext}>
+                        Next <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowRuleForm(false)} disabled={isApplyingRule}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={handleApplyRule}
+                    disabled={!ruleCondition.value.trim() || !ruleCategoryId || isApplyingRule}
+                  >
+                    {isApplyingRule ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                    Apply rule
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : done ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                 <CheckCircle className="h-6 w-6 text-green-600" />
@@ -216,7 +370,7 @@ function FocusModal({
                   variant="outline"
                   size="icon"
                   className="h-10 w-10 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
-                  onClick={() => setQuickRuleTx(current)}
+                  onClick={openRuleForm}
                   title="Create rule for this transaction"
                 >
                   <Zap className="h-4 w-4" />
@@ -246,16 +400,6 @@ function FocusModal({
         </div>
       </DialogContent>
     </Dialog>
-
-    {quickRuleTx && (
-      <QuickRuleDialog
-        open
-        onClose={() => setQuickRuleTx(null)}
-        transaction={quickRuleTx}
-        categories={categories}
-      />
-    )}
-  </>
   );
 }
 
