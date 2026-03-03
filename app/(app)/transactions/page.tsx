@@ -57,8 +57,11 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       : {}),
   };
 
-  const [total, transactions, accounts, prefs, categories] = await Promise.all([
-    prisma.transaction.count({ where }),
+  const total = await prisma.transaction.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const effectivePage = Math.min(Math.max(1, page), totalPages);
+
+  const [transactions, accounts, prefs, categories] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: {
@@ -66,7 +69,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
         categorization: { include: { category: { select: { name: true, color: true } } } },
       },
       orderBy: { bookingDate: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
+      skip: (effectivePage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
     prisma.bankAccount.findMany({
@@ -81,9 +84,8 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(page * PAGE_SIZE, total);
+  const rangeStart = total === 0 ? 0 : (effectivePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(effectivePage * PAGE_SIZE, total);
 
   const pageQuery = new URLSearchParams({
     from: fromStr,
@@ -133,7 +135,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
       ) : (
         <TransactionsView
           groupedTransactions={groupedTransactions}
-          page={page}
+          page={effectivePage}
           totalPages={totalPages}
           total={total}
           rangeStart={rangeStart}
