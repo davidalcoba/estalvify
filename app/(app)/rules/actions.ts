@@ -238,31 +238,47 @@ async function applyRuleConditions(
 
   if (transactions.length === 0) return { categorized: 0 };
 
+  const allIds = transactions.map((tx) => tx.id);
   const now = new Date();
-  await prisma.$transaction(
-    transactions.map((tx) =>
-      prisma.transactionCategorization.upsert({
-        where: { transactionId: tx.id },
-        create: {
-          transactionId: tx.id,
-          categoryId,
-          source: "RULE",
-          status: "APPROVED",
-          categoryRuleId: ruleId,
-          approvedAt: now,
-        },
-        update: {
-          categoryId,
-          source: "RULE",
-          status: "APPROVED",
-          categoryRuleId: ruleId,
-          approvedAt: now,
-          rejectedAt: null,
-          note: null,
-        },
-      })
-    )
-  );
+
+  // Find which transactions already have a categorization row
+  const existing = await prisma.transactionCategorization.findMany({
+    where: { transactionId: { in: allIds } },
+    select: { transactionId: true },
+  });
+  const existingIds = new Set(existing.map((e) => e.transactionId));
+  const newIds = allIds.filter((id) => !existingIds.has(id));
+
+  // Two bulk writes — no interactive transaction needed
+  await Promise.all([
+    existingIds.size > 0
+      ? prisma.transactionCategorization.updateMany({
+          where: { transactionId: { in: [...existingIds] } },
+          data: {
+            categoryId,
+            source: "RULE",
+            status: "APPROVED",
+            categoryRuleId: ruleId,
+            approvedAt: now,
+            rejectedAt: null,
+            note: null,
+          },
+        })
+      : Promise.resolve(),
+    newIds.length > 0
+      ? prisma.transactionCategorization.createMany({
+          data: newIds.map((id) => ({
+            transactionId: id,
+            categoryId,
+            source: "RULE",
+            status: "APPROVED",
+            categoryRuleId: ruleId,
+            approvedAt: now,
+          })),
+          skipDuplicates: true,
+        })
+      : Promise.resolve(),
+  ]);
 
   revalidatePath("/categorize");
   revalidatePath("/transactions");
