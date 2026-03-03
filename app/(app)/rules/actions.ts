@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@/app/generated/prisma";
 import type { RuleCondition } from "@/lib/rules/rule-dto";
 import { buildRuleWhereClause } from "@/lib/rules/rule-evaluator";
 import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
@@ -67,7 +68,7 @@ export async function saveRule(input: {
     data: {
       userId,
       name: input.name.trim(),
-      conditions: input.conditions,
+      conditions: input.conditions as unknown as Prisma.InputJsonValue,
       sourceCategoryId: input.sourceCategoryId,
       categoryId: input.categoryId,
       priority: input.priority,
@@ -138,7 +139,7 @@ export async function executeRuleOnce(input: {
       data: {
         userId,
         name: input.ruleName.trim(),
-        conditions: input.conditions,
+        conditions: input.conditions as unknown as Prisma.InputJsonValue,
         sourceCategoryId: input.sourceCategoryId,
         categoryId: input.categoryId,
         isActive: true,
