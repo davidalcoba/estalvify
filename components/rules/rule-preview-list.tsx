@@ -21,7 +21,7 @@ export function RulePreviewList({
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
         <p className="text-sm text-muted-foreground">
-          No se encontraron transacciones que cumplan las condiciones.
+          No transactions match the conditions.
         </p>
       </div>
     );
@@ -32,17 +32,16 @@ export function RulePreviewList({
       <p className="text-sm text-muted-foreground">
         {total > previewLimit ? (
           <>
-            Mostrando{" "}
+            Showing{" "}
             <span className="font-medium text-foreground">{previewLimit}</span>{" "}
-            de{" "}
+            of{" "}
             <span className="font-medium text-foreground">{total}</span>{" "}
-            transacciones coincidentes
+            matching transactions
           </>
         ) : (
           <>
             <span className="font-medium text-foreground">{total}</span>{" "}
-            transacción{total !== 1 ? "es" : ""} coincidente
-            {total !== 1 ? "s" : ""}
+            matching transaction{total !== 1 ? "s" : ""}
           </>
         )}
       </p>

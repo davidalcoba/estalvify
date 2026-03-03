@@ -21,7 +21,7 @@ import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto"
 const PREVIEW_LIMIT = 50;
 
 function defaultCondition(): RuleCondition {
-  return { field: "description", operator: "contains", value: "" };
+  return { field: "description", operator: getDefaultOperator("description"), value: "" };
 }
 
 interface RuleBuilderFormProps {
@@ -49,23 +49,22 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
   const [isExecuting, startExecute] = useTransition();
 
   function handleConditionChange(index: number, condition: RuleCondition) {
-    setConditions((prev) => prev.map((c, i) => (i === index ? condition : c)));
+    setConditions((prev: RuleCondition[]) => prev.map((c: RuleCondition, i: number) => (i === index ? condition : c)));
     setPreview(null);
     setExecuteResult(null);
   }
 
   function handleConditionRemove(index: number) {
-    setConditions((prev) => prev.filter((_, i) => i !== index));
+    setConditions((prev: RuleCondition[]) => prev.filter((_: RuleCondition, i: number) => i !== index));
     setPreview(null);
     setExecuteResult(null);
   }
 
   function handleAddCondition() {
-    setConditions((prev) => [...prev, defaultCondition()]);
+    setConditions((prev: RuleCondition[]) => [...prev, defaultCondition()]);
   }
 
-  // Validate that at least one condition has a non-empty value
-  const hasValidConditions = conditions.some((c) => c.value.trim() !== "");
+  const hasValidConditions = conditions.some((c: RuleCondition) => c.value.trim() !== "");
 
   function handleSearch() {
     setError(null);
@@ -73,19 +72,19 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
     startSearch(async () => {
       try {
         const result = await previewRuleTransactions(
-          conditions.filter((c) => c.value.trim() !== ""),
+          conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
           sourceCategoryId || null
         );
         setPreview(result);
       } catch {
-        setError("Error al buscar transacciones. Inténtalo de nuevo.");
+        setError("Failed to search transactions. Please try again.");
       }
     });
   }
 
   function handleExecute() {
     if (!targetCategoryId) {
-      setError("Selecciona una categoría de destino antes de ejecutar.");
+      setError("Select a target category before executing.");
       return;
     }
     setError(null);
@@ -93,26 +92,25 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
     startExecute(async () => {
       try {
         const result = await executeRuleOnce({
-          conditions: conditions.filter((c) => c.value.trim() !== ""),
+          conditions: conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
           sourceCategoryId: sourceCategoryId || null,
           categoryId: targetCategoryId,
           ruleName: ruleName.trim() || null,
         });
         const msg =
           result.categorized > 0
-            ? `${result.categorized} transacción${result.categorized !== 1 ? "es" : ""} categorizada${result.categorized !== 1 ? "s" : ""}${result.savedRuleId ? " — regla guardada" : ""}.`
-            : "Ninguna transacción nueva categorizada.";
+            ? `${result.categorized} transaction${result.categorized !== 1 ? "s" : ""} categorized${result.savedRuleId ? " — rule saved" : ""}.`
+            : "No new transactions categorized.";
         setExecuteResult(msg);
-        // Refresh preview after execution
         if (result.categorized > 0) {
           const updated = await previewRuleTransactions(
-            conditions.filter((c) => c.value.trim() !== ""),
+            conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
             sourceCategoryId || null
           );
           setPreview(updated);
         }
       } catch {
-        setError("Error al ejecutar la regla. Inténtalo de nuevo.");
+        setError("Failed to execute the rule. Please try again.");
       }
     });
   }
@@ -121,39 +119,36 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
 
   return (
     <div className="space-y-6">
-      {/* ── Builder card ── */}
       <Card>
         <CardContent className="p-4 md:p-6 space-y-5">
           {/* Rule name */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
-              Nombre de la regla{" "}
+              Rule name{" "}
               <span className="text-muted-foreground font-normal">
-                (opcional, para guardarla)
+                (optional — fill to save it)
               </span>
             </label>
             <input
               type="text"
               value={ruleName}
               onChange={(e) => setRuleName(e.target.value)}
-              placeholder="Ej: Netflix, Supermercados, Nómina..."
+              placeholder="e.g. Netflix, Groceries, Salary..."
               className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
 
           {/* Conditions */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">
-                Condiciones{" "}
-                <span className="text-muted-foreground font-normal">
-                  (todas deben cumplirse)
-                </span>
-              </label>
-            </div>
+            <label className="text-sm font-medium">
+              Conditions{" "}
+              <span className="text-muted-foreground font-normal">
+                (all must match)
+              </span>
+            </label>
 
             <div className="space-y-2">
-              {conditions.map((condition, index) => (
+              {conditions.map((condition: RuleCondition, index: number) => (
                 <RuleConditionRow
                   key={index}
                   condition={condition}
@@ -173,7 +168,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               className="gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
-              Añadir condición
+              Add condition
             </Button>
           </div>
 
@@ -181,13 +176,13 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
-                Categoría origen{" "}
+                Source category{" "}
                 <span className="text-muted-foreground font-normal">
-                  (opcional)
+                  (optional)
                 </span>
               </label>
               <p className="text-xs text-muted-foreground">
-                Solo recategoriza desde esta categoría
+                Only re-categorize from this category
               </p>
               <select
                 value={sourceCategoryId}
@@ -197,36 +192,31 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
                 }}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                <option value="">— Cualquier categoría —</option>
+                <option value="">— Any category —</option>
                 <CategoryOptions categories={categories} />
               </select>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
-                Categoría destino{" "}
+                Target category{" "}
                 <span className="text-destructive">*</span>
               </label>
               <p className="text-xs text-muted-foreground">
-                Categoría que se asignará al ejecutar
+                Category to assign when executing
               </p>
               <select
                 value={targetCategoryId}
                 onChange={(e) => setTargetCategoryId(e.target.value)}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                <option value="">— Seleccionar categoría —</option>
+                <option value="">— Select category —</option>
                 <CategoryOptions categories={categories} />
               </select>
             </div>
           </div>
 
-          {/* Error message */}
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-
-          {/* Execute result */}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           {executeResult && (
             <p className="text-sm text-green-600 font-medium">{executeResult}</p>
           )}
@@ -245,7 +235,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              Buscar transacciones
+              Search transactions
             </Button>
 
             <Button
@@ -259,25 +249,25 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               ) : (
                 <Play className="h-4 w-4" />
               )}
-              Ejecutar
+              Execute
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* ── Preview results ── */}
+      {/* Preview */}
       {isSearching && (
         <div className="rounded-xl border p-6 text-center">
           <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
           <p className="text-sm text-muted-foreground mt-2">
-            Buscando transacciones...
+            Searching transactions...
           </p>
         </div>
       )}
 
       {!isSearching && preview !== null && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Transacciones coincidentes</h3>
+          <h3 className="text-sm font-semibold">Matching transactions</h3>
           <RulePreviewList
             transactions={preview.transactions}
             total={preview.total}

@@ -38,7 +38,6 @@ export function RuleConditionRow({
 }: RuleConditionRowProps) {
   function handleFieldChange(field: RuleConditionField) {
     const operator = getDefaultOperator(field);
-    // Reset value when switching to direction field
     const value = field === "direction" ? "DEBIT" : condition.value;
     onChange(index, { field, operator, value });
   }
@@ -55,7 +54,6 @@ export function RuleConditionRow({
 
   return (
     <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-      {/* Field selector */}
       <select
         value={condition.field}
         onChange={(e) => handleFieldChange(e.target.value as RuleConditionField)}
@@ -68,7 +66,6 @@ export function RuleConditionRow({
         ))}
       </select>
 
-      {/* Operator selector */}
       <select
         value={condition.operator}
         onChange={(e) => handleOperatorChange(e.target.value as RuleConditionOperator)}
@@ -81,29 +78,27 @@ export function RuleConditionRow({
         ))}
       </select>
 
-      {/* Value input */}
       {condition.field === "direction" ? (
         <select
           value={condition.value}
           onChange={(e) => handleValueChange(e.target.value)}
           className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-w-[120px] flex-1"
         >
-          <option value="DEBIT">Débito (gasto)</option>
-          <option value="CREDIT">Crédito (ingreso)</option>
+          <option value="DEBIT">Debit (expense)</option>
+          <option value="CREDIT">Credit (income)</option>
         </select>
       ) : (
         <input
           type={condition.field === "amount" ? "number" : "text"}
           value={condition.value}
           onChange={(e) => handleValueChange(e.target.value)}
-          placeholder={condition.field === "amount" ? "0.00" : "Valor..."}
+          placeholder={condition.field === "amount" ? "0.00" : "Value..."}
           min={condition.field === "amount" ? "0" : undefined}
           step={condition.field === "amount" ? "0.01" : undefined}
           className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 flex-1 min-w-[140px]"
         />
       )}
 
-      {/* Remove button */}
       <Button
         type="button"
         variant="ghost"
@@ -111,7 +106,7 @@ export function RuleConditionRow({
         onClick={() => onRemove(index)}
         disabled={!canRemove}
         className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive"
-        aria-label="Eliminar condición"
+        aria-label="Remove condition"
       >
         <Trash2 className="h-4 w-4" />
       </Button>

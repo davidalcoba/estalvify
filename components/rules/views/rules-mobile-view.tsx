@@ -16,16 +16,16 @@ import {
   toggleRuleActive,
 } from "@/app/(app)/rules/actions";
 
-interface SavedRulesListProps {
+interface RulesMobileViewProps {
   rules: CategoryRuleDTO[];
 }
 
-export function SavedRulesList({ rules }: SavedRulesListProps) {
+export function RulesMobileView({ rules }: RulesMobileViewProps) {
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
         <p className="text-sm text-muted-foreground">
-          No hay reglas guardadas aún. Crea tu primera regla arriba.
+          No saved rules yet. Create your first rule above.
         </p>
       </div>
     );
@@ -34,13 +34,13 @@ export function SavedRulesList({ rules }: SavedRulesListProps) {
   return (
     <div className="space-y-3">
       {rules.map((rule) => (
-        <SavedRuleRow key={rule.id} rule={rule} />
+        <RulesMobileCard key={rule.id} rule={rule} />
       ))}
     </div>
   );
 }
 
-function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
+function RulesMobileCard({ rule }: { rule: CategoryRuleDTO }) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
 
@@ -50,8 +50,8 @@ function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
       const { categorized } = await executeRule(rule.id);
       setResult(
         categorized > 0
-          ? `${categorized} transacción${categorized !== 1 ? "es" : ""} categorizada${categorized !== 1 ? "s" : ""}`
-          : "Sin coincidencias"
+          ? `${categorized} transaction${categorized !== 1 ? "s" : ""} categorized`
+          : "No matches"
       );
     });
   }
@@ -72,12 +72,11 @@ function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
     <Card className={`py-0 gap-0 ${!rule.isActive ? "opacity-60" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          {/* Active toggle */}
           <button
             onClick={handleToggleActive}
             disabled={isPending}
             className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={rule.isActive ? "Desactivar regla" : "Activar regla"}
+            aria-label={rule.isActive ? "Deactivate" : "Activate"}
           >
             {rule.isActive ? (
               <CheckCircle2 className="h-5 w-5 text-green-500" />
@@ -86,60 +85,42 @@ function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
             )}
           </button>
 
-          {/* Rule info */}
           <div className="flex-1 min-w-0 space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-sm truncate">{rule.name}</span>
+              <span className="font-medium text-sm">{rule.name}</span>
               {!rule.isActive && (
-                <Badge variant="secondary" className="text-xs">
-                  Inactiva
-                </Badge>
+                <Badge variant="secondary" className="text-xs">Inactive</Badge>
               )}
             </div>
 
-            {/* Conditions summary */}
             <div className="flex flex-wrap gap-1.5">
-              {rule.conditions.slice(0, 3).map((c, i) => (
+              {rule.conditions.slice(0, 2).map((c, i) => (
                 <span
                   key={i}
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded px-2 py-0.5"
                 >
                   <span className="font-medium">{FIELD_LABELS[c.field]}</span>
                   <span>{OPERATOR_LABELS[c.operator]}</span>
-                  <span className="font-medium truncate max-w-[100px]">
-                    &quot;{c.value}&quot;
-                  </span>
+                  <span className="font-medium truncate max-w-[80px]">&quot;{c.value}&quot;</span>
                 </span>
               ))}
-              {rule.conditions.length > 3 && (
+              {rule.conditions.length > 2 && (
                 <span className="text-xs text-muted-foreground">
-                  +{rule.conditions.length - 3} más
+                  +{rule.conditions.length - 2} more
                 </span>
               )}
             </div>
 
-            {/* Source → Target */}
-            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {rule.sourceCategoryName && (
-                <>
-                  <span>
-                    Desde:{" "}
-                    <span
-                      className="font-medium"
-                      style={{ color: rule.sourceCategoryColor ?? undefined }}
-                    >
-                      {rule.sourceCategoryName}
-                    </span>
-                  </span>
-                  <span>→</span>
-                </>
+                <span>
+                  From: <span style={{ color: rule.sourceCategoryColor ?? undefined }}>{rule.sourceCategoryName}</span>
+                  {" → "}
+                </span>
               )}
               <span>
-                Hacia:{" "}
-                <span
-                  className="font-medium"
-                  style={{ color: rule.categoryColor }}
-                >
+                To:{" "}
+                <span className="font-medium" style={{ color: rule.categoryColor }}>
                   {rule.categoryName}
                 </span>
               </span>
@@ -150,7 +131,6 @@ function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
             )}
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
             <Button
               type="button"
@@ -159,8 +139,8 @@ function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
               onClick={handleExecute}
               disabled={isPending || !rule.isActive}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="Ejecutar regla"
-              title="Ejecutar regla"
+              aria-label="Run"
+              title="Run rule"
             >
               <Play className="h-4 w-4" />
             </Button>
@@ -171,8 +151,8 @@ function SavedRuleRow({ rule }: { rule: CategoryRuleDTO }) {
               onClick={handleDelete}
               disabled={isPending}
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              aria-label="Eliminar regla"
-              title="Eliminar regla"
+              aria-label="Delete"
+              title="Delete rule"
             >
               <Trash2 className="h-4 w-4" />
             </Button>

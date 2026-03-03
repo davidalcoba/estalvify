@@ -40,21 +40,21 @@ export interface CategoryRuleDTO {
 // Labels for UI rendering
 
 export const FIELD_LABELS: Record<RuleConditionField, string> = {
-  description: "Descripción",
-  creditorName: "Acreedor",
-  debtorName: "Deudor",
-  remittanceInfo: "Referencia",
-  amount: "Importe",
-  direction: "Dirección",
+  description: "Description",
+  creditorName: "Creditor",
+  debtorName: "Debtor",
+  remittanceInfo: "Reference",
+  amount: "Amount",
+  direction: "Direction",
 };
 
 export const OPERATOR_LABELS: Record<RuleConditionOperator, string> = {
-  contains: "contiene",
-  equals: "es igual a",
-  startsWith: "empieza por",
-  endsWith: "termina en",
-  greaterThan: "mayor que",
-  lessThan: "menor que",
+  contains: "contains",
+  equals: "equals",
+  startsWith: "starts with",
+  endsWith: "ends with",
+  greaterThan: "greater than",
+  lessThan: "less than",
 };
 
 // Which operators are valid for each field type

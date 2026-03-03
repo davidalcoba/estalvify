@@ -1,8 +1,9 @@
 // Rules page orchestrator — composes builder form and saved rules list
 
-import { RuleBuilderForm } from "@/components/rules/rule-builder-form";
-import { SavedRulesList } from "@/components/rules/saved-rules-list";
 import { Separator } from "@/components/ui/separator";
+import { RuleBuilderForm } from "@/components/rules/rule-builder-form";
+import { RulesDesktopView } from "@/components/rules/views/rules-desktop-view";
+import { RulesMobileView } from "@/components/rules/views/rules-mobile-view";
 import type { Category } from "@/components/categorize/category-options";
 import type { CategoryRuleDTO } from "@/lib/rules/rule-dto";
 
@@ -15,13 +16,13 @@ interface RulesViewProps {
 export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
   return (
     <div className="space-y-8">
-      {/* ── New rule builder ── */}
+      {/* ── Rule builder ── */}
       <section>
         <div className="mb-4">
-          <h3 className="text-base font-semibold">Nueva regla</h3>
+          <h3 className="text-base font-semibold">New rule</h3>
           <p className="text-sm text-muted-foreground">
-            Define las condiciones, busca las transacciones que coinciden y
-            ejecútala para categorizarlas.
+            Define conditions, preview matching transactions, and execute to
+            categorize them.
           </p>
         </div>
         <RuleBuilderForm categories={categories} locale={locale} />
@@ -29,11 +30,11 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
 
       <Separator />
 
-      {/* ── Saved rules list ── */}
+      {/* ── Saved rules ── */}
       <section>
         <div className="mb-4">
           <h3 className="text-base font-semibold">
-            Reglas guardadas
+            Saved rules
             {savedRules.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 ({savedRules.length})
@@ -41,11 +42,19 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
             )}
           </h3>
           <p className="text-sm text-muted-foreground">
-            Las reglas con nombre se guardan aquí para poder ejecutarlas de
-            nuevo en cualquier momento.
+            Named rules are saved here and can be re-run at any time.
           </p>
         </div>
-        <SavedRulesList rules={savedRules} />
+
+        {/* Desktop table */}
+        <div className="hidden md:block">
+          <RulesDesktopView rules={savedRules} />
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden">
+          <RulesMobileView rules={savedRules} />
+        </div>
       </section>
     </div>
   );

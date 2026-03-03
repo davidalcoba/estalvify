@@ -7,7 +7,7 @@ import { getUserPrefs } from "@/lib/user-prefs";
 import { RulesView } from "@/components/rules/rules-view";
 import { toCategoryRuleDTO } from "@/lib/rules/rule-dto";
 
-export const metadata: Metadata = { title: "Reglas" };
+export const metadata: Metadata = { title: "Rules" };
 
 export default async function RulesPage() {
   const session = await auth();
@@ -32,9 +32,9 @@ export default async function RulesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Reglas</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Rules</h2>
         <p className="text-muted-foreground text-sm">
-          Crea reglas para categorizar transacciones de forma automática.
+          Create rules to automatically categorize transactions.
         </p>
       </div>
 
