@@ -1,8 +1,6 @@
-import { Inbox, Loader2, Search, Tag, CheckCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Inbox, Loader2, Tag, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 import { TransactionPagination } from "@/components/transactions/shared/transaction-pagination";
 import {
@@ -97,29 +95,6 @@ export function CategorizeDesktopView({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Categorize</h2>
-          <p className="text-muted-foreground text-sm">Classify transactions to get accurate reports.</p>
-        </div>
-        {total > 0 && (
-          <Badge variant="secondary" className="mt-1 shrink-0 text-sm font-semibold">
-            {total} pending
-          </Badge>
-        )}
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="search"
-          placeholder="Filter by description, merchant, reference…"
-          value={searchInput}
-          onChange={(e) => onSearchInputChange(e.target.value)}
-          className="h-9 pl-9 pr-4 text-sm"
-        />
-      </div>
-
       {showBulkByQuery && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
           <span className="text-sm font-medium text-blue-700 shrink-0">
