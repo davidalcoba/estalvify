@@ -47,7 +47,11 @@ const DEFAULT_CATEGORIES: Array<{
   { name: "Transfers", color: "#6b7280", isNonComputable: true, children: ["Savings transfer", "Internal transfer"] },
 ];
 
-export async function seedDefaultCategories(userId: string) {
+export async function seedDefaultCategories() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
   const count = await prisma.category.count({ where: { userId } });
   if (count > 0) return;
 
