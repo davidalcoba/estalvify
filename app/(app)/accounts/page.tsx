@@ -58,6 +58,21 @@ export default async function AccountsPage({
     ? (errorMessages[params.error] ?? decodeURIComponent(params.error))
     : null;
 
+  // Auto-recover connections stuck in SYNCING for more than 10 minutes.
+  // This happens when a Vercel function timeout kills the sync job without
+  // updating the connection status back to ACTIVE.
+  await prisma.bankConnection.updateMany({
+    where: {
+      userId: session!.user.id,
+      status: "SYNCING",
+      updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
+    },
+    data: {
+      status: "ACTIVE",
+      lastSyncError: "Sync timed out — try syncing again",
+    },
+  });
+
   const [connections, prefs] = await Promise.all([
     prisma.bankConnection.findMany({
       where: {
