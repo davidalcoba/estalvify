@@ -70,34 +70,47 @@ export async function syncConnection(
   for (const account of connection.bankAccounts) {
     // ── Balances ────────────────────────────────────────────────────────
     try {
-      const { balances } = await getBalances(account.externalAccountId);
+      // Skip the API call if a balance was already stored today — PSD2
+      // consent access is limited (some banks enforce ≤4/day) so we
+      // avoid burning quota on a value we already have.
+      const cachedBalance = await prisma.accountBalance.findFirst({
+        where: { bankAccountId: account.id, date: today },
+        select: { id: true },
+      });
 
-      for (const balance of balances) {
-        await prisma.accountBalance.upsert({
-          where: {
-            bankAccountId_date_balanceType: {
+      if (cachedBalance) {
+        console.log(`[sync] Account ${account.externalAccountId} balance already cached for today — skipping API call`);
+      } else {
+        const { balances } = await getBalances(account.externalAccountId);
+
+        for (const balance of balances) {
+          await prisma.accountBalance.upsert({
+            where: {
+              bankAccountId_date_balanceType: {
+                bankAccountId: account.id,
+                date: today,
+                balanceType: balance.balance_type ?? "unknown",
+              },
+            },
+            create: {
               bankAccountId: account.id,
               date: today,
+              balance: balance.balance_amount.amount,
+              currency: balance.balance_amount.currency,
               balanceType: balance.balance_type ?? "unknown",
             },
-          },
-          create: {
-            bankAccountId: account.id,
-            date: today,
-            balance: balance.balance_amount.amount,
-            currency: balance.balance_amount.currency,
-            balanceType: balance.balance_type ?? "unknown",
-          },
-          update: {
-            balance: balance.balance_amount.amount,
-          },
-        });
-        balancesFetched++;
+            update: {
+              balance: balance.balance_amount.amount,
+            },
+          });
+          balancesFetched++;
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
-      errors.push(`Account ${account.externalAccountId} balances: ${msg}`);
+      const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
+      errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}Account ${account.externalAccountId} balances: ${msg}`);
     }
 
     // ── Transactions (with automatic pagination) ─────────────────────────
@@ -179,7 +192,8 @@ export async function syncConnection(
         );
       } else {
         console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
-        errors.push(`Account ${account.externalAccountId} transactions: ${msg}`);
+        const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
+        errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}Account ${account.externalAccountId} transactions: ${msg}`);
       }
     }
   }

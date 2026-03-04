@@ -47,39 +47,52 @@ export const POST = handleCallback<SyncConnectionMessage>(
       console.error(`[queue/sync-connection] ${connectionId} failed:`, msg);
 
       const isAuthError = msg.includes("401") || msg.includes("403") || msg.includes("expired");
+      const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
 
       await prisma.bankConnection
         .update({
           where: { id: connectionId },
           data: {
             status: isAuthError ? "EXPIRED" : "ACTIVE",
-            // Persist error message so the UI can surface it; clear on auth
-            // expiry since the user must re-auth rather than retry the sync.
-            lastSyncError: isAuthError ? null : msg,
+            lastSyncError: isAuthError
+              ? null
+              : isRateLimit
+                ? "Bank rate limit reached — sync will resume in tomorrow's daily run"
+                : msg,
           },
         })
         .catch(() => {});
 
-      // Re-throw so Vercel retries the message (unless it's an auth error —
-      // retrying won't help, so we swallow it and acknowledge cleanly).
-      if (!isAuthError) throw err;
+      // Auth errors and rate limits are not retryable — acknowledge cleanly.
+      // Retrying a 429 would burn more PSD2 quota with no benefit.
+      if (!isAuthError && !isRateLimit) throw err;
       return;
     }
 
     // ── Evaluate result ───────────────────────────────────────────────────────
     if (result.errors.length > 0) {
-      // Per-account errors: surface them to the user and deliberately preserve
-      // lastSyncAt so the next sync re-fetches from the correct start date and
-      // doesn't skip the window where data is missing.
+      // syncConnection() tags rate-limit errors with a "RATE_LIMIT:" prefix
+      // so we can distinguish them from transient failures.
+      const isRateLimited = result.errors.some((e) => e.startsWith("RATE_LIMIT:"));
+
+      const userMessage = isRateLimited
+        ? "Bank rate limit reached — sync will resume in tomorrow's daily run"
+        : result.errors.join(" | ");
+
+      // Preserve lastSyncAt so the next sync re-fetches from the correct
+      // start date and doesn't skip the window where data is missing.
       await prisma.bankConnection.update({
         where: { id: connectionId },
-        data: {
-          status: "ACTIVE",
-          lastSyncError: result.errors.join(" | "),
-          // lastSyncAt intentionally NOT updated.
-        },
+        data: { status: "ACTIVE", lastSyncError: userMessage },
       });
-      // Re-throw to trigger a Vercel retry; the daily cron will also retry.
+
+      if (isRateLimited) {
+        // Retrying a rate-limited sync wastes quota — acknowledge and let
+        // tomorrow's cron pick it up from the preserved lastSyncAt.
+        return;
+      }
+
+      // Other errors are retryable — re-throw so Vercel retries the message.
       throw new Error(`Sync completed with errors: ${result.errors.join(" | ")}`);
     }
 
