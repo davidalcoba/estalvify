@@ -220,12 +220,16 @@ export default async function AccountsPage({
       ) : (
         <div className="space-y-4">
           {bankGroups.map((group) => {
-            const statusConfig = STATUS_CONFIG[group.status];
-            const StatusIcon = statusConfig.icon;
             const isExpired = group.status === "EXPIRED";
             const isSyncing = group.status === "SYNCING";
             const hasSyncError = !isSyncing && !isExpired && !!group.lastSyncError;
             const isRateLimitError = hasSyncError && !!group.lastSyncError?.includes("rate limit");
+            const badgeConfig = isRateLimitError
+              ? { label: "Quota reached", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
+              : hasSyncError
+                ? { label: "Sync error", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
+                : STATUS_CONFIG[group.status];
+            const StatusIcon = badgeConfig.icon;
             return (
               <Card key={group.bankId} className={isExpired ? "border-red-200" : undefined}>
                 <CardHeader className="pb-3">
@@ -243,9 +247,9 @@ export default async function AccountsPage({
                       </p>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                      <Badge variant="outline" className={`gap-1 text-xs ${statusConfig.className}`}>
+                      <Badge variant="outline" className={`gap-1 text-xs ${badgeConfig.className}`}>
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
-                        {statusConfig.label}
+                        {badgeConfig.label}
                       </Badge>
                       {isExpired ? (
                         <ReconnectBankButton
