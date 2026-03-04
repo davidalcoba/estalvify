@@ -229,7 +229,7 @@ export default async function AccountsPage({
             return (
               <Card key={group.bankId} className={isExpired ? "border-red-200" : undefined}>
                 <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                       <Building2 className="h-5 w-5 text-slate-600" />
                     </div>
@@ -242,7 +242,7 @@ export default async function AccountsPage({
                         )}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 ml-auto">
                       <Badge variant="outline" className={`gap-1 text-xs ${statusConfig.className}`}>
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
                         {statusConfig.label}

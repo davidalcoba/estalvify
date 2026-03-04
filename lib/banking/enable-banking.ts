@@ -138,18 +138,14 @@ async function generateJwt(): Promise<string> {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const jwt = await generateJwt();
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
   const response = await fetch(`${ENABLE_BANKING_BASE_URL}${path}`, {
     ...options,
-    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${jwt}`,
       "Content-Type": "application/json",
       ...options?.headers,
     },
-  }).finally(() => clearTimeout(timeoutId));
+  });
 
   if (!response.ok) {
     const body = await response.text();
