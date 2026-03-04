@@ -68,6 +68,8 @@ export async function syncConnection(
   const errors: string[] = [];
 
   for (const account of connection.bankAccounts) {
+    const accountErrors: string[] = [];
+
     // ── Balances ────────────────────────────────────────────────────────
     try {
       // Skip the API call if a balance was already stored today — PSD2
@@ -110,7 +112,7 @@ export async function syncConnection(
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
       const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
-      errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}Account ${account.externalAccountId} balances: ${msg}`);
+      accountErrors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}balances: ${msg}`);
     }
 
     // ── Transactions (with automatic pagination) ─────────────────────────
@@ -193,8 +195,24 @@ export async function syncConnection(
       } else {
         console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
         const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
-        errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}Account ${account.externalAccountId} transactions: ${msg}`);
+        accountErrors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}transactions: ${msg}`);
       }
+    }
+
+    // ── Update per-account sync status ────────────────────────────────────
+    // Write the outcome immediately so the UI reflects partial progress even
+    // when other accounts in the same connection are still pending or fail.
+    if (accountErrors.length === 0) {
+      await prisma.bankAccount
+        .update({ where: { id: account.id }, data: { lastSyncAt: new Date(), lastSyncError: null } })
+        .catch(() => {});
+    } else {
+      await prisma.bankAccount
+        .update({ where: { id: account.id }, data: { lastSyncError: accountErrors.join(" | ") } })
+        .catch(() => {});
+      // Propagate tagged errors to the connection-level result so the
+      // queue consumer can decide whether to retry or acknowledge.
+      errors.push(...accountErrors.map((e) => `Account ${account.externalAccountId} ${e}`));
     }
   }
 

@@ -36,12 +36,22 @@ export default async function SetupPage({
 
   const rawAccounts = (connection.sessionData as { accounts?: EnableBankingAccount[] })?.accounts ?? [];
 
-  const accounts = rawAccounts.map((a) => ({
-    uid: a.uid,
-    name: buildDisplayName(a),
-    iban: a.account_id?.iban,
-    currency: a.currency,
-  }));
+  // Filter out accounts already imported into any of the user's bank connections.
+  const allUids = rawAccounts.map((a) => a.uid);
+  const alreadyImported = await prisma.bankAccount.findMany({
+    where: { userId: session!.user.id, externalAccountId: { in: allUids } },
+    select: { externalAccountId: true },
+  });
+  const importedUids = new Set(alreadyImported.map((a) => a.externalAccountId));
+
+  const accounts = rawAccounts
+    .filter((a) => !importedUids.has(a.uid))
+    .map((a) => ({
+      uid: a.uid,
+      name: buildDisplayName(a),
+      iban: a.account_id?.iban,
+      currency: a.currency,
+    }));
 
   return (
     <div className="max-w-lg space-y-6">
@@ -62,6 +72,7 @@ export default async function SetupPage({
               <CardTitle className="text-base">{connection.bankName}</CardTitle>
               <CardDescription className="text-xs">
                 {accounts.length} account{accounts.length !== 1 ? "s" : ""} available
+                {importedUids.size > 0 && ` · ${importedUids.size} already imported`}
               </CardDescription>
             </div>
           </div>

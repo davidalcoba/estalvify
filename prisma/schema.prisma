@@ -145,6 +145,10 @@ model BankAccount {
   currency String          @default("EUR")
   isActive Boolean         @default(true)
 
+  // Per-account sync tracking (finer-grained than connection-level lastSyncAt)
+  lastSyncAt    DateTime? // When this account last synced successfully
+  lastSyncError String?   // Error from the most recent failed sync (null on success)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

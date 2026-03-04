@@ -280,14 +280,19 @@ export default async function AccountsPage({
                               )}
                             </div>
 
-                            {/* Balance */}
+                            {/* Balance + sync status */}
                             <div className="flex flex-col items-end gap-1 shrink-0">
                               {latestBalance && (
                                 <p className="text-sm font-semibold tabular-nums">
                                   {formatCurrency(latestBalance.balance, latestBalance.currency, locale)}
                                 </p>
                               )}
-                              {latestBalance ? (
+                              {account.lastSyncError ? (
+                                <span title={account.lastSyncError} className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  Sync error
+                                </span>
+                              ) : latestBalance ? (
                                 <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
                                   Synced {formatDate(latestBalance.date, locale, timezone)}
                                 </span>
