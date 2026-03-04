@@ -308,6 +308,11 @@ export default async function AccountsPage({
                                 <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
                                   Synced {formatDate(latestBalance.date, locale, timezone)}
                                 </span>
+                              ) : isSyncing ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                                  <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+                                  Syncing…
+                                </span>
                               ) : (
                                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                                   Never synced

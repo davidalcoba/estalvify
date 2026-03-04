@@ -69,6 +69,7 @@ export async function syncConnection(
 
   for (const account of connection.bankAccounts) {
     const accountErrors: string[] = [];
+    let rateLimitReached = false;
 
     // ── Balances ────────────────────────────────────────────────────────
     try {
@@ -113,89 +114,95 @@ export async function syncConnection(
       console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
       const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
       accountErrors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}balances: ${msg}`);
+      if (isRateLimit) rateLimitReached = true;
     }
 
     // ── Transactions (with automatic pagination) ─────────────────────────
+    // Skip entirely if rate limit was already hit on balances — further calls
+    // would also fail and would only burn more of the limited daily PSD2 quota.
     // The Enable Banking API may return a `continuation_key` when there are
     // more records beyond the current page. We loop until it stops coming.
     // Some account types (CARD, LOAN, etc.) may not support the transactions
     // endpoint — a 404 is logged as a warning but does not fail the sync.
-    try {
-      let continuationKey: string | undefined;
-      let pageCount = 0;
+    if (!rateLimitReached) {
+      try {
+        let continuationKey: string | undefined;
+        let pageCount = 0;
 
-      do {
-        const page = await getTransactions(account.externalAccountId, {
-          dateFrom,
-          dateTo,
-          continuationKey,
-        });
-
-        pageCount++;
-        continuationKey = page.continuation_key;
-
-        console.log(
-          `[sync] Account ${account.externalAccountId}: page ${pageCount}, ` +
-            `${page.transactions.length} transactions (${dateFrom}→${dateTo})` +
-            (continuationKey ? ", fetching next page…" : "")
-        );
-
-        for (const tx of page.transactions) {
-          const externalId = buildExternalId(tx);
-          if (!externalId) {
-            transactionsSkipped++;
-            console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
-            continue;
-          }
-
-          await prisma.transaction.upsert({
-            where: {
-              bankAccountId_externalTransactionId: {
-                bankAccountId: account.id,
-                externalTransactionId: externalId,
-              },
-            },
-            create: {
-              userId: connection.userId,
-              bankAccountId: account.id,
-              externalTransactionId: externalId,
-              amount: tx.transaction_amount.amount,
-              currency: tx.transaction_amount.currency,
-              direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
-              bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
-              valueDate: tx.value_date ? new Date(tx.value_date) : null,
-              description:
-                tx.bank_transaction_code?.description ??
-                tx.remittance_information?.join(" | ") ??
-                tx.note ??
-                null,
-              creditorName: tx.creditor?.name ?? null,
-              debtorName: tx.debtor?.name ?? null,
-              creditorIban: tx.creditor_account?.iban ?? null,
-              debtorIban: tx.debtor_account?.iban ?? null,
-              remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
-              merchantCategoryCode: tx.merchant_category_code ?? null,
-              rawData: tx as object,
-            },
-            update: {}, // transactions are immutable once stored
+        do {
+          const page = await getTransactions(account.externalAccountId, {
+            dateFrom,
+            dateTo,
+            continuationKey,
           });
 
-          transactionsFetched++;
-        }
-      } while (continuationKey);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      const is404 = msg.includes("404");
+          pageCount++;
+          continuationKey = page.continuation_key;
 
-      if (is404) {
-        // Account type does not support transaction history via PSD2 — not an error.
-        console.warn(
-          `[sync] Account ${account.externalAccountId} has no transaction endpoint (404) — skipping transactions`
-        );
-      } else {
-        console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
-        const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
-        accountErrors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}transactions: ${msg}`);
+          console.log(
+            `[sync] Account ${account.externalAccountId}: page ${pageCount}, ` +
+              `${page.transactions.length} transactions (${dateFrom}→${dateTo})` +
+              (continuationKey ? ", fetching next page…" : "")
+          );
+
+          for (const tx of page.transactions) {
+            const externalId = buildExternalId(tx);
+            if (!externalId) {
+              transactionsSkipped++;
+              console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
+              continue;
+            }
+
+            await prisma.transaction.upsert({
+              where: {
+                bankAccountId_externalTransactionId: {
+                  bankAccountId: account.id,
+                  externalTransactionId: externalId,
+                },
+              },
+              create: {
+                userId: connection.userId,
+                bankAccountId: account.id,
+                externalTransactionId: externalId,
+                amount: tx.transaction_amount.amount,
+                currency: tx.transaction_amount.currency,
+                direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
+                bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
+                valueDate: tx.value_date ? new Date(tx.value_date) : null,
+                description:
+                  tx.bank_transaction_code?.description ??
+                  tx.remittance_information?.join(" | ") ??
+                  tx.note ??
+                  null,
+                creditorName: tx.creditor?.name ?? null,
+                debtorName: tx.debtor?.name ?? null,
+                creditorIban: tx.creditor_account?.iban ?? null,
+                debtorIban: tx.debtor_account?.iban ?? null,
+                remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
+                merchantCategoryCode: tx.merchant_category_code ?? null,
+                rawData: tx as object,
+              },
+              update: {}, // transactions are immutable once stored
+            });
+
+            transactionsFetched++;
+          }
+        } while (continuationKey);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        const is404 = msg.includes("404");
+
+        if (is404) {
+          // Account type does not support transaction history via PSD2 — not an error.
+          console.warn(
+            `[sync] Account ${account.externalAccountId} has no transaction endpoint (404) — skipping transactions`
+          );
+        } else {
+          console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
+          const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
+          accountErrors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}transactions: ${msg}`);
+          if (isRateLimit) rateLimitReached = true;
+        }
       }
     }
 
@@ -214,6 +221,10 @@ export async function syncConnection(
       // queue consumer can decide whether to retry or acknowledge.
       errors.push(...accountErrors.map((e) => `Account ${account.externalAccountId} ${e}`));
     }
+
+    // Stop processing remaining accounts if rate limited — further calls
+    // would also fail and only burn more of the limited daily PSD2 quota.
+    if (rateLimitReached) break;
   }
 
   return {

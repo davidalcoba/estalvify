@@ -73,7 +73,9 @@ export const POST = handleCallback<SyncConnectionMessage>(
     if (result.errors.length > 0) {
       // syncConnection() tags rate-limit errors with a "RATE_LIMIT:" prefix
       // so we can distinguish them from transient failures.
-      const isRateLimited = result.errors.some((e) => e.startsWith("RATE_LIMIT:"));
+      // NOTE: errors are formatted as "Account {uid} RATE_LIMIT:..." so we
+      // need includes() not startsWith().
+      const isRateLimited = result.errors.some((e) => e.includes("RATE_LIMIT:"));
 
       const userMessage = isRateLimited
         ? "Bank rate limit reached — sync will resume in tomorrow's daily run"
