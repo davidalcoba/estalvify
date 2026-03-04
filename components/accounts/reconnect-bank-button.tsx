@@ -8,9 +8,10 @@ interface ReconnectBankButtonProps {
   connectionId: string;
   aspspName: string;
   aspspCountry: string;
+  label?: string;
 }
 
-export function ReconnectBankButton({ connectionId, aspspName, aspspCountry }: ReconnectBankButtonProps) {
+export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, label = "Reconnect" }: ReconnectBankButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -50,7 +51,7 @@ export function ReconnectBankButton({ connectionId, aspspName, aspspCountry }: R
         {isPending
           ? <Loader2 className="h-3 w-3 animate-spin" />
           : <RefreshCw className="h-3 w-3" />}
-        Reconnect
+        {label}
       </Button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

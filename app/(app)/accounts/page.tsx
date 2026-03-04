@@ -210,6 +210,7 @@ export default async function AccountsPage({
             const isExpired = group.status === "EXPIRED";
             const isSyncing = group.status === "SYNCING";
             const hasSyncError = !isSyncing && !isExpired && !!group.lastSyncError;
+            const isRateLimitError = hasSyncError && !!group.lastSyncError?.includes("rate limit");
             return (
               <Card key={group.bankId} className={isExpired ? "border-red-200" : undefined}>
                 <CardHeader className="pb-3">
@@ -231,11 +232,12 @@ export default async function AccountsPage({
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
                         {statusConfig.label}
                       </Badge>
-                      {isExpired ? (
+                      {isExpired || isRateLimitError ? (
                         <ReconnectBankButton
                           connectionId={group.connectionIds[0]}
                           aspspName={group.bankId}
                           aspspCountry={group.country}
+                          label={isRateLimitError ? "Refresh access" : "Reconnect"}
                         />
                       ) : (
                         <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />
@@ -253,8 +255,18 @@ export default async function AccountsPage({
                     <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                       <span>
-                        <span className="font-medium">Last sync had errors</span> — transactions may be incomplete.
-                        Try syncing again or check back later.
+                        {isRateLimitError ? (
+                          <>
+                            <span className="font-medium">Bank rate limit reached</span> — the daily API quota
+                            for this connection is exhausted. Click <span className="font-medium">Refresh access</span> to
+                            create a new session with a fresh quota.
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium">Last sync had errors</span> — transactions may be incomplete.
+                            Try syncing again or check back later.
+                          </>
+                        )}
                       </span>
                     </div>
                   </CardContent>

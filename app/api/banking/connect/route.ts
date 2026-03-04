@@ -34,10 +34,16 @@ export async function POST(request: NextRequest) {
   // Verify the target connection exists and belongs to this user
   if (reconnectConnectionId) {
     const existing = await prisma.bankConnection.findFirst({
-      where: { id: reconnectConnectionId, userId: session.user.id, status: "EXPIRED" },
+      where: {
+        id: reconnectConnectionId,
+        userId: session.user.id,
+        // Allow re-auth for EXPIRED and ACTIVE connections.
+        // ACTIVE connections may also need a fresh consent to reset PSD2 rate limits.
+        status: { in: ["EXPIRED", "ACTIVE"] },
+      },
     });
     if (!existing) {
-      return NextResponse.json({ error: "Connection not found or not expired" }, { status: 400 });
+      return NextResponse.json({ error: "Connection not found" }, { status: 400 });
     }
   }
 

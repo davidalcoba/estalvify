@@ -73,10 +73,22 @@ export async function GET(request: NextRequest) {
             sessionId: session_id,
             status: "ACTIVE",
             consentExpiresAt,
+            // Clear any previous sync error (e.g. rate limit) and reset lastSyncAt
+            // so the next sync fetches a full 90-day window with the fresh consent.
+            lastSyncError: null,
+            lastSyncAt: null,
           },
         });
         await tx.bankConnection.delete({ where: { id: bankConnection.id } });
       });
+
+      // Reset per-account sync state to match the fresh connection state.
+      await prisma.bankAccount
+        .updateMany({
+          where: { bankConnectionId: reconnectConnectionId },
+          data: { lastSyncError: null, lastSyncAt: null },
+        })
+        .catch((err) => console.warn("[callback] Could not reset account sync state:", err));
 
       // Enable Banking assigns new UIDs per session, so the stored
       // externalAccountId values are now stale. Update them outside the
