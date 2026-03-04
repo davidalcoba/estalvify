@@ -16,6 +16,7 @@ import {
   LogOut,
   Sparkles,
   X,
+  ListFilter,
 } from "lucide-react";
 
 import {
@@ -56,6 +57,11 @@ const navItems = [
         url: "/categorize",
         icon: Tag,
         // Badge count will come from props in the future
+      },
+      {
+        title: "Rules",
+        url: "/rules",
+        icon: ListFilter,
       },
     ],
   },

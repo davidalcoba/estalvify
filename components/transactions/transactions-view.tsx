@@ -52,10 +52,7 @@ export function TransactionsView(props: TransactionsViewProps) {
         />
       </div>
       <div className="md:hidden">
-        <TransactionsMobileView
-          {...props}
-          onOpenDetail={(transaction) => setActiveTransactionId(transaction.id)}
-        />
+        <TransactionsMobileView {...props} />
       </div>
     </>
   );
