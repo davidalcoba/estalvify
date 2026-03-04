@@ -184,15 +184,6 @@ export async function syncConnection(
     }
   }
 
-  // Record the time of this sync so the next call can start from here,
-  // avoiding redundant re-fetching of old transactions.
-  if (errors.length === 0) {
-    await prisma.bankConnection.update({
-      where: { id: connection.id },
-      data: { lastSyncAt: new Date() },
-    });
-  }
-
   return {
     accountsSynced: connection.bankAccounts.length,
     transactionsFetched,

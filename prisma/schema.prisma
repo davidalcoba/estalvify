@@ -109,9 +109,10 @@ model BankConnection {
   // PSD2 consent validity
   consentExpiresAt DateTime?
 
-  status      BankConnectionStatus @default(ACTIVE)
-  lastSyncAt  DateTime?            // When the last successful sync completed
-  createdAt   DateTime             @default(now())
+  status        BankConnectionStatus @default(ACTIVE)
+  lastSyncAt    DateTime?            // When the last successful sync completed
+  lastSyncError String?              // Error message from the most recent failed sync (null on success)
+  createdAt     DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -88,6 +88,7 @@ export default async function AccountsPage({
     status: BankConnectionStatus;
     firstConnectedAt: Date;
     consentExpiresAt: Date | null;
+    lastSyncError: string | null;
     allAccounts: (typeof connections)[number]["bankAccounts"][number][];
   };
 
@@ -110,6 +111,9 @@ export default async function AccountsPage({
       ) {
         existing.consentExpiresAt = conn.consentExpiresAt;
       }
+      if (conn.lastSyncError && !existing.lastSyncError) {
+        existing.lastSyncError = conn.lastSyncError;
+      }
     } else {
       bankGroupMap.set(conn.bankId, {
         bankId: conn.bankId,
@@ -119,6 +123,7 @@ export default async function AccountsPage({
         status: conn.status,
         firstConnectedAt: conn.createdAt,
         consentExpiresAt: conn.consentExpiresAt,
+        lastSyncError: conn.lastSyncError,
         allAccounts: [...conn.bankAccounts],
       });
     }
@@ -204,6 +209,7 @@ export default async function AccountsPage({
             const StatusIcon = statusConfig.icon;
             const isExpired = group.status === "EXPIRED";
             const isSyncing = group.status === "SYNCING";
+            const hasSyncError = !isSyncing && !isExpired && !!group.lastSyncError;
             return (
               <Card key={group.bankId} className={isExpired ? "border-red-200" : undefined}>
                 <CardHeader className="pb-3">
@@ -241,6 +247,18 @@ export default async function AccountsPage({
                     </div>
                   </div>
                 </CardHeader>
+
+                {hasSyncError && (
+                  <CardContent className="pt-0 pb-3">
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        <span className="font-medium">Last sync had errors</span> — transactions may be incomplete.
+                        Try syncing again or check back later.
+                      </span>
+                    </div>
+                  </CardContent>
+                )}
 
                 {group.allAccounts.length > 0 && (
                   <CardContent className="pt-0 pb-3">

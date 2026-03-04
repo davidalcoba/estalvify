@@ -37,14 +37,12 @@ export const POST = handleCallback<SyncConnectionMessage>(
       ? toDateString(new Date(connection.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
       : toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
 
+    // ── Run sync ─────────────────────────────────────────────────────────────
+    let result;
     try {
-      await syncConnection(connection, dateFrom, dateTo);
-
-      await prisma.bankConnection.update({
-        where: { id: connectionId },
-        data: { status: "ACTIVE" },
-      });
+      result = await syncConnection(connection, dateFrom, dateTo);
     } catch (err) {
+      // Unexpected exception thrown by syncConnection (e.g. DB error, network).
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error(`[queue/sync-connection] ${connectionId} failed:`, msg);
 
@@ -53,14 +51,47 @@ export const POST = handleCallback<SyncConnectionMessage>(
       await prisma.bankConnection
         .update({
           where: { id: connectionId },
-          data: { status: isAuthError ? "EXPIRED" : "ACTIVE" },
+          data: {
+            status: isAuthError ? "EXPIRED" : "ACTIVE",
+            // Persist error message so the UI can surface it; clear on auth
+            // expiry since the user must re-auth rather than retry the sync.
+            lastSyncError: isAuthError ? null : msg,
+          },
         })
         .catch(() => {});
 
-      // Re-throw so Vercel retries the message (unless it's an auth error
-      // — retrying won't help, so we swallow it and acknowledge cleanly).
+      // Re-throw so Vercel retries the message (unless it's an auth error —
+      // retrying won't help, so we swallow it and acknowledge cleanly).
       if (!isAuthError) throw err;
+      return;
     }
+
+    // ── Evaluate result ───────────────────────────────────────────────────────
+    if (result.errors.length > 0) {
+      // Per-account errors: surface them to the user and deliberately preserve
+      // lastSyncAt so the next sync re-fetches from the correct start date and
+      // doesn't skip the window where data is missing.
+      await prisma.bankConnection.update({
+        where: { id: connectionId },
+        data: {
+          status: "ACTIVE",
+          lastSyncError: result.errors.join(" | "),
+          // lastSyncAt intentionally NOT updated.
+        },
+      });
+      // Re-throw to trigger a Vercel retry; the daily cron will also retry.
+      throw new Error(`Sync completed with errors: ${result.errors.join(" | ")}`);
+    }
+
+    // Clean success: advance lastSyncAt and clear any previous error.
+    await prisma.bankConnection.update({
+      where: { id: connectionId },
+      data: {
+        status: "ACTIVE",
+        lastSyncAt: new Date(),
+        lastSyncError: null,
+      },
+    });
   },
   {
     retry: (_error, metadata) => {
