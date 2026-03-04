@@ -247,15 +247,24 @@ export default async function AccountsPage({
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
                         {statusConfig.label}
                       </Badge>
-                      {isExpired || isRateLimitError ? (
+                      {isExpired ? (
                         <ReconnectBankButton
                           connectionId={group.connectionIds[0]}
                           aspspName={group.bankId}
                           aspspCountry={group.country}
-                          label={isRateLimitError ? "Refresh access" : "Reconnect"}
+                          label="Reconnect"
                         />
                       ) : (
-                        <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />
+                        <>
+                          <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />
+                          <ReconnectBankButton
+                            connectionId={group.connectionIds[0]}
+                            aspspName={group.bankId}
+                            aspspCountry={group.country}
+                            label="Refresh access"
+                            secondary
+                          />
+                        </>
                       )}
                       <DisconnectBankButton
                         connectionIds={group.connectionIds}
@@ -273,8 +282,7 @@ export default async function AccountsPage({
                         {isRateLimitError ? (
                           <>
                             <span className="font-medium">Bank rate limit reached</span> — the daily API quota
-                            for this connection is exhausted. Click <span className="font-medium">Refresh access</span> to
-                            create a new session with a fresh quota.
+                            for this connection is exhausted. It will reset tomorrow, or use <span className="font-medium">Refresh access</span> for a fresh quota now.
                           </>
                         ) : (
                           <>
