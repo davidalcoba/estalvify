@@ -260,7 +260,7 @@ export default async function AccountsPage({
                         />
                       ) : (
                         <>
-                          <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />
+                          {!isRateLimitError && <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />}
                           <ReconnectBankButton
                             connectionId={group.connectionIds[0]}
                             aspspName={group.bankId}
