@@ -102,11 +102,16 @@ export const POST = handleCallback<SyncConnectionMessage>(
     }
 
     // ── Check whether all accounts for this connection are now done ───────────
-    // An account is "done" when its lastSyncAt was set on or after syncStartedAt
-    // (success) or its lastSyncError is non-null (error). The last account to
-    // finish closes out the connection status.
+    // Three independent signals that an account has been processed:
+    //   1. lastSyncAt >= syncStartedAt  — success path
+    //   2. lastSyncError IS NOT NULL    — error path
+    //   3. has a balance from today     — fallback (reliable even if lastSyncAt
+    //                                     write was swallowed by .catch)
+    // The last account to finish closes out the connection status.
     if (syncStartedAt && totalAccounts) {
       const startedAt = new Date(syncStartedAt);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
       const doneAccounts = await prisma.bankAccount.findMany({
         where: {
@@ -115,6 +120,7 @@ export const POST = handleCallback<SyncConnectionMessage>(
           OR: [
             { lastSyncAt: { gte: startedAt } },
             { lastSyncError: { not: null } },
+            { balances: { some: { date: { gte: today } } } },
           ],
         },
         select: { lastSyncError: true },
