@@ -59,7 +59,7 @@ interface FocusModalProps {
 
 function matchesSearch(tx: TransactionListItemDTO, query: string): boolean {
   const lower = query.toLowerCase();
-  return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((field) =>
+  return [tx.description, tx.remittanceInfo].some((field) =>
     field?.toLowerCase().includes(lower)
   );
 }
@@ -75,12 +75,6 @@ function fmtDateLong(dateIso: string, locale: string, timezone: string): string 
 }
 
 function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
-  if (tx.creditorName) {
-    return { field: "creditorName", operator: getDefaultOperator("creditorName"), value: tx.creditorName };
-  }
-  if (tx.debtorName) {
-    return { field: "debtorName", operator: getDefaultOperator("debtorName"), value: tx.debtorName };
-  }
   return { field: "description", operator: getDefaultOperator("description"), value: tx.description ?? "" };
 }
 
