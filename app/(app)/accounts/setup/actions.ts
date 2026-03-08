@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/app/generated/prisma";
 import { type EnableBankingAccount } from "@/lib/banking/enable-banking";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
@@ -75,7 +76,7 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
   // full IBANs from the OAuth flow — no longer needed after setup).
   await prisma.bankConnection.update({
     where: { id: connectionId },
-    data: { status: "SYNCING", sessionData: null },
+    data: { status: "SYNCING", sessionData: Prisma.DbNull },
   });
 
   try {
