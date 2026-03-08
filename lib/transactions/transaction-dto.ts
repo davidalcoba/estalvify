@@ -8,7 +8,6 @@ export interface TransactionListItemDTO {
   bookingDate: string;
   description: string | null;
   remittanceInfo: string | null;
-  counterpartyName: string | null;
   categoryId: string | null;
   categoryName: string | null;
   categoryColor: string | null;
@@ -30,8 +29,6 @@ interface TransactionRecordLike {
   bookingDate: Date;
   description: string | null;
   remittanceInfo?: string | null;
-  creditorName?: string | null;
-  debtorName?: string | null;
   categorization?: {
     categoryId?: string;
     category?: {
@@ -46,11 +43,6 @@ interface TransactionRecordLike {
 }
 
 export function toTransactionListItemDTO(tx: TransactionRecordLike): TransactionListItemDTO {
-  const counterpartyName =
-    tx.direction === "DEBIT"
-      ? (tx.creditorName ?? null)
-      : (tx.debtorName ?? null);
-
   return {
     id: tx.id,
     amount: Number(tx.amount.toString()),
@@ -59,7 +51,6 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
     bookingDate: tx.bookingDate.toISOString(),
     description: tx.description,
     remittanceInfo: tx.remittanceInfo ?? null,
-    counterpartyName,
     categoryId: tx.categorization?.categoryId ?? null,
     categoryName: tx.categorization?.category?.name ?? null,
     categoryColor: tx.categorization?.category?.color ?? null,
@@ -74,8 +65,8 @@ export function transactionLabel(tx: TransactionListItemDTO): string {
   return tx.description ?? tx.remittanceInfo ?? "Transaction";
 }
 
-export function transactionCounterparty(tx: TransactionListItemDTO): string | null {
-  return tx.counterpartyName ?? null;
+export function transactionCounterparty(_tx: TransactionListItemDTO): string | null {
+  return null;
 }
 
 function normalizeChunk(value: string): string {

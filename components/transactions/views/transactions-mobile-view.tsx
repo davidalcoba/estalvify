@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag, User } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Tag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Sheet,
@@ -19,7 +19,6 @@ import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
   transactionMerchant,
   transactionOperationType,
-  transactionCounterparty,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
 
@@ -171,12 +170,6 @@ export function TransactionsMobileView({
                     <CreditCard className="h-4 w-4 shrink-0" />
                     {activeTx.bankAccount.name}
                   </p>
-                  {transactionCounterparty(activeTx) && (
-                    <p className="flex items-center gap-2 text-muted-foreground">
-                      <User className="h-4 w-4 shrink-0" />
-                      {transactionCounterparty(activeTx)}
-                    </p>
-                  )}
                   {activeTx.categoryName && (
                     <p className="flex items-center gap-2 text-muted-foreground">
                       <Tag className="h-4 w-4 shrink-0" />

@@ -172,8 +172,6 @@ export async function syncAccount(
               // Store only the last 4 digits — full IBANs are personal data
               creditorIban: tx.creditor_account?.iban?.slice(-4) ?? null,
               debtorIban: tx.debtor_account?.iban?.slice(-4) ?? null,
-              creditorName: tx.creditor?.name ?? null,
-              debtorName: tx.debtor?.name ?? null,
               remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
               merchantCategoryCode: tx.merchant_category_code ?? null,
             })),

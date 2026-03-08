@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag, User } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
@@ -11,7 +11,6 @@ import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
   transactionMerchant,
   transactionOperationType,
-  transactionCounterparty,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
 
@@ -34,8 +33,6 @@ export function TransactionDetailDialog({
   const [saving, setSaving] = useState(false);
 
   if (!transaction) return null;
-
-  const counterparty = transactionCounterparty(transaction);
 
   async function handleRecategorize(categoryId: string) {
     if (!categoryId || !transaction) return;
@@ -85,12 +82,6 @@ export function TransactionDetailDialog({
               <CreditCard className="h-4 w-4" />
               {transaction.bankAccount.name}
             </p>
-            {counterparty && (
-              <p className="flex items-center gap-2 text-muted-foreground">
-                <User className="h-4 w-4" />
-                {counterparty}
-              </p>
-            )}
             {transaction.categoryName && (
               <p className="flex items-center gap-2 text-muted-foreground">
                 <Tag className="h-4 w-4" />
