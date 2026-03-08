@@ -193,10 +193,11 @@ export async function syncAccount(
   }
 
   // ── Update per-account sync status ──────────────────────────────────────────
+  // Success write is NOT silently caught — if it fails, the error propagates
+  // so the queue retries the invocation and lastSyncAt eventually gets written.
   if (errors.length === 0) {
     await prisma.bankAccount
-      .update({ where: { id: account.id }, data: { lastSyncAt: new Date(), lastSyncError: null } })
-      .catch(() => {});
+      .update({ where: { id: account.id }, data: { lastSyncAt: new Date(), lastSyncError: null } });
   } else {
     await prisma.bankAccount
       .update({ where: { id: account.id }, data: { lastSyncError: errors.join(" | ") } })
