@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { type EnableBankingAccount } from "@/lib/banking/enable-banking";
+import { getAccounts, type EnableBankingAccount } from "@/lib/banking/enable-banking";
 import { AccountSelectionForm } from "@/components/accounts/account-selection-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2 } from "lucide-react";
@@ -29,12 +29,18 @@ export default async function SetupPage({
 
   const connection = await prisma.bankConnection.findFirst({
     where: { id: connectionId, userId: session!.user.id, status: "PENDING_SETUP" },
-    select: { id: true, bankName: true, sessionData: true },
+    select: { id: true, bankName: true, sessionId: true },
   });
 
   if (!connection) redirect("/accounts?error=setup_expired");
 
-  const rawAccounts = (connection.sessionData as { accounts?: EnableBankingAccount[] })?.accounts ?? [];
+  let rawAccounts: EnableBankingAccount[] = [];
+  try {
+    const result = await getAccounts(connection.sessionId);
+    rawAccounts = result.accounts;
+  } catch {
+    redirect("/accounts?error=setup_expired");
+  }
 
   // Filter out accounts already imported into any of the user's bank connections.
   const allUids = rawAccounts.map((a) => a.uid);

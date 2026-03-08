@@ -71,10 +71,8 @@ export async function POST(request: NextRequest) {
         country: aspspCountry,
         sessionId: state,
         status: "PENDING_REAUTH",
-        // Store reconnect target so the callback can restore the existing connection
-        sessionData: reconnectConnectionId
-          ? JSON.parse(JSON.stringify({ reconnectConnectionId }))
-          : undefined,
+        // Set when re-authing an existing connection — callback will restore it
+        reconnectConnectionId: reconnectConnectionId ?? null,
       },
     });
 

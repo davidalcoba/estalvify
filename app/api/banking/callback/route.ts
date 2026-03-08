@@ -2,7 +2,7 @@
 // Enable Banking redirects here after user authenticates with their bank.
 //
 // Two flows:
-//   NEW connection: store accounts in sessionData → redirect to setup page
+//   NEW connection: move to PENDING_SETUP → redirect to setup page (accounts fetched live)
 //   RE-AUTH (reconnectConnectionId present): restore the existing connection
 //     with the new session, skip setup, accounts are untouched.
 //
@@ -48,8 +48,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Check if this is a re-auth for an existing expired connection
-  const reconnectConnectionId = (bankConnection.sessionData as { reconnectConnectionId?: string } | null)
-    ?.reconnectConnectionId;
+  const reconnectConnectionId = bankConnection.reconnectConnectionId;
 
   try {
     const { session_id, accounts, access } = await exchangeCodeForSession(code);
@@ -72,10 +71,6 @@ export async function GET(request: NextRequest) {
             sessionId: session_id,
             status: "ACTIVE",
             consentExpiresAt,
-            // Clear any previous sync error (e.g. rate limit) and reset lastSyncAt
-            // so the next sync fetches a full 90-day window with the fresh consent.
-            lastSyncError: null,
-            lastSyncAt: null,
           },
         });
         await tx.bankConnection.delete({ where: { id: bankConnection.id } });
@@ -131,14 +126,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/accounts?error=already_connected`);
     }
 
-    // Store accounts + move to setup page for account selection
+    // Move to setup page for account selection — accounts are fetched fresh via API
     await prisma.bankConnection.update({
       where: { id: bankConnection.id },
       data: {
         sessionId: session_id,
         status: "PENDING_SETUP",
         consentExpiresAt,
-        sessionData: JSON.parse(JSON.stringify({ accounts })),
       },
     });
 

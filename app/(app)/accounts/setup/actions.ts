@@ -3,8 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/app/generated/prisma";
-import { type EnableBankingAccount } from "@/lib/banking/enable-banking";
+import { getAccounts, type EnableBankingAccount } from "@/lib/banking/enable-banking";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
@@ -35,11 +34,12 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
 
   const connection = await prisma.bankConnection.findFirst({
     where: { id: connectionId, userId: session.user.id, status: "PENDING_SETUP" },
+    select: { id: true, sessionId: true },
   });
 
   if (!connection) throw new Error("Setup session not found or already completed");
 
-  const allAccounts = ((connection.sessionData as { accounts?: EnableBankingAccount[] })?.accounts ?? []);
+  const { accounts: allAccounts } = await getAccounts(connection.sessionId);
   const selected = allAccounts.filter((a) => selectedUids.includes(a.uid));
 
   if (selected.length === 0) throw new Error("None of the selected accounts were found");
@@ -72,11 +72,9 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
     );
   });
 
-  // Mark as SYNCING and clear sessionData (it contains raw account data with
-  // full IBANs from the OAuth flow — no longer needed after setup).
   await prisma.bankConnection.update({
     where: { id: connectionId },
-    data: { status: "SYNCING", sessionData: Prisma.DbNull },
+    data: { status: "SYNCING" },
   });
 
   try {

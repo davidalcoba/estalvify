@@ -99,20 +99,15 @@ model BankConnection {
 
   // Enable Banking session
   sessionId String  @unique // Enable Banking session ID
-  sessionData Json?   // Full session response for reference
 
-  // OAuth tokens (encrypted at rest in production)
-  accessToken      String?
-  refreshToken     String?
-  tokenExpiresAt   DateTime?
+  // Set only during PENDING_REAUTH when re-authing an existing connection
+  reconnectConnectionId String?
 
   // PSD2 consent validity
   consentExpiresAt DateTime?
 
-  status        BankConnectionStatus @default(ACTIVE)
-  lastSyncAt    DateTime?            // When the last successful sync completed
-  lastSyncError String?              // Error message from the most recent failed sync (null on success)
-  createdAt     DateTime             @default(now())
+  status    BankConnectionStatus @default(ACTIVE)
+  createdAt DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

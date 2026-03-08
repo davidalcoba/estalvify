@@ -37,7 +37,7 @@ export const POST = handleCallback<SyncConnectionMessage>(
 
       await prisma.bankConnection.update({
         where: { id: connectionId },
-        data: { status: "SYNCING", lastSyncError: null },
+        data: { status: "SYNCING" },
       });
 
       const now = new Date().toISOString();
@@ -96,7 +96,7 @@ export const POST = handleCallback<SyncConnectionMessage>(
       if (isAuthError) {
         // Auth failure affects the whole connection — mark it as expired.
         await prisma.bankConnection
-          .update({ where: { id: connectionId }, data: { status: "EXPIRED", lastSyncError: null } })
+          .update({ where: { id: connectionId }, data: { status: "EXPIRED" } })
           .catch(() => {});
         return; // don't retry
       }
@@ -116,7 +116,7 @@ export const POST = handleCallback<SyncConnectionMessage>(
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const doneAccounts = await prisma.bankAccount.findMany({
+      const doneCount = await prisma.bankAccount.count({
         where: {
           bankConnectionId: connectionId,
           isActive: true,
@@ -126,31 +126,11 @@ export const POST = handleCallback<SyncConnectionMessage>(
             { balances: { some: { date: { gte: today } } } },
           ],
         },
-        select: { lastSyncError: true },
       });
 
-      if (doneAccounts.length >= totalAccounts) {
-        const errors = doneAccounts.flatMap((a) => (a.lastSyncError ? [a.lastSyncError] : []));
-        const isRateLimited = errors.some((e) => e.includes("RATE_LIMIT:"));
-
-        const userMessage = isRateLimited
-          ? "Bank rate limit reached — sync will resume in tomorrow's daily run"
-          : errors.length > 0
-            ? errors.join(" | ")
-            : null;
-
+      if (doneCount >= totalAccounts) {
         await prisma.bankConnection
-          .update({
-            where: { id: connectionId },
-            data: {
-              status: "ACTIVE",
-              lastSyncError: userMessage,
-              // Advance lastSyncAt on full success or when only rate-limit errors
-              // occurred — partial data is still data, and advancing ensures
-              // tomorrow's cron starts an incremental sync instead of 90 days again.
-              ...((errors.length === 0 || isRateLimited) && { lastSyncAt: new Date() }),
-            },
-          })
+          .update({ where: { id: connectionId }, data: { status: "ACTIVE" } })
           .catch(() => {});
       }
     }

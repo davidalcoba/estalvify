@@ -67,10 +67,7 @@ export default async function AccountsPage({
       status: "SYNCING",
       updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
     },
-    data: {
-      status: "ACTIVE",
-      lastSyncError: "Sync timed out — try syncing again",
-    },
+    data: { status: "ACTIVE" },
   });
 
   const [connections, prefs] = await Promise.all([
@@ -85,6 +82,7 @@ export default async function AccountsPage({
           include: {
             balances: { orderBy: { date: "desc" }, take: 1 },
           },
+          orderBy: { createdAt: "asc" },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -103,7 +101,6 @@ export default async function AccountsPage({
     status: BankConnectionStatus;
     firstConnectedAt: Date;
     consentExpiresAt: Date | null;
-    lastSyncError: string | null;
     allAccounts: (typeof connections)[number]["bankAccounts"][number][];
   };
 
@@ -126,9 +123,6 @@ export default async function AccountsPage({
       ) {
         existing.consentExpiresAt = conn.consentExpiresAt;
       }
-      if (conn.lastSyncError && !existing.lastSyncError) {
-        existing.lastSyncError = conn.lastSyncError;
-      }
     } else {
       bankGroupMap.set(conn.bankId, {
         bankId: conn.bankId,
@@ -138,7 +132,6 @@ export default async function AccountsPage({
         status: conn.status,
         firstConnectedAt: conn.createdAt,
         consentExpiresAt: conn.consentExpiresAt,
-        lastSyncError: conn.lastSyncError,
         allAccounts: [...conn.bankAccounts],
       });
     }
@@ -222,8 +215,9 @@ export default async function AccountsPage({
           {bankGroups.map((group) => {
             const isExpired = group.status === "EXPIRED";
             const isSyncing = group.status === "SYNCING";
-            const hasSyncError = !isSyncing && !isExpired && !!group.lastSyncError;
-            const isRateLimitError = hasSyncError && !!group.lastSyncError?.includes("rate limit");
+            const groupSyncError = group.allAccounts.find((a) => a.lastSyncError)?.lastSyncError ?? null;
+            const hasSyncError = !isSyncing && !isExpired && !!groupSyncError;
+            const isRateLimitError = hasSyncError && !!groupSyncError?.includes("RATE_LIMIT:");
             const badgeConfig = isRateLimitError
               ? { label: "Quota reached", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
               : hasSyncError
