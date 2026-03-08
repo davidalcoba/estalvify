@@ -65,16 +65,19 @@ export const POST = handleCallback<SyncConnectionMessage>(
 
     if (!account) return; // account deleted while message was queued
 
-    const connection = await prisma.bankConnection.findFirst({
+    const connectionExists = await prisma.bankConnection.findFirst({
       where: { id: connectionId },
-      select: { lastSyncAt: true },
+      select: { id: true },
     });
 
-    if (!connection) return;
+    if (!connectionExists) return;
 
     const dateTo = toDateString(new Date());
-    const dateFrom = connection.lastSyncAt
-      ? toDateString(new Date(connection.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
+    // Use per-account lastSyncAt so each account tracks its own sync window
+    // independently. This prevents a rate-limited account from forcing all
+    // accounts to re-fetch the full 90-day window on every subsequent sync.
+    const dateFrom = account.lastSyncAt
+      ? toDateString(new Date(account.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
       : toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
 
     let result;
@@ -142,8 +145,10 @@ export const POST = handleCallback<SyncConnectionMessage>(
             data: {
               status: "ACTIVE",
               lastSyncError: userMessage,
-              // Only advance lastSyncAt when all accounts succeeded.
-              ...(errors.length === 0 && { lastSyncAt: new Date() }),
+              // Advance lastSyncAt on full success or when only rate-limit errors
+              // occurred — partial data is still data, and advancing ensures
+              // tomorrow's cron starts an incremental sync instead of 90 days again.
+              ...((errors.length === 0 || isRateLimited) && { lastSyncAt: new Date() }),
             },
           })
           .catch(() => {});
