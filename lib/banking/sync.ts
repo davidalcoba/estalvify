@@ -160,7 +160,6 @@ export async function syncAccount(
               bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
               valueDate: tx.value_date ? new Date(tx.value_date) : null,
               description:
-                tx.bank_transaction_code?.description ??
                 tx.remittance_information?.join(" | ") ??
                 tx.note ??
                 null,
