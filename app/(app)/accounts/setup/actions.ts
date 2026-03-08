@@ -63,7 +63,11 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
             type: mapAccountType(account.type),
             isActive: true,
           },
-          update: { isActive: true },
+          // Also update bankConnectionId in case this account was previously
+          // imported into a different connection (e.g. user deleted the old
+          // connection and reconnected). Without this, Phase 1 fan-out queries
+          // accounts by bankConnectionId and silently skips the account.
+          update: { bankConnectionId: connectionId, isActive: true },
         })
       )
     );

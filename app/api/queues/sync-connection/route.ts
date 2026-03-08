@@ -63,14 +63,20 @@ export const POST = handleCallback<SyncConnectionMessage>(
       where: { id: accountId, isActive: true },
     });
 
-    if (!account) return; // account deleted while message was queued
+    if (!account) {
+      console.warn(`[queue/sync-connection] Phase 2 skipped: account ${accountId} not found or inactive (connectionId=${connectionId})`);
+      return;
+    }
 
     const connectionExists = await prisma.bankConnection.findFirst({
       where: { id: connectionId },
       select: { id: true },
     });
 
-    if (!connectionExists) return;
+    if (!connectionExists) {
+      console.warn(`[queue/sync-connection] Phase 2 skipped: connection ${connectionId} not found (accountId=${accountId})`);
+      return;
+    }
 
     const dateTo = toDateString(new Date());
     // Use per-account lastSyncAt so each account tracks its own sync window
