@@ -14,8 +14,9 @@ import {
 
 const ALL_FIELDS: RuleConditionField[] = [
   "description",
-  "creditorName",
-  "debtorName",
+  "remittanceInfo",
+  "amount",
+  "direction",
 ];
 
 interface RuleConditionRowProps {

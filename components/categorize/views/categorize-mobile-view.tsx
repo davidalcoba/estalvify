@@ -70,7 +70,7 @@ export function CategorizeMobileView({
     activeQuery.length >= 3
       ? transactions.filter((tx) => {
           const lower = activeQuery.toLowerCase();
-          return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((f) =>
+          return [tx.description, tx.remittanceInfo].some((f) =>
             f?.toLowerCase().includes(lower)
           );
         })
