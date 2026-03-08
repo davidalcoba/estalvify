@@ -135,6 +135,15 @@ export async function syncAccount(
             (continuationKey ? ", fetching next page…" : "")
         );
 
+        // Collect valid transactions for this page, skipping those without
+        // a stable ID. Use createMany+skipDuplicates instead of per-row
+        // upserts to avoid N sequential round-trips that can timeout the
+        // Vercel function on large initial syncs (90-day window).
+        const validTxs: Array<{
+          externalId: string;
+          tx: EnableBankingTransaction;
+        }> = [];
+
         for (const tx of page.transactions) {
           const externalId = buildExternalId(tx);
           if (!externalId) {
@@ -142,15 +151,12 @@ export async function syncAccount(
             console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
             continue;
           }
+          validTxs.push({ externalId, tx });
+        }
 
-          await prisma.transaction.upsert({
-            where: {
-              bankAccountId_externalTransactionId: {
-                bankAccountId: account.id,
-                externalTransactionId: externalId,
-              },
-            },
-            create: {
+        if (validTxs.length > 0) {
+          const { count } = await prisma.transaction.createMany({
+            data: validTxs.map(({ externalId, tx }) => ({
               userId,
               bankAccountId: account.id,
               externalTransactionId: externalId,
@@ -168,11 +174,10 @@ export async function syncAccount(
               debtorIban: tx.debtor_account?.iban?.slice(-4) ?? null,
               remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
               merchantCategoryCode: tx.merchant_category_code ?? null,
-            },
-            update: {}, // transactions are immutable once stored
+            })),
+            skipDuplicates: true,
           });
-
-          transactionsFetched++;
+          transactionsFetched += count;
         }
       } while (continuationKey);
     } catch (err) {
