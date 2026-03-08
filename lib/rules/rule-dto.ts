@@ -2,8 +2,6 @@
 
 export type RuleConditionField =
   | "description"
-  | "creditorName"
-  | "debtorName"
   | "remittanceInfo"
   | "amount"
   | "direction";
@@ -41,8 +39,6 @@ export interface CategoryRuleDTO {
 
 export const FIELD_LABELS: Record<RuleConditionField, string> = {
   description: "Description",
-  creditorName: "Creditor",
-  debtorName: "Debtor",
   remittanceInfo: "Reference",
   amount: "Amount",
   direction: "Direction",
@@ -60,8 +56,6 @@ export const OPERATOR_LABELS: Record<RuleConditionOperator, string> = {
 // Which operators are valid for each field type
 export const TEXT_FIELDS: RuleConditionField[] = [
   "description",
-  "creditorName",
-  "debtorName",
   "remittanceInfo",
 ];
 

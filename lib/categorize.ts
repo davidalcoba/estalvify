@@ -16,8 +16,6 @@ export function buildUncategorizedWhere(userId: string, searchQuery?: string) {
     conditions.push({
       OR: [
         { description: { contains: q, mode: "insensitive" } },
-        { creditorName: { contains: q, mode: "insensitive" } },
-        { debtorName: { contains: q, mode: "insensitive" } },
         { remittanceInfo: { contains: q, mode: "insensitive" } },
       ],
     });

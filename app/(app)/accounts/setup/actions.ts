@@ -58,7 +58,8 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
             userId: session.user.id,
             bankConnectionId: connectionId,
             externalAccountId: account.uid,
-            iban: account.account_id?.iban,
+            // Store only last 4 digits of IBAN — full IBAN is personal data
+            iban: account.account_id?.iban?.slice(-4) ?? null,
             name: buildAccountName(account),
             currency: account.currency,
             type: mapAccountType(account.cash_account_type),
@@ -70,11 +71,11 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
     );
   });
 
-  // Mark as SYNCING immediately so the accounts page shows progress.
-  // The actual sync runs in background — the user is redirected right away.
+  // Mark as SYNCING and clear sessionData (it contains raw account data with
+  // full IBANs from the OAuth flow — no longer needed after setup).
   await prisma.bankConnection.update({
     where: { id: connectionId },
-    data: { status: "SYNCING" },
+    data: { status: "SYNCING", sessionData: null },
   });
 
   try {

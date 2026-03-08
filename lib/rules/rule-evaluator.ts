@@ -60,8 +60,6 @@ function conditionToWhereClause(
 
   const textFields: RuleConditionField[] = [
     "description",
-    "creditorName",
-    "debtorName",
     "remittanceInfo",
   ];
 

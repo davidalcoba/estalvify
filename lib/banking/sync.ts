@@ -164,13 +164,11 @@ export async function syncAccount(
                 tx.remittance_information?.join(" | ") ??
                 tx.note ??
                 null,
-              creditorName: tx.creditor?.name ?? null,
-              debtorName: tx.debtor?.name ?? null,
-              creditorIban: tx.creditor_account?.iban ?? null,
-              debtorIban: tx.debtor_account?.iban ?? null,
+              // Store only the last 4 digits — full IBANs are personal data
+              creditorIban: tx.creditor_account?.iban?.slice(-4) ?? null,
+              debtorIban: tx.debtor_account?.iban?.slice(-4) ?? null,
               remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
               merchantCategoryCode: tx.merchant_category_code ?? null,
-              rawData: tx as object,
             },
             update: {}, // transactions are immutable once stored
           });

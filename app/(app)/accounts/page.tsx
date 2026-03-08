@@ -317,7 +317,7 @@ export default async function AccountsPage({
                               />
                               {account.iban && (
                                 <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                  {account.iban.replace(/(.{4})/g, "$1 ").trim()}
+                                  ···{account.iban}
                                 </p>
                               )}
                             </div>

@@ -54,9 +54,8 @@ export async function GET(request: NextRequest) {
   try {
     const { session_id, accounts, access } = await exchangeCodeForSession(code);
 
-    // Log raw account fields so we can see what the bank returns for naming
     console.log("[callback] accounts from API:", JSON.stringify(
-      accounts.map((a) => ({ uid: a.uid, name: a.name, product: a.product, details: a.details, iban: a.account_id?.iban })),
+      accounts.map((a) => ({ uid: a.uid, name: a.name, product: a.product, details: a.details, ibanSuffix: a.account_id?.iban?.slice(-4) })),
       null, 2
     ));
 
@@ -95,15 +94,16 @@ export async function GET(request: NextRequest) {
       // transaction — individual failures are non-fatal (the connection is
       // already restored) and we log them for debugging.
       for (const newAccount of accounts) {
-        const iban = newAccount.account_id?.iban;
-        if (!iban || !newAccount.uid) continue;
+        const ibanSuffix = newAccount.account_id?.iban?.slice(-4);
+        if (!ibanSuffix || !newAccount.uid) continue;
         try {
+          // iban column stores only the last 4 digits — match on that
           await prisma.bankAccount.updateMany({
-            where: { bankConnectionId: reconnectConnectionId, iban },
+            where: { bankConnectionId: reconnectConnectionId, iban: ibanSuffix },
             data: { externalAccountId: newAccount.uid },
           });
         } catch (err) {
-          console.warn(`[callback] Could not update UID for IBAN ${iban}:`, err);
+          console.warn(`[callback] Could not update UID for IBAN suffix ···${ibanSuffix}:`, err);
         }
       }
 
