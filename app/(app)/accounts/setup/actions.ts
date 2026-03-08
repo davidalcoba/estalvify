@@ -3,19 +3,17 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { type EnableBankingAccount } from "@/lib/banking/enable-banking";
+import { Prisma } from "@/app/generated/prisma";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
-function buildAccountName(account: EnableBankingAccount): string {
-  // Try every API text field before falling back to IBAN — different banks
-  // populate different fields (BBVA uses `product`, others use `name` or `details`)
-  const apiName = account.name || account.product || account.details;
-  if (apiName) return apiName;
-  const iban = account.account_id?.iban;
-  if (iban) return `···${iban.slice(-4)}`;
-  return account.uid.slice(0, 8);
-}
+type PendingAccount = {
+  uid: string;
+  name: string | null;
+  ibanSuffix: string | null;
+  currency: string;
+  type: string;
+};
 
 function mapAccountType(type?: string): "CHECKING" | "SAVINGS" | "CREDIT" | "INVESTMENT" | "OTHER" {
   switch (type) {
@@ -34,20 +32,21 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
 
   const connection = await prisma.bankConnection.findFirst({
     where: { id: connectionId, userId: session.user.id, status: "PENDING_SETUP" },
+    select: { id: true, pendingAccounts: true },
   });
 
   if (!connection) throw new Error("Setup session not found or already completed");
 
-  const allAccounts = ((connection.sessionData as { accounts?: EnableBankingAccount[] })?.accounts ?? []);
+  const allAccounts = (connection.pendingAccounts as PendingAccount[] | null) ?? [];
   const selected = allAccounts.filter((a) => selectedUids.includes(a.uid));
 
   if (selected.length === 0) throw new Error("None of the selected accounts were found");
 
-  // Create accounts + activate connection atomically
-  const savedAccounts = await prisma.$transaction(async (tx) => {
+  // Create accounts + activate connection + clear pendingAccounts atomically
+  await prisma.$transaction(async (tx) => {
     await tx.bankConnection.update({
       where: { id: connectionId },
-      data: { status: "ACTIVE" },
+      data: { status: "ACTIVE", pendingAccounts: Prisma.DbNull },
     });
 
     return Promise.all(
@@ -58,20 +57,22 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
             userId: session.user.id,
             bankConnectionId: connectionId,
             externalAccountId: account.uid,
-            iban: account.account_id?.iban,
-            name: buildAccountName(account),
+            iban: account.ibanSuffix ?? null,
+            name: account.name ?? (account.ibanSuffix ? `···${account.ibanSuffix}` : account.uid.slice(0, 8)),
             currency: account.currency,
-            type: mapAccountType(account.cash_account_type),
+            type: mapAccountType(account.type),
             isActive: true,
           },
-          update: { isActive: true },
+          // Also update bankConnectionId in case this account was previously
+          // imported into a different connection (e.g. user deleted the old
+          // connection and reconnected). Without this, Phase 1 fan-out queries
+          // accounts by bankConnectionId and silently skips the account.
+          update: { bankConnectionId: connectionId, isActive: true },
         })
       )
     );
   });
 
-  // Mark as SYNCING immediately so the accounts page shows progress.
-  // The actual sync runs in background — the user is redirected right away.
   await prisma.bankConnection.update({
     where: { id: connectionId },
     data: { status: "SYNCING" },

@@ -17,6 +17,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Recover connections that got stuck in SYNCING (e.g. because the Vercel
+  // Queue message was lost or the consumer timed out before updating status).
+  // 30 minutes is generous — normal syncs complete in seconds.
+  const staleThreshold = new Date(Date.now() - 30 * 60 * 1000);
+  await prisma.bankConnection.updateMany({
+    where: { status: "SYNCING", updatedAt: { lt: staleThreshold } },
+    data: { status: "ACTIVE" },
+  });
+
   const activeConnections = await prisma.bankConnection.findMany({
     where: { status: "ACTIVE" },
     select: { id: true, userId: true },

@@ -1,65 +1,152 @@
 // Consumer: sync-connection
 // Invoked by Vercel Queues (push mode) — no public URL, no auth needed.
-// Fetches transactions and balances for a single bank connection.
+//
+// Two-phase fan-out pattern:
+//
+//   Phase 1 — Fan-out (accountId absent):
+//     Sets the connection to SYNCING, then re-enqueues one message per
+//     active account. Returns immediately — no API calls, no timeout risk.
+//
+//   Phase 2 — Per-account sync (accountId present):
+//     Fetches balances and transactions for a single account. Each account
+//     runs in its own Vercel function invocation with its own timeout budget,
+//     so a connection with N accounts is never bounded by N × timeout.
+//     After completing, checks whether all accounts are done and closes out
+//     the connection status.
 
-import { handleCallback } from "@vercel/queue";
+import { handleCallback, send } from "@vercel/queue";
 import { prisma } from "@/lib/prisma";
-import { syncConnection, toDateString } from "@/lib/banking/sync";
-import type { SyncConnectionMessage } from "@/lib/queue";
+import { syncAccount, toDateString } from "@/lib/banking/sync";
+import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
 export const POST = handleCallback<SyncConnectionMessage>(
   async (message) => {
-    const { connectionId } = message;
+    const { connectionId, userId, accountId, syncStartedAt, totalAccounts } = message;
 
-    const connection = await prisma.bankConnection.findFirst({
-      where: {
-        id: connectionId,
-        status: { in: ["ACTIVE", "SYNCING"] },
-      },
-      include: { bankAccounts: { where: { isActive: true } } },
-    });
+    // ── Phase 1: Fan-out ──────────────────────────────────────────────────────
+    if (!accountId) {
+      const connection = await prisma.bankConnection.findFirst({
+        where: {
+          id: connectionId,
+          status: { in: ["ACTIVE", "SYNCING"] },
+        },
+        include: { bankAccounts: { where: { isActive: true } } },
+      });
 
-    if (!connection) {
-      // Connection was deleted or revoked — nothing to do, acknowledge cleanly.
-      return;
-    }
-
-    await prisma.bankConnection.update({
-      where: { id: connectionId },
-      data: { status: "SYNCING" },
-    });
-
-    // Determine date range. For the first sync (no lastSyncAt) fetch 90 days
-    // of history so the user sees meaningful data right away. Subsequent syncs
-    // use a 1-day overlap on lastSyncAt to catch any late-settling transactions.
-    const dateTo = toDateString(new Date());
-    const dateFrom = connection.lastSyncAt
-      ? toDateString(new Date(connection.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
-      : toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
-
-    try {
-      await syncConnection(connection, dateFrom, dateTo);
+      if (!connection) return; // deleted or revoked
 
       await prisma.bankConnection.update({
         where: { id: connectionId },
-        data: { status: "ACTIVE" },
+        data: { status: "SYNCING" },
       });
+
+      const now = new Date().toISOString();
+
+      // Enqueue one message per account — each runs in its own invocation.
+      await Promise.all(
+        connection.bankAccounts.map((account) =>
+          send<SyncConnectionMessage>(TOPICS.syncConnection, {
+            connectionId,
+            userId,
+            accountId: account.id,
+            syncStartedAt: now,
+            totalAccounts: connection.bankAccounts.length,
+          })
+        )
+      );
+
+      return;
+    }
+
+    // ── Phase 2: Per-account sync ─────────────────────────────────────────────
+    const account = await prisma.bankAccount.findFirst({
+      where: { id: accountId, isActive: true },
+    });
+
+    if (!account) {
+      console.warn(`[queue/sync-connection] Phase 2 skipped: account ${accountId} not found or inactive (connectionId=${connectionId})`);
+      return;
+    }
+
+    const connectionExists = await prisma.bankConnection.findFirst({
+      where: { id: connectionId },
+      select: { id: true },
+    });
+
+    if (!connectionExists) {
+      console.warn(`[queue/sync-connection] Phase 2 skipped: connection ${connectionId} not found (accountId=${accountId})`);
+      return;
+    }
+
+    const dateTo = toDateString(new Date());
+    // Use per-account lastSyncAt so each account tracks its own sync window
+    // independently. This prevents a rate-limited account from forcing all
+    // accounts to re-fetch the full 90-day window on every subsequent sync.
+    const dateFrom = account.lastSyncAt
+      ? toDateString(new Date(account.lastSyncAt.getTime() - 24 * 60 * 60 * 1000))
+      : toDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+
+    let result;
+    try {
+      result = await syncAccount(account, userId, dateFrom, dateTo);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      console.error(`[queue/sync-connection] ${connectionId} failed:`, msg);
+      console.error(`[queue/sync-connection] account ${accountId} failed:`, msg);
 
       const isAuthError = msg.includes("401") || msg.includes("403") || msg.includes("expired");
 
-      await prisma.bankConnection
-        .update({
-          where: { id: connectionId },
-          data: { status: isAuthError ? "EXPIRED" : "ACTIVE" },
-        })
+      await prisma.bankAccount
+        .update({ where: { id: accountId }, data: { lastSyncError: msg } })
         .catch(() => {});
 
-      // Re-throw so Vercel retries the message (unless it's an auth error
-      // — retrying won't help, so we swallow it and acknowledge cleanly).
-      if (!isAuthError) throw err;
+      if (isAuthError) {
+        // Auth failure affects the whole connection — mark it as expired.
+        await prisma.bankConnection
+          .update({ where: { id: connectionId }, data: { status: "EXPIRED" } })
+          .catch(() => {});
+        return; // don't retry
+      }
+
+      throw err; // retryable — let Vercel retry the message
+    }
+
+    // ── Check whether all accounts for this connection are now done ───────────
+    // Three independent signals that an account has been processed:
+    //   1. lastSyncAt >= syncStartedAt  — success path
+    //   2. lastSyncError IS NOT NULL    — error path
+    //   3. has a balance from today     — fallback (reliable even if lastSyncAt
+    //                                     write was swallowed by .catch)
+    // The last account to finish closes out the connection status.
+    if (syncStartedAt && totalAccounts) {
+      const startedAt = new Date(syncStartedAt);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const doneCount = await prisma.bankAccount.count({
+        where: {
+          bankConnectionId: connectionId,
+          isActive: true,
+          OR: [
+            { lastSyncAt: { gte: startedAt } },
+            { lastSyncError: { not: null } },
+            { balances: { some: { date: { gte: today } } } },
+          ],
+        },
+      });
+
+      if (doneCount >= totalAccounts) {
+        await prisma.bankConnection
+          .update({ where: { id: connectionId }, data: { status: "ACTIVE" } })
+          .catch(() => {});
+      }
+    }
+
+    // Rate-limit errors are not retryable — acknowledge cleanly.
+    if (result.errors.some((e) => e.includes("RATE_LIMIT:"))) return;
+
+    // Other per-account errors → re-throw so Vercel retries the message.
+    if (result.errors.length > 0) {
+      throw new Error(`Account ${accountId} sync errors: ${result.errors.join(" | ")}`);
     }
   },
   {

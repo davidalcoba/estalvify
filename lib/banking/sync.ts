@@ -4,18 +4,13 @@ import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getBalances, getTransactions } from "./enable-banking";
 import type { EnableBankingTransaction } from "./enable-banking";
-import type { BankAccount, BankConnection } from "@/app/generated/prisma";
+import type { BankAccount } from "@/app/generated/prisma";
 
-interface ConnectionWithAccounts extends BankConnection {
-  bankAccounts: BankAccount[];
-}
-
-export interface SyncResult {
-  accountsSynced: number;
+export interface AccountSyncResult {
+  errors: string[];
   transactionsFetched: number;
   transactionsSkipped: number;
   balancesFetched: number;
-  errors: string[];
 }
 
 /**
@@ -43,33 +38,42 @@ function buildExternalId(tx: EnableBankingTransaction): string | null {
 }
 
 /**
- * Sync balances and transactions for all accounts in a connection.
+ * Sync balances and transactions for a single bank account.
  *
  * `dateFrom` / `dateTo` are YYYY-MM-DD strings. Callers are responsible for
  * computing the right range (e.g. from lastSyncAt for incremental syncs, or
- * yesterday for the initial sync).
+ * 90 days back for the initial sync).
  *
- * Transactions are fetched exhaustively: the API may paginate via
- * `continuation_key` and we loop until there are no more pages.
- *
- * On success, `connection.lastSyncAt` is updated in the DB.
+ * Updates bankAccount.lastSyncAt / lastSyncError in the DB before returning.
  */
-export async function syncConnection(
-  connection: ConnectionWithAccounts,
+export async function syncAccount(
+  account: BankAccount,
+  userId: string,
   dateFrom: string,
   dateTo: string
-): Promise<SyncResult> {
+): Promise<AccountSyncResult> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const errors: string[] = [];
+  let rateLimitReached = false;
   let transactionsFetched = 0;
   let transactionsSkipped = 0;
   let balancesFetched = 0;
-  const errors: string[] = [];
 
-  for (const account of connection.bankAccounts) {
-    // ── Balances ────────────────────────────────────────────────────────
-    try {
+  // ── Balances ────────────────────────────────────────────────────────────────
+  try {
+    // Skip the API call if a balance was already stored today — PSD2
+    // consent access is limited (some banks enforce ≤4/day) so we
+    // avoid burning quota on a value we already have.
+    const cachedBalance = await prisma.accountBalance.findFirst({
+      where: { bankAccountId: account.id, date: today },
+      select: { id: true },
+    });
+
+    if (cachedBalance) {
+      console.log(`[sync] Account ${account.externalAccountId} balance already cached for today — skipping API call`);
+    } else {
       const { balances } = await getBalances(account.externalAccountId);
 
       for (const balance of balances) {
@@ -94,17 +98,23 @@ export async function syncConnection(
         });
         balancesFetched++;
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
-      errors.push(`Account ${account.externalAccountId} balances: ${msg}`);
     }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
+    const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
+    errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}balances: ${msg}`);
+    if (isRateLimit) rateLimitReached = true;
+  }
 
-    // ── Transactions (with automatic pagination) ─────────────────────────
-    // The Enable Banking API may return a `continuation_key` when there are
-    // more records beyond the current page. We loop until it stops coming.
-    // Some account types (CARD, LOAN, etc.) may not support the transactions
-    // endpoint — a 404 is logged as a warning but does not fail the sync.
+  // ── Transactions (with automatic pagination) ─────────────────────────────
+  // Skip entirely if rate limit was already hit on balances — further calls
+  // would also fail and would only burn more of the limited daily PSD2 quota.
+  // The Enable Banking API may return a `continuation_key` when there are
+  // more records beyond the current page. We loop until it stops coming.
+  // Some account types (CARD, LOAN, etc.) may not support the transactions
+  // endpoint — a 404 is logged as a warning but does not fail the sync.
+  if (!rateLimitReached) {
     try {
       let continuationKey: string | undefined;
       let pageCount = 0;
@@ -125,6 +135,15 @@ export async function syncConnection(
             (continuationKey ? ", fetching next page…" : "")
         );
 
+        // Collect valid transactions for this page, skipping those without
+        // a stable ID. Use createMany+skipDuplicates instead of per-row
+        // upserts to avoid N sequential round-trips that can timeout the
+        // Vercel function on large initial syncs (90-day window).
+        const validTxs: Array<{
+          externalId: string;
+          tx: EnableBankingTransaction;
+        }> = [];
+
         for (const tx of page.transactions) {
           const externalId = buildExternalId(tx);
           if (!externalId) {
@@ -132,16 +151,13 @@ export async function syncConnection(
             console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
             continue;
           }
+          validTxs.push({ externalId, tx });
+        }
 
-          await prisma.transaction.upsert({
-            where: {
-              bankAccountId_externalTransactionId: {
-                bankAccountId: account.id,
-                externalTransactionId: externalId,
-              },
-            },
-            create: {
-              userId: connection.userId,
+        if (validTxs.length > 0) {
+          const { count } = await prisma.transaction.createMany({
+            data: validTxs.map(({ externalId, tx }) => ({
+              userId,
               bankAccountId: account.id,
               externalTransactionId: externalId,
               amount: tx.transaction_amount.amount,
@@ -150,22 +166,18 @@ export async function syncConnection(
               bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
               valueDate: tx.value_date ? new Date(tx.value_date) : null,
               description:
-                tx.bank_transaction_code?.description ??
                 tx.remittance_information?.join(" | ") ??
                 tx.note ??
                 null,
-              creditorName: tx.creditor?.name ?? null,
-              debtorName: tx.debtor?.name ?? null,
-              creditorIban: tx.creditor_account?.iban ?? null,
-              debtorIban: tx.debtor_account?.iban ?? null,
+              // Store only the last 4 digits — full IBANs are personal data
+              creditorIban: tx.creditor_account?.iban?.slice(-4) ?? null,
+              debtorIban: tx.debtor_account?.iban?.slice(-4) ?? null,
               remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
               merchantCategoryCode: tx.merchant_category_code ?? null,
-              rawData: tx as object,
-            },
-            update: {}, // transactions are immutable once stored
+            })),
+            skipDuplicates: true,
           });
-
-          transactionsFetched++;
+          transactionsFetched += count;
         }
       } while (continuationKey);
     } catch (err) {
@@ -179,27 +191,25 @@ export async function syncConnection(
         );
       } else {
         console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
-        errors.push(`Account ${account.externalAccountId} transactions: ${msg}`);
+        const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
+        errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}transactions: ${msg}`);
       }
     }
   }
 
-  // Record the time of this sync so the next call can start from here,
-  // avoiding redundant re-fetching of old transactions.
+  // ── Update per-account sync status ──────────────────────────────────────────
+  // Success write is NOT silently caught — if it fails, the error propagates
+  // so the queue retries the invocation and lastSyncAt eventually gets written.
   if (errors.length === 0) {
-    await prisma.bankConnection.update({
-      where: { id: connection.id },
-      data: { lastSyncAt: new Date() },
-    });
+    await prisma.bankAccount
+      .update({ where: { id: account.id }, data: { lastSyncAt: new Date(), lastSyncError: null } });
+  } else {
+    await prisma.bankAccount
+      .update({ where: { id: account.id }, data: { lastSyncError: errors.join(" | ") } })
+      .catch(() => {});
   }
 
-  return {
-    accountsSynced: connection.bankAccounts.length,
-    transactionsFetched,
-    transactionsSkipped,
-    balancesFetched,
-    errors,
-  };
+  return { errors, transactionsFetched, transactionsSkipped, balancesFetched };
 }
 
 /** Format a date as YYYY-MM-DD */

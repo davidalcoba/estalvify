@@ -1,4 +1,4 @@
-// Resets lastSyncAt on the active connection so the next sync fetches 90 days
+// Resets lastSyncAt on all active bank accounts so the next sync fetches 90 days
 // of history, and deletes abandoned PENDING_REAUTH / PENDING_SETUP connections.
 import { PrismaClient } from "../app/generated/prisma";
 import { PrismaNeon } from "@prisma/adapter-neon";
@@ -13,12 +13,12 @@ async function main() {
   });
   console.log(`Deleted ${deleted.count} abandoned connections`);
 
-  // Reset lastSyncAt on ACTIVE connections so the next sync fetches 90 days
-  const reset = await prisma.bankConnection.updateMany({
-    where: { status: "ACTIVE" },
+  // Reset lastSyncAt on all active accounts so the next sync fetches 90 days
+  const reset = await prisma.bankAccount.updateMany({
+    where: { isActive: true },
     data: { lastSyncAt: null },
   });
-  console.log(`Reset lastSyncAt on ${reset.count} active connections`);
+  console.log(`Reset lastSyncAt on ${reset.count} active accounts`);
 
   await prisma.$disconnect();
 }

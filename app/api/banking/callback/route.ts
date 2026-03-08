@@ -2,7 +2,7 @@
 // Enable Banking redirects here after user authenticates with their bank.
 //
 // Two flows:
-//   NEW connection: store accounts in sessionData → redirect to setup page
+//   NEW connection: move to PENDING_SETUP → redirect to setup page (accounts fetched live)
 //   RE-AUTH (reconnectConnectionId present): restore the existing connection
 //     with the new session, skip setup, accounts are untouched.
 //
@@ -48,15 +48,13 @@ export async function GET(request: NextRequest) {
   }
 
   // Check if this is a re-auth for an existing expired connection
-  const reconnectConnectionId = (bankConnection.sessionData as { reconnectConnectionId?: string } | null)
-    ?.reconnectConnectionId;
+  const reconnectConnectionId = bankConnection.reconnectConnectionId;
 
   try {
     const { session_id, accounts, access } = await exchangeCodeForSession(code);
 
-    // Log raw account fields so we can see what the bank returns for naming
     console.log("[callback] accounts from API:", JSON.stringify(
-      accounts.map((a) => ({ uid: a.uid, name: a.name, product: a.product, details: a.details, iban: a.account_id?.iban })),
+      accounts.map((a) => ({ uid: a.uid, name: a.name, product: a.product, details: a.details, ibanSuffix: a.account_id?.iban?.slice(-4) })),
       null, 2
     ));
 
@@ -78,20 +76,29 @@ export async function GET(request: NextRequest) {
         await tx.bankConnection.delete({ where: { id: bankConnection.id } });
       });
 
+      // Reset per-account sync state to match the fresh connection state.
+      await prisma.bankAccount
+        .updateMany({
+          where: { bankConnectionId: reconnectConnectionId },
+          data: { lastSyncError: null, lastSyncAt: null },
+        })
+        .catch((err) => console.warn("[callback] Could not reset account sync state:", err));
+
       // Enable Banking assigns new UIDs per session, so the stored
       // externalAccountId values are now stale. Update them outside the
       // transaction — individual failures are non-fatal (the connection is
       // already restored) and we log them for debugging.
       for (const newAccount of accounts) {
-        const iban = newAccount.account_id?.iban;
-        if (!iban || !newAccount.uid) continue;
+        const ibanSuffix = newAccount.account_id?.iban?.slice(-4);
+        if (!ibanSuffix || !newAccount.uid) continue;
         try {
+          // iban column stores only the last 4 digits — match on that
           await prisma.bankAccount.updateMany({
-            where: { bankConnectionId: reconnectConnectionId, iban },
+            where: { bankConnectionId: reconnectConnectionId, iban: ibanSuffix },
             data: { externalAccountId: newAccount.uid },
           });
         } catch (err) {
-          console.warn(`[callback] Could not update UID for IBAN ${iban}:`, err);
+          console.warn(`[callback] Could not update UID for IBAN suffix ···${ibanSuffix}:`, err);
         }
       }
 
@@ -119,14 +126,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/accounts?error=already_connected`);
     }
 
-    // Store accounts + move to setup page for account selection
+    // Store minimal account info for the setup page.
+    // Only uid, display name, last-4 IBAN, currency and type — no full IBANs.
+    // Cleared when setup completes or is cancelled.
+    const pendingAccounts = accounts.map((a) => ({
+      uid: a.uid,
+      name: a.name ?? a.product ?? a.details ?? null,
+      ibanSuffix: a.account_id?.iban?.slice(-4) ?? null,
+      currency: a.currency,
+      type: a.cash_account_type,
+    }));
+
     await prisma.bankConnection.update({
       where: { id: bankConnection.id },
       data: {
         sessionId: session_id,
         status: "PENDING_SETUP",
         consentExpiresAt,
-        sessionData: JSON.parse(JSON.stringify({ accounts })),
+        pendingAccounts,
       },
     });
 

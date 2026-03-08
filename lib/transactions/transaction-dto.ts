@@ -7,8 +7,6 @@ export interface TransactionListItemDTO {
   direction: TransactionDirection;
   bookingDate: string;
   description: string | null;
-  creditorName: string | null;
-  debtorName: string | null;
   remittanceInfo: string | null;
   categoryId: string | null;
   categoryName: string | null;
@@ -30,8 +28,6 @@ interface TransactionRecordLike {
   direction: TransactionDirection;
   bookingDate: Date;
   description: string | null;
-  creditorName: string | null;
-  debtorName: string | null;
   remittanceInfo?: string | null;
   categorization?: {
     categoryId?: string;
@@ -54,8 +50,6 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
     direction: tx.direction,
     bookingDate: tx.bookingDate.toISOString(),
     description: tx.description,
-    creditorName: tx.creditorName,
-    debtorName: tx.debtorName,
     remittanceInfo: tx.remittanceInfo ?? null,
     categoryId: tx.categorization?.categoryId ?? null,
     categoryName: tx.categorization?.category?.name ?? null,
@@ -68,11 +62,11 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
 }
 
 export function transactionLabel(tx: TransactionListItemDTO): string {
-  return tx.description ?? (tx.direction === "CREDIT" ? tx.debtorName : tx.creditorName) ?? "Transaction";
+  return tx.description ?? tx.remittanceInfo ?? "Transaction";
 }
 
-export function transactionCounterparty(tx: TransactionListItemDTO): string | null {
-  return tx.direction === "CREDIT" ? tx.debtorName : tx.creditorName;
+export function transactionCounterparty(_tx: TransactionListItemDTO): string | null {
+  return null;
 }
 
 function normalizeChunk(value: string): string {
@@ -94,9 +88,6 @@ export function transactionOperationType(tx: TransactionListItemDTO): string {
 }
 
 export function transactionMerchant(tx: TransactionListItemDTO): string {
-  const counterparty = normalizeChunk(transactionCounterparty(tx) ?? "");
-  if (counterparty) return counterparty;
-
   const chunks = splitDescriptionChunks(tx.description);
   if (chunks[2]) return chunks[2];
   if (chunks[1]) return chunks[1];

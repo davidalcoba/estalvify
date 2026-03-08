@@ -1,3 +1,5 @@
+"use client";
+
 import { Inbox, Loader2, Tag, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,7 +76,7 @@ export function CategorizeDesktopView({
   const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => {
         const lower = activeQuery.toLowerCase();
-        return [tx.description, tx.creditorName, tx.debtorName, tx.remittanceInfo].some((f) =>
+        return [tx.description, tx.remittanceInfo].some((f) =>
           f?.toLowerCase().includes(lower)
         );
       })

@@ -58,6 +58,18 @@ export default async function AccountsPage({
     ? (errorMessages[params.error] ?? decodeURIComponent(params.error))
     : null;
 
+  // Auto-recover connections stuck in SYNCING for more than 10 minutes.
+  // This happens when a Vercel function timeout kills the sync job without
+  // updating the connection status back to ACTIVE.
+  await prisma.bankConnection.updateMany({
+    where: {
+      userId: session!.user.id,
+      status: "SYNCING",
+      updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
+    },
+    data: { status: "ACTIVE" },
+  });
+
   const [connections, prefs] = await Promise.all([
     prisma.bankConnection.findMany({
       where: {
@@ -70,6 +82,7 @@ export default async function AccountsPage({
           include: {
             balances: { orderBy: { date: "desc" }, take: 1 },
           },
+          orderBy: { createdAt: "asc" },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -200,14 +213,21 @@ export default async function AccountsPage({
       ) : (
         <div className="space-y-4">
           {bankGroups.map((group) => {
-            const statusConfig = STATUS_CONFIG[group.status];
-            const StatusIcon = statusConfig.icon;
             const isExpired = group.status === "EXPIRED";
             const isSyncing = group.status === "SYNCING";
+            const groupSyncError = group.allAccounts.find((a) => a.lastSyncError)?.lastSyncError ?? null;
+            const hasSyncError = !isSyncing && !isExpired && !!groupSyncError;
+            const isRateLimitError = hasSyncError && !!groupSyncError?.includes("RATE_LIMIT:");
+            const badgeConfig = isRateLimitError
+              ? { label: "Quota reached", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
+              : hasSyncError
+                ? { label: "Sync error", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
+                : STATUS_CONFIG[group.status];
+            const StatusIcon = badgeConfig.icon;
             return (
               <Card key={group.bankId} className={isExpired ? "border-red-200" : undefined}>
                 <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                       <Building2 className="h-5 w-5 text-slate-600" />
                     </div>
@@ -220,19 +240,32 @@ export default async function AccountsPage({
                         )}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className={`gap-1 text-xs ${statusConfig.className}`}>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Badge variant="outline" className={`gap-1 text-xs ${badgeConfig.className}`}>
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
-                        {statusConfig.label}
+                        {badgeConfig.label}
                       </Badge>
                       {isExpired ? (
                         <ReconnectBankButton
                           connectionId={group.connectionIds[0]}
                           aspspName={group.bankId}
                           aspspCountry={group.country}
+                          label="Reconnect"
                         />
                       ) : (
-                        <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />
+                        <>
+                          {isRateLimitError ? (
+                            <ReconnectBankButton
+                              connectionId={group.connectionIds[0]}
+                              aspspName={group.bankId}
+                              aspspCountry={group.country}
+                              label="Refresh access"
+                              secondary
+                            />
+                          ) : (
+                            <SyncNowButton connectionIds={group.connectionIds} disabled={isSyncing} />
+                          )}
+                        </>
                       )}
                       <DisconnectBankButton
                         connectionIds={group.connectionIds}
@@ -241,6 +274,27 @@ export default async function AccountsPage({
                     </div>
                   </div>
                 </CardHeader>
+
+                {hasSyncError && (
+                  <CardContent className="pt-0 pb-3">
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        {isRateLimitError ? (
+                          <>
+                            <span className="font-medium">Bank rate limit reached</span> — the daily API quota
+                            for this connection is exhausted. It will reset tomorrow, or use <span className="font-medium">Refresh access</span> for a fresh quota now.
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium">Last sync had errors</span> — transactions may be incomplete.
+                            Try syncing again or check back later.
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </CardContent>
+                )}
 
                 {group.allAccounts.length > 0 && (
                   <CardContent className="pt-0 pb-3">
@@ -257,21 +311,31 @@ export default async function AccountsPage({
                               />
                               {account.iban && (
                                 <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                  {account.iban.replace(/(.{4})/g, "$1 ").trim()}
+                                  ···{account.iban}
                                 </p>
                               )}
                             </div>
 
-                            {/* Balance */}
+                            {/* Balance + sync status */}
                             <div className="flex flex-col items-end gap-1 shrink-0">
                               {latestBalance && (
                                 <p className="text-sm font-semibold tabular-nums">
                                   {formatCurrency(latestBalance.balance, latestBalance.currency, locale)}
                                 </p>
                               )}
-                              {latestBalance ? (
+                              {account.lastSyncError ? (
+                                <span title={account.lastSyncError} className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  Sync error
+                                </span>
+                              ) : latestBalance ? (
                                 <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
                                   Synced {formatDate(latestBalance.date, locale, timezone)}
+                                </span>
+                              ) : isSyncing ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                                  <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+                                  Syncing…
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
