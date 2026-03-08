@@ -126,13 +126,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/accounts?error=already_connected`);
     }
 
-    // Move to setup page for account selection — accounts are fetched fresh via API
+    // Store minimal account info for the setup page.
+    // Only uid, display name, last-4 IBAN, currency and type — no full IBANs.
+    // Cleared when setup completes or is cancelled.
+    const pendingAccounts = accounts.map((a) => ({
+      uid: a.uid,
+      name: a.name ?? a.product ?? a.details ?? null,
+      ibanSuffix: a.account_id?.iban?.slice(-4) ?? null,
+      currency: a.currency,
+      type: a.cash_account_type,
+    }));
+
     await prisma.bankConnection.update({
       where: { id: bankConnection.id },
       data: {
         sessionId: session_id,
         status: "PENDING_SETUP",
         consentExpiresAt,
+        pendingAccounts,
       },
     });
 

@@ -3,19 +3,17 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccounts, type EnableBankingAccount } from "@/lib/banking/enable-banking";
+import { Prisma } from "@/app/generated/prisma";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
-function buildAccountName(account: EnableBankingAccount): string {
-  // Try every API text field before falling back to IBAN — different banks
-  // populate different fields (BBVA uses `product`, others use `name` or `details`)
-  const apiName = account.name || account.product || account.details;
-  if (apiName) return apiName;
-  const iban = account.account_id?.iban;
-  if (iban) return `···${iban.slice(-4)}`;
-  return account.uid.slice(0, 8);
-}
+type PendingAccount = {
+  uid: string;
+  name: string | null;
+  ibanSuffix: string | null;
+  currency: string;
+  type: string;
+};
 
 function mapAccountType(type?: string): "CHECKING" | "SAVINGS" | "CREDIT" | "INVESTMENT" | "OTHER" {
   switch (type) {
@@ -34,21 +32,21 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
 
   const connection = await prisma.bankConnection.findFirst({
     where: { id: connectionId, userId: session.user.id, status: "PENDING_SETUP" },
-    select: { id: true, sessionId: true },
+    select: { id: true, pendingAccounts: true },
   });
 
   if (!connection) throw new Error("Setup session not found or already completed");
 
-  const { accounts: allAccounts } = await getAccounts(connection.sessionId);
+  const allAccounts = (connection.pendingAccounts as PendingAccount[] | null) ?? [];
   const selected = allAccounts.filter((a) => selectedUids.includes(a.uid));
 
   if (selected.length === 0) throw new Error("None of the selected accounts were found");
 
-  // Create accounts + activate connection atomically
-  const savedAccounts = await prisma.$transaction(async (tx) => {
+  // Create accounts + activate connection + clear pendingAccounts atomically
+  await prisma.$transaction(async (tx) => {
     await tx.bankConnection.update({
       where: { id: connectionId },
-      data: { status: "ACTIVE" },
+      data: { status: "ACTIVE", pendingAccounts: Prisma.DbNull },
     });
 
     return Promise.all(
@@ -59,11 +57,10 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
             userId: session.user.id,
             bankConnectionId: connectionId,
             externalAccountId: account.uid,
-            // Store only last 4 digits of IBAN — full IBAN is personal data
-            iban: account.account_id?.iban?.slice(-4) ?? null,
-            name: buildAccountName(account),
+            iban: account.ibanSuffix ?? null,
+            name: account.name ?? (account.ibanSuffix ? `···${account.ibanSuffix}` : account.uid.slice(0, 8)),
             currency: account.currency,
-            type: mapAccountType(account.cash_account_type),
+            type: mapAccountType(account.type),
             isActive: true,
           },
           update: { isActive: true },

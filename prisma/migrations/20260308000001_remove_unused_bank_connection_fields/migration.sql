@@ -17,3 +17,6 @@ ALTER TABLE "bank_connections" DROP COLUMN IF EXISTS "lastSyncAt";
 ALTER TABLE "bank_connections" DROP COLUMN IF EXISTS "lastSyncError";
 
 ALTER TABLE "bank_connections" ADD COLUMN IF NOT EXISTS "reconnectConnectionId" TEXT;
+
+-- Temporary account list for the PENDING_SETUP window only (cleared after setup)
+ALTER TABLE "bank_connections" ADD COLUMN IF NOT EXISTS "pendingAccounts" JSONB;

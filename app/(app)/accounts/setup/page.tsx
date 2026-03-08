@@ -2,20 +2,19 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccounts, type EnableBankingAccount } from "@/lib/banking/enable-banking";
 import { AccountSelectionForm } from "@/components/accounts/account-selection-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Select accounts" };
 
-function buildDisplayName(account: EnableBankingAccount): string {
-  const apiName = account.name || account.product || account.details;
-  if (apiName) return apiName;
-  const iban = account.account_id?.iban;
-  if (iban) return `···${iban.slice(-4)}`;
-  return account.uid.slice(0, 8);
-}
+type PendingAccount = {
+  uid: string;
+  name: string | null;
+  ibanSuffix: string | null;
+  currency: string;
+  type: string;
+};
 
 export default async function SetupPage({
   searchParams,
@@ -29,18 +28,12 @@ export default async function SetupPage({
 
   const connection = await prisma.bankConnection.findFirst({
     where: { id: connectionId, userId: session!.user.id, status: "PENDING_SETUP" },
-    select: { id: true, bankName: true, sessionId: true },
+    select: { id: true, bankName: true, pendingAccounts: true },
   });
 
   if (!connection) redirect("/accounts?error=setup_expired");
 
-  let rawAccounts: EnableBankingAccount[] = [];
-  try {
-    const result = await getAccounts(connection.sessionId);
-    rawAccounts = result.accounts;
-  } catch {
-    redirect("/accounts?error=setup_expired");
-  }
+  const rawAccounts = (connection.pendingAccounts as PendingAccount[] | null) ?? [];
 
   // Filter out accounts already imported into any of the user's bank connections.
   const allUids = rawAccounts.map((a) => a.uid);
@@ -54,8 +47,8 @@ export default async function SetupPage({
     .filter((a) => !importedUids.has(a.uid))
     .map((a) => ({
       uid: a.uid,
-      name: buildDisplayName(a),
-      iban: a.account_id?.iban,
+      name: a.name ?? (a.ibanSuffix ? `···${a.ibanSuffix}` : a.uid.slice(0, 8)),
+      iban: a.ibanSuffix ?? undefined,
       currency: a.currency,
     }));
 

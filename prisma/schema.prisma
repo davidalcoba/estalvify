@@ -103,6 +103,10 @@ model BankConnection {
   // Set only during PENDING_REAUTH when re-authing an existing connection
   reconnectConnectionId String?
 
+  // Available only while status = PENDING_SETUP; cleared when setup completes or is cancelled.
+  // Stores minimal account info (uid, name, ibanSuffix, currency, type) — no full IBANs.
+  pendingAccounts Json?
+
   // PSD2 consent validity
   consentExpiresAt DateTime?
 
