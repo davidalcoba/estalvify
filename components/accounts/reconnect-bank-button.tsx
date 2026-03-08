@@ -8,9 +8,12 @@ interface ReconnectBankButtonProps {
   connectionId: string;
   aspspName: string;
   aspspCountry: string;
+  label?: string;
+  /** Render as a subtle ghost link instead of an outlined button */
+  secondary?: boolean;
 }
 
-export function ReconnectBankButton({ connectionId, aspspName, aspspCountry }: ReconnectBankButtonProps) {
+export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, label = "Reconnect", secondary = false }: ReconnectBankButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -41,16 +44,17 @@ export function ReconnectBankButton({ connectionId, aspspName, aspspCountry }: R
   return (
     <div className="flex flex-col items-end gap-1">
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         onClick={handleReconnect}
         disabled={isPending}
-        className="gap-1.5 h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+        className={secondary
+          ? "gap-1.5 h-7 text-xs text-muted-foreground hover:text-foreground"
+          : "gap-1.5 h-7 text-xs border border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700"}
       >
-        {isPending
-          ? <Loader2 className="h-3 w-3 animate-spin" />
-          : <RefreshCw className="h-3 w-3" />}
-        Reconnect
+        {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+        {!isPending && !secondary && <RefreshCw className="h-3 w-3" />}
+        {label}
       </Button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

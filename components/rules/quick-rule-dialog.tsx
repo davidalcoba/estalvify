@@ -24,12 +24,6 @@ interface QuickRuleDialogProps {
 }
 
 function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
-  if (tx.creditorName) {
-    return { field: "creditorName", operator: getDefaultOperator("creditorName"), value: tx.creditorName };
-  }
-  if (tx.debtorName) {
-    return { field: "debtorName", operator: getDefaultOperator("debtorName"), value: tx.debtorName };
-  }
   return { field: "description", operator: getDefaultOperator("description"), value: tx.description ?? "" };
 }
 

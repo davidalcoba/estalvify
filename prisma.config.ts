@@ -13,6 +13,13 @@ export default defineConfig({
   datasource: {
     // Migrations require a direct (non-pooled) connection.
     // In production set DIRECT_URL to the non-pooler Neon URL.
-    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
+    // connect_timeout=30 prevents P1002 when Neon wakes from cold start.
+    url: (() => {
+      const base = process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"];
+      if (!base) return undefined;
+      return base.includes("connect_timeout")
+        ? base
+        : `${base}${base.includes("?") ? "&" : "?"}connect_timeout=30`;
+    })(),
   },
 });

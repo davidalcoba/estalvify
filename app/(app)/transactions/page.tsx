@@ -105,8 +105,6 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
       ? {
           OR: [
             { description: { contains: query, mode: "insensitive" as const } },
-            { creditorName: { contains: query, mode: "insensitive" as const } },
-            { debtorName: { contains: query, mode: "insensitive" as const } },
             { remittanceInfo: { contains: query, mode: "insensitive" as const } },
           ],
         }

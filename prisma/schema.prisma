@@ -99,19 +99,19 @@ model BankConnection {
 
   // Enable Banking session
   sessionId String  @unique // Enable Banking session ID
-  sessionData Json?   // Full session response for reference
 
-  // OAuth tokens (encrypted at rest in production)
-  accessToken      String?
-  refreshToken     String?
-  tokenExpiresAt   DateTime?
+  // Set only during PENDING_REAUTH when re-authing an existing connection
+  reconnectConnectionId String?
+
+  // Available only while status = PENDING_SETUP; cleared when setup completes or is cancelled.
+  // Stores minimal account info (uid, name, ibanSuffix, currency, type) — no full IBANs.
+  pendingAccounts Json?
 
   // PSD2 consent validity
   consentExpiresAt DateTime?
 
-  status      BankConnectionStatus @default(ACTIVE)
-  lastSyncAt  DateTime?            // When the last successful sync completed
-  createdAt   DateTime             @default(now())
+  status    BankConnectionStatus @default(ACTIVE)
+  createdAt DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -136,13 +136,17 @@ model BankAccount {
 
   // Enable Banking account identifiers
   externalAccountId String  @unique // ID from Enable Banking API
+  // Last 4 digits of IBAN only — full IBAN is never stored (privacy)
   iban              String?
-  bban              String?
 
   name     String
   type     BankAccountType @default(CHECKING)
   currency String          @default("EUR")
   isActive Boolean         @default(true)
+
+  // Per-account sync tracking (finer-grained than connection-level lastSyncAt)
+  lastSyncAt    DateTime? // When this account last synced successfully
+  lastSyncError String?   // Error from the most recent failed sync (null on success)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -205,15 +209,11 @@ model Transaction {
 
   // Descriptors from bank (raw, do not modify)
   description          String?
-  creditorName         String?
-  debtorName           String?
+  // Last 4 digits of counterparty IBANs only — full IBANs are never stored (privacy)
   creditorIban         String?
   debtorIban           String?
-  remittanceInfo       String? // Payment reference
-  merchantCategoryCode String? // MCC code
-
-  // Full raw response from Enable Banking API (JSONB)
-  rawData Json
+  remittanceInfo       String? // Payment reference (SEPA; may contain free text)
+  merchantCategoryCode String? // MCC code (card transactions only)
 
   createdAt DateTime @default(now())
 
@@ -276,7 +276,7 @@ model CategoryRule {
 
   name       String
   conditions Json   // Array of RuleCondition: [{field, operator, value}]
-  // Field options: "description", "creditorName", "debtorName", "amount", "direction", "remittanceInfo"
+  // Field options: "description", "remittanceInfo", "amount", "direction"
   // Operator options: "contains", "equals", "startsWith", "endsWith", "greaterThan", "lessThan"
 
   // Optional: only match transactions already in this category (re-categorization)
