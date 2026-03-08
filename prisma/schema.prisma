@@ -212,6 +212,8 @@ model Transaction {
   // Last 4 digits of counterparty IBANs only — full IBANs are never stored (privacy)
   creditorIban         String?
   debtorIban           String?
+  creditorName         String? // Name of the recipient (transfers, Bizum, etc.)
+  debtorName           String? // Name of the sender (incoming transfers)
   remittanceInfo       String? // Payment reference (SEPA; may contain free text)
   merchantCategoryCode String? // MCC code (card transactions only)
 
