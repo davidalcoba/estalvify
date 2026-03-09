@@ -69,31 +69,27 @@ export function transactionCounterparty(_tx: TransactionListItemDTO): string | n
   return null;
 }
 
-function normalizeChunk(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-export function splitDescriptionChunks(description: string | null): string[] {
-  if (!description) return [];
-  return description
-    .split("//")
-    .map(normalizeChunk)
-    .filter(Boolean);
-}
-
 export function transactionOperationType(tx: TransactionListItemDTO): string {
-  const chunks = splitDescriptionChunks(tx.description);
-  if (chunks[0]) return chunks[0];
+  if (tx.remittanceInfo) return tx.remittanceInfo;
   return tx.direction === "CREDIT" ? "INCOME" : "EXPENSE";
 }
 
-export function transactionMerchant(tx: TransactionListItemDTO): string {
-  const chunks = splitDescriptionChunks(tx.description);
-  if (chunks[2]) return chunks[2];
-  if (chunks[1]) return chunks[1];
-  if (chunks[0]) return chunks[0];
+const BBVA_DESCRIPTION_PREFIXES = [
+  "PAGO DE ADEUDO DIRECTO SEPA ",
+  "PAGO DE ADEUDO SEPA ",
+  "ADEUDO DIRECTO SEPA ",
+  "PAGO CON TARJETA ",
+  "PAGO CON VISA ",
+];
 
-  return "Unknown merchant";
+export function transactionMerchant(tx: TransactionListItemDTO): string {
+  const raw = tx.description ?? tx.remittanceInfo ?? "Unknown";
+  for (const prefix of BBVA_DESCRIPTION_PREFIXES) {
+    if (raw.toUpperCase().startsWith(prefix)) {
+      return raw.slice(prefix.length).trim() || raw;
+    }
+  }
+  return raw;
 }
 
 export function groupTransactionsByDate(transactions: TransactionListItemDTO[]): Array<{ dateKey: string; items: TransactionListItemDTO[] }> {
