@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,6 +80,15 @@ export function TransactionsMobileView({
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  // Prevent ghost-tap: the tap that opens the sheet can land on the select
+  // as it slides into position, opening the native picker unintentionally.
+  const [sheetJustOpened, setSheetJustOpened] = useState(false);
+  useEffect(() => {
+    if (!activeTx) return;
+    setSheetJustOpened(true);
+    const t = setTimeout(() => setSheetJustOpened(false), 400);
+    return () => clearTimeout(t);
+  }, [activeTx?.id]);
 
   async function handleRecategorize(categoryId: string) {
     if (!categoryId || !activeTx) return;
@@ -189,7 +198,7 @@ export function TransactionsMobileView({
                     key={activeTx.id}
                     defaultValue={activeTx.categoryId ?? ""}
                     onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
-                    disabled={saving}
+                    disabled={saving || sheetJustOpened}
                     className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
                   >
                     <option value="" disabled>Select a category…</option>

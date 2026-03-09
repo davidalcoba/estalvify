@@ -117,34 +117,29 @@ export function TransactionDetailDialog({
                 </div>
               </div>
 
-              {categories.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <select
-                    key={transaction.id}
-                    defaultValue={transaction.categoryId ?? ""}
-                    onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
-                    disabled={saving}
-                    className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
-                  >
-                    <option value="" disabled>Pick a category…</option>
-                    <CategoryOptions categories={categories} />
-                  </select>
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
-                      onClick={() => setRuleOpen(true)}
-                      title="Create rule for this transaction"
-                    >
-                      <Zap className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <select
+                  key={transaction.id}
+                  defaultValue={transaction.categoryId ?? ""}
+                  onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                  disabled={saving}
+                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
+                >
+                  <option value="" disabled>Pick a category…</option>
+                  <CategoryOptions categories={categories} />
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                  onClick={() => setRuleOpen(true)}
+                  disabled={saving}
+                  title="Create rule for this transaction"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
