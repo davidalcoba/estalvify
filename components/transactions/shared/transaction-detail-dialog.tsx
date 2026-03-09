@@ -63,7 +63,7 @@ export function TransactionDetailDialog({
     )}
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="w-[min(96vw,640px)] max-h-[85vh] p-6 gap-0 overflow-hidden"
+        className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Transaction details</DialogTitle>
@@ -126,7 +126,7 @@ export function TransactionDetailDialog({
                 onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
                 disabled={saving}
                 tabIndex={-1}
-                className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
               >
                 <option value="" disabled>Pick a category…</option>
                 <CategoryOptions categories={categories} />

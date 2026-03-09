@@ -7,6 +7,8 @@ import {
   ArrowUpRight,
   Calendar,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -132,7 +134,7 @@ function FocusModal({
       />
     )}
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] p-6 gap-0 overflow-hidden">
+      <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden">
         <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
 
         <div className="space-y-4 overflow-y-auto pr-2">
@@ -199,7 +201,7 @@ function FocusModal({
                   key={current.id}
                   defaultValue=""
                   onChange={(e) => handleCategorySelect(e.target.value)}
-                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
                 >
                   <option value="" disabled>
                     Pick a category…
@@ -218,6 +220,24 @@ function FocusModal({
                 </Button>
               </div>
 
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIndex((i) => i - 1)}
+                  disabled={index === 0}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIndex((i) => Math.min(i + 1, queue.length - 1))}
+                  disabled={index >= queue.length - 1}
+                >
+                  Next <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </>
           ) : null}
         </div>

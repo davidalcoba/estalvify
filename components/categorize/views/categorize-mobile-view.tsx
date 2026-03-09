@@ -307,7 +307,7 @@ export function CategorizeMobileView({
                     key={currentTx.id}
                     defaultValue=""
                     onChange={(e) => handleCategorySelect(e.target.value)}
-                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
                   >
                     <option value="" disabled>
                       Select a category…

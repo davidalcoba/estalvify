@@ -191,7 +191,7 @@ export function TransactionsMobileView({
                       defaultValue={activeTx.categoryId ?? ""}
                       onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
                       disabled={saving}
-                      className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                      className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
                     >
                       <option value="" disabled>Pick a category…</option>
                       <CategoryOptions categories={categories} />
