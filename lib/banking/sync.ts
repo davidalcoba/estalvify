@@ -163,8 +163,7 @@ export async function syncAccount(
               amount: tx.transaction_amount.amount,
               currency: tx.transaction_amount.currency,
               direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
-              bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
-              valueDate: tx.value_date ? new Date(tx.value_date) : null,
+              valueDate: tx.value_date ? new Date(tx.value_date) : (tx.booking_date ? new Date(tx.booking_date) : today),
               description:
                 tx.remittance_information?.join(" | ") ??
                 tx.note ??

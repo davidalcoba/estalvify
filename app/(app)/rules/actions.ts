@@ -33,7 +33,7 @@ export async function previewRuleTransactions(
         bankAccount: { select: { id: true, name: true } },
         categorization: { include: { category: { select: { name: true, color: true } } } },
       },
-      orderBy: [{ bookingDate: "desc" }, { id: "asc" }],
+      orderBy: [{ valueDate: "desc" }, { id: "asc" }],
       take: PREVIEW_LIMIT,
     }),
   ]);

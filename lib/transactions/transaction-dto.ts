@@ -5,7 +5,7 @@ export interface TransactionListItemDTO {
   amount: number;
   currency: string;
   direction: TransactionDirection;
-  bookingDate: string;
+  valueDate: string;
   description: string | null;
   remittanceInfo: string | null;
   categoryId: string | null;
@@ -26,7 +26,7 @@ interface TransactionRecordLike {
   amount: TxAmountLike;
   currency: string;
   direction: TransactionDirection;
-  bookingDate: Date;
+  valueDate: Date;
   description: string | null;
   remittanceInfo?: string | null;
   categorization?: {
@@ -48,7 +48,7 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
     amount: Number(tx.amount.toString()),
     currency: tx.currency,
     direction: tx.direction,
-    bookingDate: tx.bookingDate.toISOString(),
+    valueDate: tx.valueDate.toISOString(),
     description: tx.description,
     remittanceInfo: tx.remittanceInfo ?? null,
     categoryId: tx.categorization?.categoryId ?? null,
@@ -100,7 +100,7 @@ export function groupTransactionsByDate(transactions: TransactionListItemDTO[]):
   const grouped = new Map<string, TransactionListItemDTO[]>();
 
   for (const tx of transactions) {
-    const dateKey = tx.bookingDate.split("T")[0];
+    const dateKey = tx.valueDate.split("T")[0];
     const bucket = grouped.get(dateKey);
     if (bucket) {
       bucket.push(tx);

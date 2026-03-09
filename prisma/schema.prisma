@@ -204,8 +204,7 @@ model Transaction {
   direction   TransactionDirection // DEBIT or CREDIT
 
   // Dates
-  bookingDate DateTime  @db.Date // When posted to account
-  valueDate   DateTime? @db.Date // When money actually moved
+  valueDate DateTime @db.Date // When money actually moved (value date)
 
   // Descriptors from bank (raw, do not modify)
   description          String?
@@ -224,8 +223,8 @@ model Transaction {
   aiSuggestion     AiCategorySuggestion?
 
   @@unique([bankAccountId, externalTransactionId])
-  @@index([userId, bookingDate])
-  @@index([bankAccountId, bookingDate])
+  @@index([userId, valueDate])
+  @@index([bankAccountId, valueDate])
   @@map("transactions")
 }
 
