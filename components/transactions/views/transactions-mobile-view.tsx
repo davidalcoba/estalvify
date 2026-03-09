@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, ChevronLeft, ChevronRight, CreditCard, Loader2, Tag, Zap } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,50 +77,18 @@ export function TransactionsMobileView({
   categories,
 }: TransactionsMobileViewProps) {
   const router = useRouter();
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
 
-  const flatTransactions = useMemo(
-    () => groupedTransactions.flatMap((g) => g.items),
-    [groupedTransactions]
-  );
-
-  const activeTx = activeIndex !== null ? (flatTransactions[activeIndex] ?? null) : null;
-
-  function openTx(tx: TransactionListItemDTO) {
-    const idx = flatTransactions.findIndex((t) => t.id === tx.id);
-    setActiveIndex(idx >= 0 ? idx : null);
-  }
-
-  function navigateTo(idx: number) {
-    setRuleOpen(false);
-    setActiveIndex(idx);
-  }
-
   async function handleRecategorize(categoryId: string) {
-    if (!categoryId || activeIndex === null || !activeTx) return;
+    if (!categoryId || !activeTx) return;
     setSaving(true);
     try {
       await categorizeTransaction(activeTx.id, categoryId);
       router.refresh();
-      if (activeIndex + 1 < flatTransactions.length) {
-        setActiveIndex(activeIndex + 1);
-      } else {
-        setActiveIndex(null);
-      }
     } finally {
       setSaving(false);
-    }
-  }
-
-  function handleRuleSuccess() {
-    setRuleOpen(false);
-    router.refresh();
-    if (activeIndex !== null && activeIndex + 1 < flatTransactions.length) {
-      setActiveIndex(activeIndex + 1);
-    } else {
-      setActiveIndex(null);
     }
   }
 
@@ -154,7 +122,7 @@ export function TransactionsMobileView({
                     tx={tx}
                     locale={userLocale}
                     dateText={formatMobileDate(tx.valueDate, userLocale, userTimezone)}
-                    onClick={() => openTx(tx)}
+                    onClick={() => setActiveTx(tx)}
                   />
                 </CardContent>
               </Card>
@@ -177,8 +145,8 @@ export function TransactionsMobileView({
         </div>
       )}
 
-      {/* Transaction detail — bottom sheet on mobile */}
-      <Sheet open={!!activeTx} onOpenChange={(open) => { if (!open) setActiveIndex(null); }}>
+      {/* Transaction detail — bottom sheet */}
+      <Sheet open={!!activeTx} onOpenChange={(open) => { if (!open) setActiveTx(null); }}>
         <SheetContent side="bottom" className="rounded-t-xl pb-4" onOpenAutoFocus={(e) => e.preventDefault()}>
           {activeTx && (
             <>
@@ -244,35 +212,14 @@ export function TransactionsMobileView({
                     )}
                   </div>
                 )}
-
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => activeIndex !== null && navigateTo(activeIndex - 1)}
-                    disabled={activeIndex === null || activeIndex === 0}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    {activeIndex !== null ? activeIndex + 1 : 0} / {flatTransactions.length}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => activeIndex !== null && navigateTo(activeIndex + 1)}
-                    disabled={activeIndex === null || activeIndex >= flatTransactions.length - 1}
-                  >
-                    Next <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
 
-      {activeTx && ruleOpen && (
+      {/* Rule dialog — opens on top of the sheet */}
+      {ruleOpen && activeTx && (
         <QuickRuleDialog
           open={ruleOpen}
           onClose={() => setRuleOpen(false)}
@@ -280,7 +227,7 @@ export function TransactionsMobileView({
           categories={categories}
           categoryId={activeTx.categoryId ?? ""}
           categoryName={activeTx.categoryName ?? ""}
-          onSuccess={handleRuleSuccess}
+          onSuccess={() => { setRuleOpen(false); router.refresh(); }}
         />
       )}
     </div>

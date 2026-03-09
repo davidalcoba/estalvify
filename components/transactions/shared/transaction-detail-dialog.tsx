@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, Calendar, ChevronLeft, ChevronRight, Loader2, Zap } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
+import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
@@ -16,50 +17,32 @@ import {
 } from "@/lib/transactions/transaction-dto";
 
 interface TransactionDetailDialogProps {
-  transactions: TransactionListItemDTO[];
-  activeIndex: number | null;
-  onNavigate: (index: number) => void;
-  onClose: () => void;
+  transaction: TransactionListItemDTO | null;
   locale: string;
   timezone: string;
   categories: Category[];
+  onClose: () => void;
 }
 
 export function TransactionDetailDialog({
-  transactions,
-  activeIndex,
-  onNavigate,
-  onClose,
+  transaction,
   locale,
   timezone,
   categories,
+  onClose,
 }: TransactionDetailDialogProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
 
-  const transaction = activeIndex !== null ? (transactions[activeIndex] ?? null) : null;
-  const isOpen = transaction !== null;
-
   async function handleRecategorize(categoryId: string) {
-    if (!categoryId || !transaction || activeIndex === null) return;
+    if (!categoryId || !transaction) return;
     setSaving(true);
     try {
       await categorizeTransaction(transaction.id, categoryId);
       router.refresh();
-      if (activeIndex + 1 < transactions.length) {
-        onNavigate(activeIndex + 1);
-      }
     } finally {
       setSaving(false);
-    }
-  }
-
-  function handleRuleSuccess() {
-    setRuleOpen(false);
-    router.refresh();
-    if (activeIndex !== null && activeIndex + 1 < transactions.length) {
-      onNavigate(activeIndex + 1);
     }
   }
 
@@ -74,10 +57,10 @@ export function TransactionDetailDialog({
           categoryId={transaction.categoryId ?? ""}
           categoryName={transaction.categoryName ?? ""}
           mode="dialog"
-          onSuccess={handleRuleSuccess}
+          onSuccess={() => { setRuleOpen(false); router.refresh(); }}
         />
       )}
-      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog open={!!transaction} onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogContent
           className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden"
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -120,8 +103,8 @@ export function TransactionDetailDialog({
                 </div>
 
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t min-w-0">
-                  <span className="flex items-center gap-1 min-w-0">
-                    <Calendar className="h-3 w-3" />
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <Calendar className="h-3 w-3 shrink-0" />
                     <span className="truncate">
                       {new Date(transaction.valueDate).toLocaleDateString(locale, {
                         timeZone: timezone,
@@ -132,6 +115,19 @@ export function TransactionDetailDialog({
                       })}
                     </span>
                   </span>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <CreditCard className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{transaction.bankAccount.name}</span>
+                  </span>
+                  {transaction.categoryName && (
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <Tag className="h-3 w-3 shrink-0" />
+                      <CategoryChip
+                        name={transaction.categoryName}
+                        color={transaction.categoryColor}
+                      />
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -164,28 +160,6 @@ export function TransactionDetailDialog({
                   )}
                 </div>
               )}
-
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => activeIndex !== null && onNavigate(activeIndex - 1)}
-                  disabled={activeIndex === null || activeIndex === 0}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {activeIndex !== null ? activeIndex + 1 : 0} / {transactions.length}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => activeIndex !== null && onNavigate(activeIndex + 1)}
-                  disabled={activeIndex === null || activeIndex >= transactions.length - 1}
-                >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
             </div>
           )}
         </DialogContent>
