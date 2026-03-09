@@ -23,6 +23,12 @@ interface QuickRuleDialogProps {
   onSuccess?: () => void;
 }
 
+const QUICK_RULE_FIELDS: ["description", "remittanceInfo"] = ["description", "remittanceInfo"];
+
+function getValueForField(tx: TransactionListItemDTO, field: "description" | "remittanceInfo"): string {
+  return field === "description" ? (tx.description ?? "") : (tx.remittanceInfo ?? "");
+}
+
 function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
   return { field: "description", operator: getDefaultOperator("description"), value: tx.description ?? "" };
 }
@@ -44,7 +50,11 @@ export function QuickRuleDialog({
   const [isPending, startTransition] = useTransition();
 
   function handleConditionChange(_index: number, updated: RuleCondition) {
-    setCondition(updated);
+    if (updated.field !== condition.field && (updated.field === "description" || updated.field === "remittanceInfo")) {
+      setCondition({ ...updated, value: getValueForField(transaction, updated.field) });
+    } else {
+      setCondition(updated);
+    }
     setResult(null);
   }
 
@@ -109,6 +119,7 @@ export function QuickRuleDialog({
                 onChange={handleConditionChange}
                 onRemove={() => {}}
                 canRemove={false}
+                allowedFields={QUICK_RULE_FIELDS}
               />
             </div>
 
