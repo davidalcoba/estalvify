@@ -12,12 +12,7 @@ import {
   getDefaultOperator,
 } from "@/lib/rules/rule-dto";
 
-const ALL_FIELDS: RuleConditionField[] = [
-  "description",
-  "remittanceInfo",
-  "amount",
-  "direction",
-];
+const ALL_FIELDS: RuleConditionField[] = ["description", "remittanceInfo"];
 
 interface RuleConditionRowProps {
   condition: RuleCondition;
@@ -25,7 +20,6 @@ interface RuleConditionRowProps {
   onChange: (index: number, condition: RuleCondition) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
-  allowedFields?: RuleConditionField[];
 }
 
 export function RuleConditionRow({
@@ -34,7 +28,6 @@ export function RuleConditionRow({
   onChange,
   onRemove,
   canRemove,
-  allowedFields,
 }: RuleConditionRowProps) {
   function handleFieldChange(field: RuleConditionField) {
     onChange(index, { field, operator: getDefaultOperator(field), value: condition.value });
@@ -48,7 +41,6 @@ export function RuleConditionRow({
     onChange(index, { ...condition, value });
   }
 
-  const fields = allowedFields ?? ALL_FIELDS;
   const operators = getOperatorsForField(condition.field);
 
   const selectCls = "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
@@ -63,7 +55,7 @@ export function RuleConditionRow({
         onChange={(e) => handleFieldChange(e.target.value as RuleConditionField)}
         className={`${selectCls} col-span-1`}
       >
-        {fields.map((f) => (
+        {ALL_FIELDS.map((f) => (
           <option key={f} value={f}>
             {FIELD_LABELS[f]}
           </option>

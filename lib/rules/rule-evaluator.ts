@@ -1,7 +1,7 @@
 // Builds Prisma where clauses from rule conditions for transaction matching
 
 import type { Prisma } from "@/app/generated/prisma";
-import type { RuleCondition, RuleConditionField, RuleConditionOperator } from "./rule-dto";
+import type { RuleCondition, RuleConditionOperator } from "./rule-dto";
 
 // ─────────────────────────────────────────────
 // Single condition → Prisma filter
@@ -26,56 +26,12 @@ function buildTextCondition(
   }
 }
 
-function buildAmountCondition(
-  operator: RuleConditionOperator,
-  value: string
-): Record<string, unknown> {
-  const num = parseFloat(value);
-  if (isNaN(num)) return {};
-  switch (operator) {
-    case "equals":
-      return { amount: num };
-    case "greaterThan":
-      return { amount: { gt: num } };
-    case "lessThan":
-      return { amount: { lt: num } };
-    default:
-      return { amount: num };
-  }
-}
-
-function buildDirectionCondition(value: string): Record<string, unknown> {
-  const normalized = value.toUpperCase();
-  if (normalized === "DEBIT" || normalized === "CREDIT") {
-    return { direction: normalized };
-  }
-  return {};
-}
-
 function conditionToWhereClause(
   condition: RuleCondition
 ): Record<string, unknown> {
   const { field, operator, value } = condition;
   if (!value.trim()) return {};
-
-  const textFields: RuleConditionField[] = [
-    "description",
-    "remittanceInfo",
-  ];
-
-  if (textFields.includes(field)) {
-    return buildTextCondition(field, operator, value.trim());
-  }
-
-  if (field === "amount") {
-    return buildAmountCondition(operator, value.trim());
-  }
-
-  if (field === "direction") {
-    return buildDirectionCondition(value.trim());
-  }
-
-  return {};
+  return buildTextCondition(field, operator, value.trim());
 }
 
 // ─────────────────────────────────────────────
