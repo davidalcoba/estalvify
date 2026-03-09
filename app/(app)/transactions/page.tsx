@@ -128,7 +128,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
     }),
     getUserPrefs(userId),
     prisma.category.findMany({
-      where: { userId, isActive: true },
+      where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
   ]);

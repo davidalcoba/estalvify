@@ -109,7 +109,7 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
       take: pageSize,
     }),
     prisma.category.findMany({
-      where: { userId, isActive: true },
+      where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     getUserPrefs(userId),
