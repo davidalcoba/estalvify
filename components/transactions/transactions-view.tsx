@@ -21,34 +21,32 @@ interface TransactionsViewProps {
 }
 
 export function TransactionsView(props: TransactionsViewProps) {
-  const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
-  const transactionsById = useMemo(() => {
-    const map = new Map<string, TransactionListItemDTO>();
-    for (const group of props.groupedTransactions) {
-      for (const item of group.items) {
-        map.set(item.id, item);
-      }
-    }
-    return map;
-  }, [props.groupedTransactions]);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  const activeTransaction = activeTransactionId ? transactionsById.get(activeTransactionId) ?? null : null;
+  const flatTransactions = useMemo(
+    () => props.groupedTransactions.flatMap((g) => g.items),
+    [props.groupedTransactions]
+  );
 
   return (
     <>
       <TransactionDetailDialog
-        key={activeTransactionId ?? "none"}
-        transaction={activeTransaction}
+        transactions={flatTransactions}
+        activeIndex={activeIndex}
+        onNavigate={setActiveIndex}
+        onClose={() => setActiveIndex(null)}
         locale={props.userLocale}
         timezone={props.userTimezone}
         categories={props.categories}
-        onClose={() => setActiveTransactionId(null)}
       />
 
       <div className="hidden md:block">
         <TransactionsDesktopView
           {...props}
-          onOpenDetail={(transaction) => setActiveTransactionId(transaction.id)}
+          onOpenDetail={(tx) => {
+            const idx = flatTransactions.findIndex((t) => t.id === tx.id);
+            setActiveIndex(idx >= 0 ? idx : null);
+          }}
         />
       </div>
       <div className="md:hidden">
