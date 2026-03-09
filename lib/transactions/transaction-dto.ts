@@ -74,8 +74,22 @@ export function transactionOperationType(tx: TransactionListItemDTO): string {
   return tx.direction === "CREDIT" ? "INCOME" : "EXPENSE";
 }
 
+const BBVA_DESCRIPTION_PREFIXES = [
+  "PAGO DE ADEUDO DIRECTO SEPA ",
+  "PAGO DE ADEUDO SEPA ",
+  "ADEUDO DIRECTO SEPA ",
+  "PAGO CON TARJETA ",
+  "PAGO CON VISA ",
+];
+
 export function transactionMerchant(tx: TransactionListItemDTO): string {
-  return tx.description ?? tx.remittanceInfo ?? "Unknown";
+  const raw = tx.description ?? tx.remittanceInfo ?? "Unknown";
+  for (const prefix of BBVA_DESCRIPTION_PREFIXES) {
+    if (raw.toUpperCase().startsWith(prefix)) {
+      return raw.slice(prefix.length).trim() || raw;
+    }
+  }
+  return raw;
 }
 
 export function groupTransactionsByDate(transactions: TransactionListItemDTO[]): Array<{ dateKey: string; items: TransactionListItemDTO[] }> {

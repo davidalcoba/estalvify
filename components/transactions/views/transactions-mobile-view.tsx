@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -15,6 +16,7 @@ import { TransactionPagination } from "@/components/transactions/shared/transact
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
   transactionMerchant,
@@ -77,6 +79,7 @@ export function TransactionsMobileView({
   const router = useRouter();
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
+  const [ruleOpen, setRuleOpen] = useState(false);
 
   async function handleRecategorize(categoryId: string) {
     if (!categoryId || !activeTx) return;
@@ -203,11 +206,33 @@ export function TransactionsMobileView({
                     </div>
                   </div>
                 )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                  onClick={() => setRuleOpen(true)}
+                >
+                  <Zap className="h-4 w-4" />
+                  Create rule
+                </Button>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      {activeTx && ruleOpen && (
+        <QuickRuleDialog
+          open={ruleOpen}
+          onClose={() => setRuleOpen(false)}
+          transaction={activeTx}
+          categories={categories}
+          categoryId={activeTx.categoryId ?? ""}
+          categoryName={activeTx.categoryName ?? ""}
+          onSuccess={() => { setRuleOpen(false); router.refresh(); }}
+        />
+      )}
     </div>
   );
 }

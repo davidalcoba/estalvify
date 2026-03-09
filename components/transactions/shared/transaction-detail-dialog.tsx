@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
   transactionMerchant,
@@ -31,6 +33,7 @@ export function TransactionDetailDialog({
 }: TransactionDetailDialogProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [ruleOpen, setRuleOpen] = useState(false);
 
   if (!transaction) return null;
 
@@ -46,6 +49,18 @@ export function TransactionDetailDialog({
   }
 
   return (
+    <>
+    {ruleOpen && (
+      <QuickRuleDialog
+        open={ruleOpen}
+        onClose={() => setRuleOpen(false)}
+        transaction={transaction}
+        categories={categories}
+        categoryId={transaction.categoryId ?? ""}
+        categoryName={transaction.categoryName ?? ""}
+        onSuccess={() => { setRuleOpen(false); router.refresh(); }}
+      />
+    )}
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className="w-[min(96vw,680px)] max-h-[85vh] overflow-hidden p-0 gap-0"
@@ -114,8 +129,19 @@ export function TransactionDetailDialog({
               </div>
             </div>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+            onClick={() => setRuleOpen(true)}
+          >
+            <Zap className="h-4 w-4" />
+            Create rule
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
