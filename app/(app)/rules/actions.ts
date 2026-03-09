@@ -231,6 +231,40 @@ export async function addConditionToRule(input: {
 }
 
 // ─────────────────────────────────────────────
+// Update a rule (name, conditions, target category)
+// ─────────────────────────────────────────────
+
+export async function updateRule(input: {
+  ruleId: string;
+  name: string;
+  conditions: RuleCondition[];
+  categoryId: string;
+}): Promise<void> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const rule = await prisma.categoryRule.findUnique({
+    where: { id: input.ruleId },
+    select: { userId: true },
+  });
+  if (!rule || rule.userId !== userId) throw new Error("Rule not found");
+
+  await validateCategoryAccess(userId, input.categoryId);
+
+  await prisma.categoryRule.update({
+    where: { id: input.ruleId },
+    data: {
+      name: input.name.trim(),
+      conditions: input.conditions as unknown as Prisma.InputJsonValue,
+      categoryId: input.categoryId,
+    },
+  });
+
+  revalidatePath("/rules");
+}
+
+// ─────────────────────────────────────────────
 // Toggle rule active/inactive
 // ─────────────────────────────────────────────
 

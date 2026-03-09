@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Play, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, Play, Trash2, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,12 +15,15 @@ import {
   deleteRule,
   toggleRuleActive,
 } from "@/app/(app)/rules/actions";
+import type { Category } from "@/components/categorize/category-options";
+import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
 
 interface RulesMobileViewProps {
   rules: CategoryRuleDTO[];
+  categories: Category[];
 }
 
-export function RulesMobileView({ rules }: RulesMobileViewProps) {
+export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
@@ -34,15 +37,16 @@ export function RulesMobileView({ rules }: RulesMobileViewProps) {
   return (
     <div className="space-y-3">
       {rules.map((rule) => (
-        <RulesMobileCard key={rule.id} rule={rule} />
+        <RulesMobileCard key={rule.id} rule={rule} categories={categories} />
       ))}
     </div>
   );
 }
 
-function RulesMobileCard({ rule }: { rule: CategoryRuleDTO }) {
+function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   function handleExecute() {
     setResult(null);
@@ -69,6 +73,10 @@ function RulesMobileCard({ rule }: { rule: CategoryRuleDTO }) {
   }
 
   return (
+    <>
+    {editing && (
+      <RuleEditDialog rule={rule} categories={categories} onClose={() => setEditing(false)} />
+    )}
     <Card className={`py-0 gap-0 ${!rule.isActive ? "opacity-60" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
@@ -136,6 +144,18 @@ function RulesMobileCard({ rule }: { rule: CategoryRuleDTO }) {
               type="button"
               variant="ghost"
               size="icon"
+              onClick={() => setEditing(true)}
+              disabled={isPending}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              aria-label="Edit"
+              title="Edit rule"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={handleExecute}
               disabled={isPending || !rule.isActive}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -160,5 +180,6 @@ function RulesMobileCard({ rule }: { rule: CategoryRuleDTO }) {
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
