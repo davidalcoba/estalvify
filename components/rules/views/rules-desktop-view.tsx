@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Play, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, Play, Trash2, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,12 +14,15 @@ import {
   deleteRule,
   toggleRuleActive,
 } from "@/app/(app)/rules/actions";
+import type { Category } from "@/components/categorize/category-options";
+import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
 
 interface RulesDesktopViewProps {
   rules: CategoryRuleDTO[];
+  categories: Category[];
 }
 
-export function RulesDesktopView({ rules }: RulesDesktopViewProps) {
+export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
@@ -44,7 +47,7 @@ export function RulesDesktopView({ rules }: RulesDesktopViewProps) {
         </thead>
         <tbody className="divide-y">
           {rules.map((rule) => (
-            <RulesDesktopRow key={rule.id} rule={rule} />
+            <RulesDesktopRow key={rule.id} rule={rule} categories={categories} />
           ))}
         </tbody>
       </table>
@@ -52,9 +55,10 @@ export function RulesDesktopView({ rules }: RulesDesktopViewProps) {
   );
 }
 
-function RulesDesktopRow({ rule }: { rule: CategoryRuleDTO }) {
+function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   function handleExecute() {
     setResult(null);
@@ -81,6 +85,10 @@ function RulesDesktopRow({ rule }: { rule: CategoryRuleDTO }) {
   }
 
   return (
+    <>
+    {editing && (
+      <RuleEditDialog rule={rule} categories={categories} onClose={() => setEditing(false)} />
+    )}
     <tr className={`hover:bg-muted/20 transition-colors ${!rule.isActive ? "opacity-60" : ""}`}>
       {/* Active toggle */}
       <td className="px-4 py-3">
@@ -159,6 +167,18 @@ function RulesDesktopRow({ rule }: { rule: CategoryRuleDTO }) {
             type="button"
             variant="ghost"
             size="icon"
+            onClick={() => setEditing(true)}
+            disabled={isPending}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label="Edit rule"
+            title="Edit rule"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={handleExecute}
             disabled={isPending || !rule.isActive}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -182,5 +202,6 @@ function RulesDesktopRow({ rule }: { rule: CategoryRuleDTO }) {
         </div>
       </td>
     </tr>
+    </>
   );
 }

@@ -48,12 +48,12 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
 
         {/* Desktop table */}
         <div className="hidden md:block">
-          <RulesDesktopView rules={savedRules} />
+          <RulesDesktopView rules={savedRules} categories={categories} />
         </div>
 
         {/* Mobile cards */}
         <div className="md:hidden">
-          <RulesMobileView rules={savedRules} />
+          <RulesMobileView rules={savedRules} categories={categories} />
         </div>
       </section>
     </div>

@@ -209,7 +209,7 @@ export function QuickRuleDialog({
             <option value="">— Select rule —</option>
             {existingRules.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name} → {r.categoryName}
+                {r.name}
               </option>
             ))}
           </select>
