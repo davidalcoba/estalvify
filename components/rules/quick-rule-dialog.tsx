@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Zap, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog as Primitive } from "radix-ui";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
 import { type RuleCondition, getDefaultOperator } from "@/lib/rules/rule-dto";
-import { executeRuleOnce } from "@/app/(app)/rules/actions";
+import { executeRuleOnce, addConditionToRule, getUserRules } from "@/app/(app)/rules/actions";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
 interface QuickRuleDialogProps {
@@ -24,6 +24,8 @@ interface QuickRuleDialogProps {
   /** Called after a successful rule execution that categorized ≥1 tx. */
   onSuccess?: () => void;
 }
+
+type DialogMode = "new" | "existing";
 
 function getValueForField(tx: TransactionListItemDTO, field: "description" | "remittanceInfo"): string {
   return field === "description" ? (tx.description ?? "") : (tx.remittanceInfo ?? "");
@@ -43,12 +45,23 @@ export function QuickRuleDialog({
   mode = "sheet",
   onSuccess,
 }: QuickRuleDialogProps) {
+  const [dialogMode, setDialogMode] = useState<DialogMode>("new");
   const [condition, setCondition] = useState<RuleCondition>(() => buildInitialCondition(transaction));
   const [targetCategoryId, setTargetCategoryId] = useState(categoryId);
   const [ruleName, setRuleName] = useState("");
   const [result, setResult] = useState<{ msg: string; categorized: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const [existingRules, setExistingRules] = useState<{ id: string; name: string; categoryName: string }[]>([]);
+  const [selectedRuleId, setSelectedRuleId] = useState("");
+
+  // Load existing rules when switching to "existing" mode
+  useEffect(() => {
+    if (dialogMode === "existing" && existingRules.length === 0) {
+      getUserRules().then(setExistingRules).catch(() => {});
+    }
+  }, [dialogMode, existingRules.length]);
 
   function handleConditionChange(_index: number, updated: RuleCondition) {
     if (updated.field !== condition.field) {
@@ -60,30 +73,52 @@ export function QuickRuleDialog({
   }
 
   function handleSave() {
-    if (!condition.value.trim() || !targetCategoryId) return;
+    if (!condition.value.trim()) return;
     setError(null);
     setResult(null);
-    startTransition(async () => {
-      try {
-        const res = await executeRuleOnce({
-          conditions: [condition],
-          sourceCategoryId: null,
-          categoryId: targetCategoryId,
-          ruleName: ruleName.trim() || null,
-        });
-        const msg =
-          res.categorized > 0
-            ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized${res.savedRuleId ? " — rule saved" : ""}.`
-            : "Rule applied — no new transactions matched.";
-        setResult({ msg, categorized: res.categorized });
-        if (res.categorized > 0) onSuccess?.();
-      } catch {
-        setError("Failed to apply rule. Please try again.");
-      }
-    });
+
+    if (dialogMode === "existing") {
+      if (!selectedRuleId) return;
+      startTransition(async () => {
+        try {
+          const res = await addConditionToRule({ ruleId: selectedRuleId, condition });
+          const msg =
+            res.categorized > 0
+              ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized — condition added to rule.`
+              : "Condition added to rule — no new transactions matched.";
+          setResult({ msg, categorized: res.categorized });
+          if (res.categorized > 0) onSuccess?.();
+        } catch {
+          setError("Failed to update rule. Please try again.");
+        }
+      });
+    } else {
+      if (!targetCategoryId) return;
+      startTransition(async () => {
+        try {
+          const res = await executeRuleOnce({
+            conditions: [condition],
+            sourceCategoryId: null,
+            categoryId: targetCategoryId,
+            ruleName: ruleName.trim() || null,
+          });
+          const msg =
+            res.categorized > 0
+              ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized${res.savedRuleId ? " — rule saved" : ""}.`
+              : "Rule applied — no new transactions matched.";
+          setResult({ msg, categorized: res.categorized });
+          if (res.categorized > 0) onSuccess?.();
+        } catch {
+          setError("Failed to apply rule. Please try again.");
+        }
+      });
+    }
   }
 
-  const canSave = condition.value.trim() !== "" && !!targetCategoryId && !isPending;
+  const canSave =
+    condition.value.trim() !== "" &&
+    !isPending &&
+    (dialogMode === "new" ? !!targetCategoryId : !!selectedRuleId);
 
   const body = (
     <div className="space-y-5">
@@ -91,6 +126,34 @@ export function QuickRuleDialog({
       <div className="flex items-center gap-2">
         <Zap className="h-4 w-4 text-amber-500 shrink-0" />
         <h2 className="font-semibold text-base">Create rule</h2>
+      </div>
+
+      {/* Mode toggle */}
+      <div className="flex rounded-md border border-input overflow-hidden text-sm">
+        <button
+          type="button"
+          className={cn(
+            "flex-1 py-1.5 text-center transition-colors",
+            dialogMode === "new"
+              ? "bg-primary text-primary-foreground font-medium"
+              : "bg-background text-muted-foreground hover:bg-muted"
+          )}
+          onClick={() => { setDialogMode("new"); setResult(null); setError(null); }}
+        >
+          New rule
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "flex-1 py-1.5 text-center transition-colors",
+            dialogMode === "existing"
+              ? "bg-primary text-primary-foreground font-medium"
+              : "bg-background text-muted-foreground hover:bg-muted"
+          )}
+          onClick={() => { setDialogMode("existing"); setResult(null); setError(null); }}
+        >
+          Add to existing rule
+        </button>
       </div>
 
       {/* Condition */}
@@ -105,32 +168,56 @@ export function QuickRuleDialog({
         />
       </div>
 
-      {/* Target category */}
-      <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Categorize as</p>
-        <select
-          value={targetCategoryId}
-          onChange={(e) => setTargetCategoryId(e.target.value)}
-          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">— Select category —</option>
-          <CategoryOptions categories={categories} />
-        </select>
-      </div>
+      {dialogMode === "new" ? (
+        <>
+          {/* Target category */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Categorize as</p>
+            <select
+              value={targetCategoryId}
+              onChange={(e) => setTargetCategoryId(e.target.value)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">— Select category —</option>
+              <CategoryOptions categories={categories} />
+            </select>
+          </div>
 
-      {/* Rule name */}
-      <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Rule name <span className="normal-case font-normal">(optional — fill to save it)</span>
-        </p>
-        <input
-          type="text"
-          value={ruleName}
-          onChange={(e) => setRuleName(e.target.value)}
-          placeholder={categoryName ? `e.g. ${categoryName}` : "e.g. Netflix, Groceries…"}
-          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
+          {/* Rule name */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Rule name <span className="normal-case font-normal">(optional — fill to save it)</span>
+            </p>
+            <input
+              type="text"
+              value={ruleName}
+              onChange={(e) => setRuleName(e.target.value)}
+              placeholder={categoryName ? `e.g. ${categoryName}` : "e.g. Netflix, Groceries…"}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </>
+      ) : (
+        /* Existing rule selector */
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add to rule</p>
+          <select
+            value={selectedRuleId}
+            onChange={(e) => setSelectedRuleId(e.target.value)}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">— Select rule —</option>
+            {existingRules.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} → {r.categoryName}
+              </option>
+            ))}
+          </select>
+          {existingRules.length === 0 && (
+            <p className="text-xs text-muted-foreground">Loading rules…</p>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -155,7 +242,7 @@ export function QuickRuleDialog({
           </Button>
           <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave}>
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            Apply rule
+            {dialogMode === "existing" ? "Add condition" : "Apply rule"}
           </Button>
         </div>
       )}

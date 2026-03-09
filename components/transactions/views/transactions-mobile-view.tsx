@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,6 +80,15 @@ export function TransactionsMobileView({
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  // Prevent ghost-tap: the tap that opens the sheet can land on the select
+  // as it slides into position, opening the native picker unintentionally.
+  const [sheetJustOpened, setSheetJustOpened] = useState(false);
+  useEffect(() => {
+    if (!activeTx) return;
+    setSheetJustOpened(true);
+    const t = setTimeout(() => setSheetJustOpened(false), 400);
+    return () => clearTimeout(t);
+  }, [activeTx?.id]);
 
   async function handleRecategorize(categoryId: string) {
     if (!categoryId || !activeTx) return;
@@ -111,18 +120,18 @@ export function TransactionsMobileView({
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide px-1">
             {formatSectionDate(dateKey, userLocale, userTimezone)}
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {items.map((tx) => (
               <Card
                 key={tx.id}
                 className="py-0 gap-0 overflow-hidden cursor-pointer active:opacity-80 transition-opacity"
+                onClick={() => setActiveTx(tx)}
               >
                 <CardContent className="p-0">
                   <TransactionItem
                     tx={tx}
                     locale={userLocale}
                     dateText={formatMobileDate(tx.valueDate, userLocale, userTimezone)}
-                    onClick={() => setActiveTx(tx)}
                   />
                 </CardContent>
               </Card>
@@ -145,7 +154,7 @@ export function TransactionsMobileView({
         </div>
       )}
 
-      {/* Transaction detail — bottom sheet on mobile */}
+      {/* Transaction detail — bottom sheet */}
       <Sheet open={!!activeTx} onOpenChange={(open) => { if (!open) setActiveTx(null); }}>
         <SheetContent side="bottom" className="rounded-t-xl pb-4" onOpenAutoFocus={(e) => e.preventDefault()}>
           {activeTx && (
@@ -184,41 +193,37 @@ export function TransactionsMobileView({
                   )}
                 </div>
 
-                {categories.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <select
-                      key={activeTx.id}
-                      defaultValue={activeTx.categoryId ?? ""}
-                      onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
-                      disabled={saving}
-                      className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
-                    >
-                      <option value="" disabled>Pick a category…</option>
-                      <CategoryOptions categories={categories} />
-                    </select>
-                    {saving ? (
-                      <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
-                        onClick={() => setRuleOpen(true)}
-                        title="Create rule for this transaction"
-                      >
-                        <Zap className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <select
+                    key={activeTx.id}
+                    defaultValue={activeTx.categoryId ?? ""}
+                    onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                    disabled={saving || sheetJustOpened}
+                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
+                  >
+                    <option value="" disabled>Select a category…</option>
+                    <CategoryOptions categories={categories} />
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    onClick={() => setRuleOpen(true)}
+                    disabled={saving}
+                    title="Create rule for this transaction"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
 
-      {activeTx && ruleOpen && (
+      {/* Rule dialog — opens on top of the sheet */}
+      {ruleOpen && activeTx && (
         <QuickRuleDialog
           open={ruleOpen}
           onClose={() => setRuleOpen(false)}

@@ -22,6 +22,7 @@ interface TransactionsViewProps {
 
 export function TransactionsView(props: TransactionsViewProps) {
   const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
+
   const transactionsById = useMemo(() => {
     const map = new Map<string, TransactionListItemDTO>();
     for (const group of props.groupedTransactions) {
@@ -32,12 +33,13 @@ export function TransactionsView(props: TransactionsViewProps) {
     return map;
   }, [props.groupedTransactions]);
 
-  const activeTransaction = activeTransactionId ? transactionsById.get(activeTransactionId) ?? null : null;
+  const activeTransaction = activeTransactionId
+    ? (transactionsById.get(activeTransactionId) ?? null)
+    : null;
 
   return (
     <>
       <TransactionDetailDialog
-        key={activeTransactionId ?? "none"}
         transaction={activeTransaction}
         locale={props.userLocale}
         timezone={props.userTimezone}
@@ -48,7 +50,7 @@ export function TransactionsView(props: TransactionsViewProps) {
       <div className="hidden md:block">
         <TransactionsDesktopView
           {...props}
-          onOpenDetail={(transaction) => setActiveTransactionId(transaction.id)}
+          onOpenDetail={(tx) => setActiveTransactionId(tx.id)}
         />
       </div>
       <div className="md:hidden">
