@@ -241,7 +241,7 @@ export function CategorizeMobileView({
                   <TransactionItem
                     tx={tx}
                     locale={locale}
-                    dateText={fmtDate(tx.bookingDate, locale, timezone)}
+                    dateText={fmtDate(tx.valueDate, locale, timezone)}
                   />
                 </CardContent>
               </Card>
@@ -263,7 +263,7 @@ export function CategorizeMobileView({
                 <TransactionItem
                   tx={currentTx}
                   locale={locale}
-                  dateText={fmtDate(currentTx.bookingDate, locale, timezone)}
+                  dateText={fmtDate(currentTx.valueDate, locale, timezone)}
                 />
               </div>
 

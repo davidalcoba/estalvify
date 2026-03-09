@@ -70,7 +70,7 @@ export function TransactionDetailDialog({
           <div className="grid gap-2 text-sm">
             <p className="flex items-center gap-2 text-muted-foreground">
               <Calendar className="h-4 w-4" />
-              {new Date(transaction.bookingDate).toLocaleDateString(locale, {
+              {new Date(transaction.valueDate).toLocaleDateString(locale, {
                 timeZone: timezone,
                 weekday: "short",
                 day: "numeric",

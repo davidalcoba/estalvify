@@ -359,7 +359,7 @@ function FocusModal({
                   <span className="flex items-center gap-1 min-w-0">
                     <Calendar className="h-3 w-3" />
                     <span className="truncate">
-                      {fmtDateLong(current.bookingDate, locale, timezone)}
+                      {fmtDateLong(current.valueDate, locale, timezone)}
                     </span>
                   </span>
                 </div>

@@ -104,7 +104,7 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
     prisma.transaction.findMany({
       where,
       include: { bankAccount: { select: { id: true, name: true } } },
-      orderBy: [{ bookingDate: "desc" }, { id: "asc" }],
+      orderBy: [{ valueDate: "desc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
