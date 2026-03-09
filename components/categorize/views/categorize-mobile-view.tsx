@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Inbox, Loader2, Tag, CheckCircle, Zap } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, CreditCard, Inbox, Tag, CheckCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -10,9 +10,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import {
+  transactionMerchant,
+  transactionOperationType,
+  type TransactionListItemDTO,
+} from "@/lib/transactions/transaction-dto";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
+import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
+import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 
 interface CategorizeMobileViewProps {
@@ -38,6 +44,16 @@ function fmtDate(dateIso: string, locale: string, timezone: string) {
     timeZone: timezone,
     day: "numeric",
     month: "short",
+  });
+}
+
+function fmtDateLong(dateIso: string, locale: string, timezone: string) {
+  return new Date(dateIso).toLocaleDateString(locale, {
+    timeZone: timezone,
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
@@ -256,18 +272,36 @@ export function CategorizeMobileView({
           {currentTx && (
             <>
               <SheetHeader className="pb-1">
-                <SheetTitle className="text-base">Categorize</SheetTitle>
+                <SheetTitle className="text-base">{transactionMerchant(currentTx)}</SheetTitle>
+                <p className="text-sm text-muted-foreground">{transactionOperationType(currentTx)}</p>
               </SheetHeader>
 
-              <div className="px-4 pb-3 border-b mb-4">
-                <TransactionItem
-                  tx={currentTx}
+              <div className="px-4 space-y-4">
+                <TransactionAmount
+                  amount={currentTx.amount}
+                  currency={currentTx.currency}
+                  direction={currentTx.direction}
                   locale={locale}
-                  dateText={fmtDate(currentTx.valueDate, locale, timezone)}
+                  className="text-2xl"
                 />
-              </div>
 
-              <div className="px-4">
+                <div className="grid gap-2 text-sm">
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Calendar className="h-4 w-4 shrink-0" />
+                    {fmtDateLong(currentTx.valueDate, locale, timezone)}
+                  </p>
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <CreditCard className="h-4 w-4 shrink-0" />
+                    {currentTx.bankAccount.name}
+                  </p>
+                  {currentTx.categoryName && (
+                    <p className="flex items-center gap-2 text-muted-foreground">
+                      <Tag className="h-4 w-4 shrink-0" />
+                      <CategoryChip name={currentTx.categoryName} color={currentTx.categoryColor} />
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-2">
                   <select
                     key={currentTx.id}

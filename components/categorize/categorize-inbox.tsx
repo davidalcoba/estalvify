@@ -7,9 +7,6 @@ import {
   ArrowUpRight,
   Calendar,
   CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  X,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -135,27 +132,10 @@ function FocusModal({
       />
     )}
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] p-6 gap-0 overflow-hidden">
         <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b">
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {done ? "All done!" : `${index + 1} / ${queue.length}`}
-            {categorizedCount > 0 && !done && (
-              <span className="ml-2 text-green-600 font-medium">✓ {categorizedCount}</span>
-            )}
-            {savingCount > 0 && (
-              <span className="ml-2 text-muted-foreground">Saving {savingCount}…</span>
-            )}
-          </span>
-          <button
-            onClick={onClose}
-            className="rounded-sm opacity-70 hover:opacity-100 transition-opacity"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        <div className="px-4 py-4 space-y-4 overflow-y-auto">
+        <div className="space-y-4 overflow-y-auto pr-2">
           {done ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -238,24 +218,6 @@ function FocusModal({
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIndex((i) => i - 1)}
-                  disabled={index === 0}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIndex((i) => Math.min(i + 1, queue.length - 1))}
-                  disabled={index >= queue.length - 1}
-                >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
             </>
           ) : null}
         </div>

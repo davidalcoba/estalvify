@@ -185,37 +185,33 @@ export function TransactionsMobileView({
                 </div>
 
                 {categories.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {activeTx.categoryName ? "Change category" : "Categorize"}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <select
-                        key={activeTx.id}
-                        defaultValue={activeTx.categoryId ?? ""}
-                        onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
-                        disabled={saving}
-                        className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                  <div className="flex items-center gap-2">
+                    <select
+                      key={activeTx.id}
+                      defaultValue={activeTx.categoryId ?? ""}
+                      onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                      disabled={saving}
+                      className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                    >
+                      <option value="" disabled>Pick a category…</option>
+                      <CategoryOptions categories={categories} />
+                    </select>
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                        onClick={() => setRuleOpen(true)}
+                        title="Create rule for this transaction"
                       >
-                        <option value="" disabled>Pick a category…</option>
-                        <CategoryOptions categories={categories} />
-                      </select>
-                      {saving && (
-                        <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-                      )}
-                    </div>
+                        <Zap className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
-                  onClick={() => setRuleOpen(true)}
-                >
-                  <Zap className="h-4 w-4" />
-                  Create rule
-                </Button>
               </div>
             </>
           )}
