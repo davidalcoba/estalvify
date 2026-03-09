@@ -104,12 +104,12 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
     prisma.transaction.findMany({
       where,
       include: { bankAccount: { select: { id: true, name: true } } },
-      orderBy: [{ bookingDate: "desc" }, { id: "asc" }],
+      orderBy: [{ valueDate: "desc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
     prisma.category.findMany({
-      where: { userId, isActive: true },
+      where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     getUserPrefs(userId),

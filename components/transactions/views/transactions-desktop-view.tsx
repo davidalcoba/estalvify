@@ -4,6 +4,14 @@ import { TransactionItem } from "@/components/transactions/shared/transaction-it
 import { TransactionPagination } from "@/components/transactions/shared/transaction-pagination";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
+function fmtDate(dateIso: string, locale: string, timezone: string) {
+  return new Date(dateIso).toLocaleDateString(locale, {
+    timeZone: timezone,
+    day: "numeric",
+    month: "short",
+  });
+}
+
 interface TransactionsDesktopViewProps {
   groupedTransactions: Array<{ dateKey: string; items: TransactionListItemDTO[] }>;
   page: number;
@@ -56,6 +64,7 @@ export function TransactionsDesktopView({
                     key={tx.id}
                     tx={tx}
                     locale={userLocale}
+                    dateText={fmtDate(tx.valueDate, userLocale, userTimezone)}
                     onClick={() => onOpenDetail(tx)}
                   />
                 ))}

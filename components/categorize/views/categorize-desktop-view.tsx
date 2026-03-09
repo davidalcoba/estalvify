@@ -250,7 +250,7 @@ export function CategorizeDesktopView({
                       key={tx.id}
                       tx={tx}
                       locale={locale}
-                      dateText={fmtDate(tx.bookingDate, locale, timezone)}
+                      dateText={fmtDate(tx.valueDate, locale, timezone)}
                       onClick={() => onOpenFocus(index)}
                       className={`${
                         checked ? "bg-indigo-50 hover:bg-indigo-100" : "hover:bg-muted/30"

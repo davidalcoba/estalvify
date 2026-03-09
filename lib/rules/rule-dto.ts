@@ -1,18 +1,12 @@
 // Types and DTOs for transaction categorization rules
 
-export type RuleConditionField =
-  | "description"
-  | "remittanceInfo"
-  | "amount"
-  | "direction";
+export type RuleConditionField = "description" | "remittanceInfo";
 
 export type RuleConditionOperator =
   | "contains"
   | "equals"
   | "startsWith"
-  | "endsWith"
-  | "greaterThan"
-  | "lessThan";
+  | "endsWith";
 
 export interface RuleCondition {
   field: RuleConditionField;
@@ -40,8 +34,6 @@ export interface CategoryRuleDTO {
 export const FIELD_LABELS: Record<RuleConditionField, string> = {
   description: "Description",
   remittanceInfo: "Reference",
-  amount: "Amount",
-  direction: "Direction",
 };
 
 export const OPERATOR_LABELS: Record<RuleConditionOperator, string> = {
@@ -49,18 +41,7 @@ export const OPERATOR_LABELS: Record<RuleConditionOperator, string> = {
   equals: "equals",
   startsWith: "starts with",
   endsWith: "ends with",
-  greaterThan: "greater than",
-  lessThan: "less than",
 };
-
-// Which operators are valid for each field type
-export const TEXT_FIELDS: RuleConditionField[] = [
-  "description",
-  "remittanceInfo",
-];
-
-export const NUMERIC_FIELDS: RuleConditionField[] = ["amount"];
-export const ENUM_FIELDS: RuleConditionField[] = ["direction"];
 
 export const TEXT_OPERATORS: RuleConditionOperator[] = [
   "contains",
@@ -69,25 +50,12 @@ export const TEXT_OPERATORS: RuleConditionOperator[] = [
   "endsWith",
 ];
 
-export const NUMERIC_OPERATORS: RuleConditionOperator[] = [
-  "equals",
-  "greaterThan",
-  "lessThan",
-];
-
-export const DIRECTION_OPERATORS: RuleConditionOperator[] = ["equals"];
-
-export function getOperatorsForField(
-  field: RuleConditionField
-): RuleConditionOperator[] {
-  if (NUMERIC_FIELDS.includes(field)) return NUMERIC_OPERATORS;
-  if (ENUM_FIELDS.includes(field)) return DIRECTION_OPERATORS;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getOperatorsForField(_field: RuleConditionField): RuleConditionOperator[] {
   return TEXT_OPERATORS;
 }
 
-export function getDefaultOperator(field: RuleConditionField): RuleConditionOperator {
-  if (NUMERIC_FIELDS.includes(field)) return "equals";
-  if (ENUM_FIELDS.includes(field)) return "equals";
+export function getDefaultOperator(_field: RuleConditionField): RuleConditionOperator {
   return "contains";
 }
 

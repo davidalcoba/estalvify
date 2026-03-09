@@ -38,8 +38,38 @@ function buildExternalId(tx: EnableBankingTransaction): string | null {
 }
 
 /**
- * Sync balances and transactions for a single bank account.
+ * Parse bank remittance_information array into two clean display fields.
  *
+ * Banks encode remittance data in two common formats:
+ *   a) A single string with "//" separators: "ADEUDO A SU CARGO//N 2026065 GC RE OCTOPUS"
+ *   b) An array of separate strings: ["ADEUDO A SU CARGO", "N 2026065 GC RE OCTOPUS"]
+ *
+ * In both cases the convention (used by Spanish SEPA banks) is:
+ *   chunks[0] = operation type / concept  → stored as remittanceInfo (subtitle)
+ *   chunks[1+] = merchant / reference     → stored as description (title)
+ */
+function parseRemittanceFields(
+  info: string[]
+): { description: string | null; remittanceInfo: string | null } {
+  if (!info.length) return { description: null, remittanceInfo: null };
+
+  // Normalize: join elements with "//" so both formats are handled uniformly
+  const chunks = info
+    .join("//")
+    .split("//")
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (chunks.length === 0) return { description: null, remittanceInfo: null };
+  if (chunks.length === 1) return { description: chunks[0], remittanceInfo: null };
+
+  return {
+    description: chunks.slice(1).join(" ").trim() || null, // title (merchant/reference)
+    remittanceInfo: chunks[0],                             // subtitle (operation type)
+  };
+}
+
+/**
  * `dateFrom` / `dateTo` are YYYY-MM-DD strings. Callers are responsible for
  * computing the right range (e.g. from lastSyncAt for incremental syncs, or
  * 90 days back for the initial sync).
@@ -156,25 +186,23 @@ export async function syncAccount(
 
         if (validTxs.length > 0) {
           const { count } = await prisma.transaction.createMany({
-            data: validTxs.map(({ externalId, tx }) => ({
+            data: validTxs.map(({ externalId, tx }) => {
+              const parsed = parseRemittanceFields(tx.remittance_information ?? []);
+              return {
               userId,
               bankAccountId: account.id,
               externalTransactionId: externalId,
               amount: tx.transaction_amount.amount,
               currency: tx.transaction_amount.currency,
               direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
-              bookingDate: tx.booking_date ? new Date(tx.booking_date) : today,
-              valueDate: tx.value_date ? new Date(tx.value_date) : null,
-              description:
-                tx.remittance_information?.join(" | ") ??
-                tx.note ??
-                null,
+              valueDate: tx.value_date ? new Date(tx.value_date) : (tx.booking_date ? new Date(tx.booking_date) : today),
+              description: parsed.description ?? tx.note ?? null,
               // Store only the last 4 digits — full IBANs are personal data
               creditorIban: tx.creditor_account?.iban?.slice(-4) ?? null,
               debtorIban: tx.debtor_account?.iban?.slice(-4) ?? null,
-              remittanceInfo: tx.remittance_information?.join(" | ") ?? null,
+              remittanceInfo: parsed.remittanceInfo,
               merchantCategoryCode: tx.merchant_category_code ?? null,
-            })),
+            };}),
             skipDuplicates: true,
           });
           transactionsFetched += count;

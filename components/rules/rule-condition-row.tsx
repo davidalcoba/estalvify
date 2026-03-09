@@ -12,12 +12,7 @@ import {
   getDefaultOperator,
 } from "@/lib/rules/rule-dto";
 
-const ALL_FIELDS: RuleConditionField[] = [
-  "description",
-  "remittanceInfo",
-  "amount",
-  "direction",
-];
+const ALL_FIELDS: RuleConditionField[] = ["description", "remittanceInfo"];
 
 interface RuleConditionRowProps {
   condition: RuleCondition;

@@ -40,7 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/app/generated/prisma
+# prisma generated client (configured at prisma/schema.prisma -> generator output)
+/app/generated/
 
 # Certificates & private keys
 certificates/

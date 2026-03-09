@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -15,6 +16,7 @@ import { TransactionPagination } from "@/components/transactions/shared/transact
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
   transactionMerchant,
@@ -77,6 +79,7 @@ export function TransactionsMobileView({
   const router = useRouter();
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
+  const [ruleOpen, setRuleOpen] = useState(false);
 
   async function handleRecategorize(categoryId: string) {
     if (!categoryId || !activeTx) return;
@@ -118,7 +121,7 @@ export function TransactionsMobileView({
                   <TransactionItem
                     tx={tx}
                     locale={userLocale}
-                    dateText={formatMobileDate(tx.bookingDate, userLocale, userTimezone)}
+                    dateText={formatMobileDate(tx.valueDate, userLocale, userTimezone)}
                     onClick={() => setActiveTx(tx)}
                   />
                 </CardContent>
@@ -164,7 +167,7 @@ export function TransactionsMobileView({
                 <div className="grid gap-2 text-sm">
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-4 w-4 shrink-0" />
-                    {formatLongDate(activeTx.bookingDate, userLocale, userTimezone)}
+                    {formatLongDate(activeTx.valueDate, userLocale, userTimezone)}
                   </p>
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <CreditCard className="h-4 w-4 shrink-0" />
@@ -182,25 +185,31 @@ export function TransactionsMobileView({
                 </div>
 
                 {categories.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {activeTx.categoryName ? "Change category" : "Categorize"}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <select
-                        key={activeTx.id}
-                        defaultValue={activeTx.categoryId ?? ""}
-                        onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
-                        disabled={saving}
-                        className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                  <div className="flex items-center gap-2">
+                    <select
+                      key={activeTx.id}
+                      defaultValue={activeTx.categoryId ?? ""}
+                      onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                      disabled={saving}
+                      className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
+                    >
+                      <option value="" disabled>Pick a category…</option>
+                      <CategoryOptions categories={categories} />
+                    </select>
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                        onClick={() => setRuleOpen(true)}
+                        title="Create rule for this transaction"
                       >
-                        <option value="" disabled>Pick a category…</option>
-                        <CategoryOptions categories={categories} />
-                      </select>
-                      {saving && (
-                        <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-                      )}
-                    </div>
+                        <Zap className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -208,6 +217,18 @@ export function TransactionsMobileView({
           )}
         </SheetContent>
       </Sheet>
+
+      {activeTx && ruleOpen && (
+        <QuickRuleDialog
+          open={ruleOpen}
+          onClose={() => setRuleOpen(false)}
+          transaction={activeTx}
+          categories={categories}
+          categoryId={activeTx.categoryId ?? ""}
+          categoryName={activeTx.categoryName ?? ""}
+          onSuccess={() => { setRuleOpen(false); router.refresh(); }}
+        />
+      )}
     </div>
   );
 }

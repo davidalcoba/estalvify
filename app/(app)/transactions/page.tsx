@@ -98,7 +98,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
   const where = {
     userId,
     ...(fromDate || toDate
-      ? { bookingDate: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } }
+      ? { valueDate: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } }
       : {}),
     ...(accountId ? { bankAccountId: accountId } : {}),
     ...(query
@@ -122,13 +122,13 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
         bankAccount: { select: { id: true, name: true } },
         categorization: { include: { category: { select: { name: true, color: true } } } },
       },
-      orderBy: { bookingDate: "desc" },
+      orderBy: { valueDate: "desc" },
       skip: (effectivePage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
     getUserPrefs(userId),
     prisma.category.findMany({
-      where: { userId, isActive: true },
+      where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
   ]);

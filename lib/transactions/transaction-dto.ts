@@ -5,7 +5,7 @@ export interface TransactionListItemDTO {
   amount: number;
   currency: string;
   direction: TransactionDirection;
-  bookingDate: string;
+  valueDate: string;
   description: string | null;
   remittanceInfo: string | null;
   categoryId: string | null;
@@ -26,7 +26,7 @@ interface TransactionRecordLike {
   amount: TxAmountLike;
   currency: string;
   direction: TransactionDirection;
-  bookingDate: Date;
+  valueDate: Date;
   description: string | null;
   remittanceInfo?: string | null;
   categorization?: {
@@ -48,7 +48,7 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
     amount: Number(tx.amount.toString()),
     currency: tx.currency,
     direction: tx.direction,
-    bookingDate: tx.bookingDate.toISOString(),
+    valueDate: tx.valueDate.toISOString(),
     description: tx.description,
     remittanceInfo: tx.remittanceInfo ?? null,
     categoryId: tx.categorization?.categoryId ?? null,
@@ -69,38 +69,34 @@ export function transactionCounterparty(_tx: TransactionListItemDTO): string | n
   return null;
 }
 
-function normalizeChunk(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-export function splitDescriptionChunks(description: string | null): string[] {
-  if (!description) return [];
-  return description
-    .split("//")
-    .map(normalizeChunk)
-    .filter(Boolean);
-}
-
 export function transactionOperationType(tx: TransactionListItemDTO): string {
-  const chunks = splitDescriptionChunks(tx.description);
-  if (chunks[0]) return chunks[0];
+  if (tx.remittanceInfo) return tx.remittanceInfo;
   return tx.direction === "CREDIT" ? "INCOME" : "EXPENSE";
 }
 
-export function transactionMerchant(tx: TransactionListItemDTO): string {
-  const chunks = splitDescriptionChunks(tx.description);
-  if (chunks[2]) return chunks[2];
-  if (chunks[1]) return chunks[1];
-  if (chunks[0]) return chunks[0];
+const BBVA_DESCRIPTION_PREFIXES = [
+  "PAGO DE ADEUDO DIRECTO SEPA ",
+  "PAGO DE ADEUDO SEPA ",
+  "ADEUDO DIRECTO SEPA ",
+  "PAGO CON TARJETA ",
+  "PAGO CON VISA ",
+];
 
-  return "Unknown merchant";
+export function transactionMerchant(tx: TransactionListItemDTO): string {
+  const raw = tx.description ?? tx.remittanceInfo ?? "Unknown";
+  for (const prefix of BBVA_DESCRIPTION_PREFIXES) {
+    if (raw.toUpperCase().startsWith(prefix)) {
+      return raw.slice(prefix.length).trim() || raw;
+    }
+  }
+  return raw;
 }
 
 export function groupTransactionsByDate(transactions: TransactionListItemDTO[]): Array<{ dateKey: string; items: TransactionListItemDTO[] }> {
   const grouped = new Map<string, TransactionListItemDTO[]>();
 
   for (const tx of transactions) {
-    const dateKey = tx.bookingDate.split("T")[0];
+    const dateKey = tx.valueDate.split("T")[0];
     const bucket = grouped.get(dateKey);
     if (bucket) {
       bucket.push(tx);
