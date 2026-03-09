@@ -69,8 +69,7 @@ function parseRemittanceFields(
   };
 }
 
-
- *
+/**
  * `dateFrom` / `dateTo` are YYYY-MM-DD strings. Callers are responsible for
  * computing the right range (e.g. from lastSyncAt for incremental syncs, or
  * 90 days back for the initial sync).
