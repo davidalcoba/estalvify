@@ -162,6 +162,109 @@ export async function executeRuleOnce(input: {
 }
 
 // ─────────────────────────────────────────────
+// Get user rules (for rule selector)
+// ─────────────────────────────────────────────
+
+export async function getUserRules(): Promise<
+  { id: string; name: string; categoryId: string; categoryName: string }[]
+> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const rules = await prisma.categoryRule.findMany({
+    where: { userId, isActive: true },
+    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      name: true,
+      categoryId: true,
+      category: { select: { name: true } },
+    },
+  });
+
+  return rules.map((r) => ({
+    id: r.id,
+    name: r.name,
+    categoryId: r.categoryId,
+    categoryName: r.category.name,
+  }));
+}
+
+// ─────────────────────────────────────────────
+// Add a condition to an existing rule
+// ─────────────────────────────────────────────
+
+export async function addConditionToRule(input: {
+  ruleId: string;
+  condition: RuleCondition;
+}): Promise<{ categorized: number }> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const rule = await prisma.categoryRule.findUnique({
+    where: { id: input.ruleId },
+    select: { userId: true, conditions: true, categoryId: true, sourceCategoryId: true },
+  });
+  if (!rule || rule.userId !== userId) throw new Error("Rule not found");
+
+  const updatedConditions = [
+    ...(rule.conditions as unknown as RuleCondition[]),
+    input.condition,
+  ];
+
+  await prisma.categoryRule.update({
+    where: { id: input.ruleId },
+    data: { conditions: updatedConditions as unknown as Prisma.InputJsonValue },
+  });
+
+  revalidatePath("/rules");
+
+  return applyRuleConditions(
+    userId,
+    input.ruleId,
+    updatedConditions,
+    rule.sourceCategoryId,
+    rule.categoryId
+  );
+}
+
+// ─────────────────────────────────────────────
+// Update a rule (name, conditions, target category)
+// ─────────────────────────────────────────────
+
+export async function updateRule(input: {
+  ruleId: string;
+  name: string;
+  conditions: RuleCondition[];
+  categoryId: string;
+}): Promise<void> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const rule = await prisma.categoryRule.findUnique({
+    where: { id: input.ruleId },
+    select: { userId: true },
+  });
+  if (!rule || rule.userId !== userId) throw new Error("Rule not found");
+
+  await validateCategoryAccess(userId, input.categoryId);
+
+  await prisma.categoryRule.update({
+    where: { id: input.ruleId },
+    data: {
+      name: input.name.trim(),
+      conditions: input.conditions as unknown as Prisma.InputJsonValue,
+      categoryId: input.categoryId,
+    },
+  });
+
+  revalidatePath("/rules");
+}
+
+// ─────────────────────────────────────────────
 // Toggle rule active/inactive
 // ─────────────────────────────────────────────
 
