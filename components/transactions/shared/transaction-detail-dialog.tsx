@@ -58,6 +58,7 @@ export function TransactionDetailDialog({
         categories={categories}
         categoryId={transaction.categoryId ?? ""}
         categoryName={transaction.categoryName ?? ""}
+        mode="dialog"
         onSuccess={() => { setRuleOpen(false); router.refresh(); }}
       />
     )}
