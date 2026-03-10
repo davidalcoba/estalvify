@@ -29,6 +29,12 @@ model User {
   currency      String    @default("EUR")
   locale        String    @default("es-ES")
 
+  // Set to the first day of the month when the user makes their first budget
+  // assignment. All budget calculations (available, activity, RTA) are scoped
+  // to transactions on or after this date so that historical spending before
+  // the user started budgeting does not create false negative balances.
+  budgetStartedAt DateTime?
+
   accounts             Account[]
   sessions             Session[]
   bankConnections      BankConnection[]

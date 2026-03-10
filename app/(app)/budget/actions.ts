@@ -34,6 +34,20 @@ export async function assignToCategory(
     throw new Error("Category cannot be budgeted");
   }
 
+  // If this is the user's first budget assignment, record budget_started_at
+  // as the first day of the target month. All budget calculations are scoped
+  // to transactions on or after this date.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { budgetStartedAt: true },
+  });
+  if (!user?.budgetStartedAt) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { budgetStartedAt: new Date(year, month - 1, 1) },
+    });
+  }
+
   // Upsert the Budget record for this month
   const budget = await prisma.budget.upsert({
     where: { userId_year_month: { userId, year, month } },

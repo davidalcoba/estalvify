@@ -13,14 +13,26 @@ import type {
 // ─────────────────────────────────────────────
 
 /**
- * Returns the first day of the user's earliest budget month, or null if the
- * user has never created a budget.
+ * Returns the budget start date for a user.
  *
- * All transaction-based calculations (available, activity, RTA) are scoped to
- * this date. This prevents historical spending — before the user started
- * budgeting — from making all categories show huge negative balances.
+ * The spec stores this as `budgetStartedAt` directly on the User model,
+ * set to the first day of the month when the user makes their first budget
+ * assignment. For users who assigned money before this field was introduced,
+ * we fall back to deriving it from their earliest Budget record so they
+ * don't lose their history.
+ *
+ * Returns null when the user has never started budgeting — all categories
+ * show 0 and RTA is 0 until the first assignment is made.
  */
 async function getBudgetStartDate(userId: string): Promise<Date | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { budgetStartedAt: true },
+  });
+
+  if (user?.budgetStartedAt) return user.budgetStartedAt;
+
+  // Backward-compat fallback: derive from earliest Budget record
   const earliest = await prisma.budget.findFirst({
     where: { userId },
     orderBy: [{ year: "asc" }, { month: "asc" }],
@@ -35,22 +47,28 @@ async function getBudgetStartDate(userId: string): Promise<Date | null> {
 // ─────────────────────────────────────────────
 
 /**
- * Ready to Assign = inflows since budget start − total assigned.
+ * Ready to Assign = inflows since budget_started_at − total assigned across
+ * all budget months.
  *
  * Inflows = CREDIT transactions that are NOT approved non-computable transfers
- * (i.e., not inter-account movements). Scoped to budget start date so that
- * income earned before the user started budgeting is not included.
+ * (i.e., not inter-account movements). Un-categorized CREDITs are included
+ * because the money exists in the user's accounts and should be assigned.
+ *
+ * Scoped to budget_started_at so income before the user started budgeting
+ * does not inflate RTA.
  */
 async function computeReadyToAssign(
   userId: string,
   budgetStart: Date | null
 ): Promise<number> {
+  if (!budgetStart) return 0;
+
   const [inflowResult, assignedResult] = await Promise.all([
     prisma.transaction.aggregate({
       where: {
         userId,
         direction: "CREDIT",
-        ...(budgetStart ? { valueDate: { gte: budgetStart } } : {}),
+        valueDate: { gte: budgetStart },
         NOT: {
           categorization: {
             status: "APPROVED",
@@ -78,9 +96,10 @@ async function computeReadyToAssign(
 /**
  * Returns a map of categoryId → net activity for the given year/month.
  * Activity = sum(DEBIT amounts) − sum(CREDIT amounts) for approved transactions.
- * Positive value = net spending; negative = net income/refund to category.
+ * Positive = net spending; negative = net refund/income to category.
  *
- * Only counts transactions from budgetStart onward.
+ * Scoped to budget_started_at: if the budget hasn't started yet for this
+ * month, returns an empty map.
  */
 async function fetchMonthlyActivity(
   userId: string,
@@ -88,13 +107,12 @@ async function fetchMonthlyActivity(
   month: number,
   budgetStart: Date | null
 ): Promise<Map<string, number>> {
+  if (!budgetStart) return new Map();
+
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  // If budgetStart is after this month, there's no activity to show
-  if (budgetStart && budgetStart >= monthEnd) {
-    return new Map();
-  }
+  if (budgetStart >= monthEnd) return new Map();
 
   const rows = await prisma.transactionCategorization.findMany({
     where: {
@@ -102,7 +120,7 @@ async function fetchMonthlyActivity(
       transaction: {
         userId,
         valueDate: {
-          gte: budgetStart && budgetStart > monthStart ? budgetStart : monthStart,
+          gte: budgetStart > monthStart ? budgetStart : monthStart,
           lt: monthEnd,
         },
       },
@@ -117,9 +135,10 @@ async function fetchMonthlyActivity(
   for (const row of rows) {
     const prev = activityMap.get(row.categoryId) ?? 0;
     const amount = Number(row.transaction.amount);
-    // DEBIT = spending (+), CREDIT = refund/income (−)
-    const delta = row.transaction.direction === "DEBIT" ? amount : -amount;
-    activityMap.set(row.categoryId, prev + delta);
+    activityMap.set(
+      row.categoryId,
+      prev + (row.transaction.direction === "DEBIT" ? amount : -amount)
+    );
   }
   return activityMap;
 }
@@ -129,10 +148,22 @@ async function fetchMonthlyActivity(
 // ─────────────────────────────────────────────
 
 /**
- * Available for a category = cumulative assigned − cumulative activity,
- * both scoped from budgetStart up to the end of the viewed month.
+ * Computes the Available balance for each category as of the end of the
+ * viewed month.
  *
- * Returns a map of categoryId → available amount.
+ * The spec defines the rolling formula:
+ *   Available_M = Available_{M-1} + Assigned_M − Activity_M
+ *
+ * This is mathematically identical to the cumulative form used here:
+ *   Available = Σ(assigned, from budget_start to month_end)
+ *             − Σ(activity, from budget_start to month_end)
+ *
+ * Both yield the same value for every month. The cumulative form maps
+ * directly to database aggregations and avoids iterating over every
+ * prior month individually.
+ *
+ * All queries are scoped to budget_started_at so historical spending
+ * before the user started budgeting never creates false negative balances.
  */
 async function fetchCumulativeAvailable(
   userId: string,
@@ -142,10 +173,9 @@ async function fetchCumulativeAvailable(
 ): Promise<Map<string, number>> {
   if (!budgetStart) return new Map();
 
-  const cutoff = new Date(upToYear, upToMonth, 1); // exclusive upper bound
+  const cutoff = new Date(upToYear, upToMonth, 1);
 
   const [assignedRows, activityRows] = await Promise.all([
-    // Budget items up to and including the viewed month
     prisma.budgetItem.findMany({
       where: {
         budget: {
@@ -158,7 +188,6 @@ async function fetchCumulativeAvailable(
       },
       select: { categoryId: true, plannedAmount: true },
     }),
-    // Approved transactions from budgetStart up to end of viewed month
     prisma.transactionCategorization.findMany({
       where: {
         status: "APPROVED",
@@ -184,9 +213,10 @@ async function fetchCumulativeAvailable(
   for (const row of activityRows) {
     const prev = availableMap.get(row.categoryId) ?? 0;
     const amount = Number(row.transaction.amount);
-    // DEBIT reduces available; CREDIT (refund) increases it
-    const delta = row.transaction.direction === "DEBIT" ? -amount : amount;
-    availableMap.set(row.categoryId, prev + delta);
+    availableMap.set(
+      row.categoryId,
+      prev + (row.transaction.direction === "DEBIT" ? -amount : amount)
+    );
   }
 
   return availableMap;
@@ -242,7 +272,6 @@ export async function getBudgetMonth(
   month: number,
   currency: string
 ): Promise<BudgetMonthDTO> {
-  // Fetch the budget start date first — all transaction queries depend on it
   const budgetStart = await getBudgetStartDate(userId);
 
   const [
@@ -306,16 +335,6 @@ export async function getBudgetMonth(
     if (rawTarget) {
       const targetAmount = Number(rawTarget.amount);
       const specificMonths = rawTarget.specificMonths as number[] | null;
-      const suggested = computeSuggestedAmount(
-        {
-          targetType: rawTarget.targetType,
-          amount: targetAmount,
-          dueMonth: rawTarget.dueMonth,
-          specificMonths,
-        },
-        year,
-        month
-      );
       target = {
         id: rawTarget.id,
         targetType: rawTarget.targetType as TargetType,
@@ -323,7 +342,16 @@ export async function getBudgetMonth(
         currency: rawTarget.currency,
         dueMonth: rawTarget.dueMonth,
         specificMonths,
-        suggestedAmount: suggested,
+        suggestedAmount: computeSuggestedAmount(
+          {
+            targetType: rawTarget.targetType,
+            amount: targetAmount,
+            dueMonth: rawTarget.dueMonth,
+            specificMonths,
+          },
+          year,
+          month
+        ),
       };
     }
 
@@ -385,7 +413,7 @@ function buildCategoryGroups(
     });
   }
 
-  // Orphaned children (parent not in active categories)
+  // Orphaned children (parent is inactive or not in budgetable categories)
   const parentIds = new Set(parents.map((p) => p.categoryId));
   for (const cat of categories) {
     if (cat.parentId && !parentIds.has(cat.parentId)) {
