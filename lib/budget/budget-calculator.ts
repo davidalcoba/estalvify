@@ -9,23 +9,48 @@ import type {
 } from "./budget-dto";
 
 // ─────────────────────────────────────────────
+// Budget start date
+// ─────────────────────────────────────────────
+
+/**
+ * Returns the first day of the user's earliest budget month, or null if the
+ * user has never created a budget.
+ *
+ * All transaction-based calculations (available, activity, RTA) are scoped to
+ * this date. This prevents historical spending — before the user started
+ * budgeting — from making all categories show huge negative balances.
+ */
+async function getBudgetStartDate(userId: string): Promise<Date | null> {
+  const earliest = await prisma.budget.findFirst({
+    where: { userId },
+    orderBy: [{ year: "asc" }, { month: "asc" }],
+    select: { year: true, month: true },
+  });
+  if (!earliest) return null;
+  return new Date(earliest.year, earliest.month - 1, 1);
+}
+
+// ─────────────────────────────────────────────
 // Ready to Assign
 // ─────────────────────────────────────────────
 
 /**
- * Ready to Assign = total inflows (CREDIT transactions, excluding transfers)
- * minus total assigned across all budget months.
+ * Ready to Assign = inflows since budget start − total assigned.
  *
- * "Transfers" are transactions with an approved categorization where the
- * category has isNonComputable = true.
+ * Inflows = CREDIT transactions that are NOT approved non-computable transfers
+ * (i.e., not inter-account movements). Scoped to budget start date so that
+ * income earned before the user started budgeting is not included.
  */
-async function computeReadyToAssign(userId: string): Promise<number> {
+async function computeReadyToAssign(
+  userId: string,
+  budgetStart: Date | null
+): Promise<number> {
   const [inflowResult, assignedResult] = await Promise.all([
-    // Sum of CREDIT transactions that are NOT approved non-computable transfers
     prisma.transaction.aggregate({
       where: {
         userId,
         direction: "CREDIT",
+        ...(budgetStart ? { valueDate: { gte: budgetStart } } : {}),
         NOT: {
           categorization: {
             status: "APPROVED",
@@ -35,7 +60,6 @@ async function computeReadyToAssign(userId: string): Promise<number> {
       },
       _sum: { amount: true },
     }),
-    // Sum of all assigned amounts across all budget months for this user
     prisma.budgetItem.aggregate({
       where: { budget: { userId } },
       _sum: { plannedAmount: true },
@@ -55,28 +79,37 @@ async function computeReadyToAssign(userId: string): Promise<number> {
  * Returns a map of categoryId → net activity for the given year/month.
  * Activity = sum(DEBIT amounts) − sum(CREDIT amounts) for approved transactions.
  * Positive value = net spending; negative = net income/refund to category.
+ *
+ * Only counts transactions from budgetStart onward.
  */
 async function fetchMonthlyActivity(
   userId: string,
   year: number,
-  month: number
+  month: number,
+  budgetStart: Date | null
 ): Promise<Map<string, number>> {
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 1);
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 1);
+
+  // If budgetStart is after this month, there's no activity to show
+  if (budgetStart && budgetStart >= monthEnd) {
+    return new Map();
+  }
 
   const rows = await prisma.transactionCategorization.findMany({
     where: {
       status: "APPROVED",
       transaction: {
         userId,
-        valueDate: { gte: startDate, lt: endDate },
+        valueDate: {
+          gte: budgetStart && budgetStart > monthStart ? budgetStart : monthStart,
+          lt: monthEnd,
+        },
       },
     },
     select: {
       categoryId: true,
-      transaction: {
-        select: { amount: true, direction: true },
-      },
+      transaction: { select: { amount: true, direction: true } },
     },
   });
 
@@ -92,22 +125,27 @@ async function fetchMonthlyActivity(
 }
 
 // ─────────────────────────────────────────────
-// Per-category all-time available
+// Per-category cumulative available
 // ─────────────────────────────────────────────
 
 /**
- * Available for a category = all-time assigned − all-time activity.
+ * Available for a category = cumulative assigned − cumulative activity,
+ * both scoped from budgetStart up to the end of the viewed month.
+ *
  * Returns a map of categoryId → available amount.
  */
 async function fetchCumulativeAvailable(
   userId: string,
   upToYear: number,
-  upToMonth: number
+  upToMonth: number,
+  budgetStart: Date | null
 ): Promise<Map<string, number>> {
-  const cutoff = new Date(upToYear, upToMonth, 1); // exclusive end
+  if (!budgetStart) return new Map();
+
+  const cutoff = new Date(upToYear, upToMonth, 1); // exclusive upper bound
 
   const [assignedRows, activityRows] = await Promise.all([
-    // All budget items up to and including the viewed month
+    // Budget items up to and including the viewed month
     prisma.budgetItem.findMany({
       where: {
         budget: {
@@ -120,13 +158,13 @@ async function fetchCumulativeAvailable(
       },
       select: { categoryId: true, plannedAmount: true },
     }),
-    // All approved transactions up to end of viewed month
+    // Approved transactions from budgetStart up to end of viewed month
     prisma.transactionCategorization.findMany({
       where: {
         status: "APPROVED",
         transaction: {
           userId,
-          valueDate: { lt: cutoff },
+          valueDate: { gte: budgetStart, lt: cutoff },
         },
       },
       select: {
@@ -146,6 +184,7 @@ async function fetchCumulativeAvailable(
   for (const row of activityRows) {
     const prev = availableMap.get(row.categoryId) ?? 0;
     const amount = Number(row.transaction.amount);
+    // DEBIT reduces available; CREDIT (refund) increases it
     const delta = row.transaction.direction === "DEBIT" ? -amount : amount;
     availableMap.set(row.categoryId, prev + delta);
   }
@@ -178,7 +217,6 @@ function computeSuggestedAmount(
 
   if (target.targetType === "YEARLY") {
     const dueMonth = target.dueMonth ?? 12;
-    // Months remaining until due (inclusive of current)
     const dueYear = month <= dueMonth ? year : year + 1;
     const dueDate = new Date(dueYear, dueMonth - 1, 1);
     const currentDate = new Date(year, month - 1, 1);
@@ -204,6 +242,9 @@ export async function getBudgetMonth(
   month: number,
   currency: string
 ): Promise<BudgetMonthDTO> {
+  // Fetch the budget start date first — all transaction queries depend on it
+  const budgetStart = await getBudgetStartDate(userId);
+
   const [
     readyToAssign,
     monthlyActivity,
@@ -212,10 +253,9 @@ export async function getBudgetMonth(
     budgetItems,
     targets,
   ] = await Promise.all([
-    computeReadyToAssign(userId),
-    fetchMonthlyActivity(userId, year, month),
-    fetchCumulativeAvailable(userId, year, month),
-    // All active budgetable categories (flat list with parent info)
+    computeReadyToAssign(userId, budgetStart),
+    fetchMonthlyActivity(userId, year, month, budgetStart),
+    fetchCumulativeAvailable(userId, year, month, budgetStart),
     prisma.category.findMany({
       where: {
         OR: [{ userId }, { userId: null }],
@@ -232,14 +272,10 @@ export async function getBudgetMonth(
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
-    // Budget items for this specific month
     prisma.budgetItem.findMany({
-      where: {
-        budget: { userId, year, month },
-      },
+      where: { budget: { userId, year, month } },
       select: { categoryId: true, plannedAmount: true },
     }),
-    // Targets for this user
     prisma.categoryTarget.findMany({
       where: { userId },
       select: {
@@ -254,14 +290,11 @@ export async function getBudgetMonth(
     }),
   ]);
 
-  // Build lookup maps
   const assignedThisMonth = new Map<string, number>(
     budgetItems.map((bi) => [bi.categoryId, Number(bi.plannedAmount)])
   );
-
   const targetByCategory = new Map(targets.map((t) => [t.categoryId, t]));
 
-  // Build category DTOs
   const categoryDTOs: BudgetCategoryDTO[] = categories.map((cat) => {
     const assigned = assignedThisMonth.get(cat.id) ?? 0;
     const activity = monthlyActivity.get(cat.id) ?? 0;
@@ -308,15 +341,12 @@ export async function getBudgetMonth(
     };
   });
 
-  // Group categories by parent
-  const groups = buildCategoryGroups(categoryDTOs);
-
   return {
     year,
     month,
     readyToAssign,
     currency,
-    categoryGroups: groups,
+    categoryGroups: buildCategoryGroups(categoryDTOs),
   };
 }
 
@@ -327,7 +357,6 @@ export async function getBudgetMonth(
 function buildCategoryGroups(
   categories: BudgetCategoryDTO[]
 ): BudgetCategoryGroupDTO[] {
-  // Separate top-level (parentId=null) categories from children
   const parents = categories.filter((c) => !c.parentId);
   const childrenByParent = new Map<string, BudgetCategoryDTO[]>();
 
@@ -343,28 +372,20 @@ function buildCategoryGroups(
 
   for (const parent of parents) {
     const children = childrenByParent.get(parent.categoryId) ?? [];
-
-    // A parent with children acts as a group header; its own budget values
-    // are summed from children (parent itself is not directly budgeted).
     const groupMembers = children.length > 0 ? children : [parent];
-
-    const assignedTotal = groupMembers.reduce((s, c) => s + c.assigned, 0);
-    const activityTotal = groupMembers.reduce((s, c) => s + c.activity, 0);
-    const availableTotal = groupMembers.reduce((s, c) => s + c.available, 0);
 
     groups.push({
       groupId: children.length > 0 ? parent.categoryId : null,
       groupName: parent.categoryName,
       groupColor: parent.categoryColor,
-      assignedTotal,
-      activityTotal,
-      availableTotal,
-      // Only include leaf categories in the rows (skip parent headers)
+      assignedTotal: groupMembers.reduce((s, c) => s + c.assigned, 0),
+      activityTotal: groupMembers.reduce((s, c) => s + c.activity, 0),
+      availableTotal: groupMembers.reduce((s, c) => s + c.available, 0),
       categories: children.length > 0 ? children : [parent],
     });
   }
 
-  // Any orphaned children (parent not in active categories) get their own group
+  // Orphaned children (parent not in active categories)
   const parentIds = new Set(parents.map((p) => p.categoryId));
   for (const cat of categories) {
     if (cat.parentId && !parentIds.has(cat.parentId)) {
