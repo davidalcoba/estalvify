@@ -15,10 +15,9 @@ interface PageProps {
 }
 
 export default async function BudgetPage({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const session = await auth();
+  // Only resolve session here — lightweight, reads from cookie
+  const [params, session] = await Promise.all([searchParams, auth()]);
   const userId = session!.user.id;
-  const { locale, currency } = await getUserPrefs(userId);
 
   const now = new Date();
   const year = parseInt(params.year ?? "") || now.getFullYear();
@@ -36,14 +35,9 @@ export default async function BudgetPage({ searchParams }: PageProps) {
         </p>
       </div>
 
+      {/* BudgetBody is inside Suspense so the skeleton shows immediately */}
       <Suspense key={bodyKey} fallback={<BudgetSkeleton />}>
-        <BudgetBody
-          userId={userId}
-          year={year}
-          month={month}
-          locale={locale}
-          currency={currency}
-        />
+        <BudgetBody userId={userId} year={year} month={month} />
       </Suspense>
     </div>
   );
@@ -53,15 +47,14 @@ async function BudgetBody({
   userId,
   year,
   month,
-  locale,
-  currency,
 }: {
   userId: string;
   year: number;
   month: number;
-  locale: string;
-  currency: string;
 }) {
+  // getUserPrefs and budget data are fetched inside the Suspense boundary
+  // so the skeleton above renders immediately on navigation
+  const { locale, currency } = await getUserPrefs(userId);
   const data = await getBudgetMonth(userId, year, month, currency);
 
   return <BudgetView data={data} locale={locale} />;
@@ -70,18 +63,46 @@ async function BudgetBody({
 function BudgetSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Month nav + Ready to Assign — desktop */}
+      <div className="hidden md:flex items-center justify-between">
         <Skeleton className="h-9 w-56" />
         <Skeleton className="h-9 w-48" />
       </div>
-      <div className="rounded-lg border">
-        {[...Array(6)].map((_, i) => (
+
+      {/* Month nav — mobile */}
+      <div className="md:hidden flex items-center justify-between">
+        <Skeleton className="h-9 w-9" />
+        <Skeleton className="h-5 w-36" />
+        <Skeleton className="h-9 w-9" />
+      </div>
+
+      {/* Ready to Assign card — mobile */}
+      <div className="md:hidden">
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
+
+      {/* Table skeleton — desktop */}
+      <div className="hidden md:block rounded-lg border overflow-hidden">
+        <div className="flex gap-4 px-4 py-2.5 border-b bg-muted/40">
+          <Skeleton className="h-3 flex-1" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+        {[...Array(8)].map((_, i) => (
           <div key={i} className="flex gap-4 px-4 py-3 border-b last:border-0">
             <Skeleton className="h-4 flex-1" />
             <Skeleton className="h-4 w-20" />
             <Skeleton className="h-4 w-20" />
             <Skeleton className="h-4 w-20" />
           </div>
+        ))}
+      </div>
+
+      {/* Card skeleton — mobile */}
+      <div className="md:hidden space-y-2">
+        {[...Array(4)].map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-xl" />
         ))}
       </div>
     </div>

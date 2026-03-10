@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BudgetCategoryDTO, TargetType } from "@/lib/budget/budget-dto";
@@ -33,10 +33,6 @@ export function CategoryTargetSheet({ category, onClose }: CategoryTargetSheetPr
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  function handleOpenChange(open: boolean) {
-    if (!open) onClose();
-  }
 
   function toggleMonth(m: number) {
     setSpecificMonths((prev) =>
@@ -87,16 +83,14 @@ export function CategoryTargetSheet({ category, onClose }: CategoryTargetSheetPr
     });
   }
 
-  if (!category) return null;
-
   return (
-    <Sheet open={!!category} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Target: {category.categoryName}</SheetTitle>
-        </SheetHeader>
-
-        <form onSubmit={handleSave} className="mt-6 space-y-5 px-1">
+    <ResponsiveModal
+      open={!!category}
+      onOpenChange={(open) => !open && onClose()}
+      title={category ? `Target: ${category.categoryName}` : "Target"}
+    >
+      {category && (
+        <form onSubmit={handleSave} className="space-y-5">
           {/* Target type */}
           <div>
             <label className="text-sm font-medium mb-2 block">Target type</label>
@@ -208,7 +202,7 @@ export function CategoryTargetSheet({ category, onClose }: CategoryTargetSheetPr
             </Button>
           )}
         </form>
-      </SheetContent>
-    </Sheet>
+      )}
+    </ResponsiveModal>
   );
 }

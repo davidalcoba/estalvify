@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
@@ -31,10 +31,6 @@ export function AssignMoneySheet({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function handleOpenChange(open: boolean) {
-    if (!open) onClose();
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!category) return;
@@ -56,18 +52,16 @@ export function AssignMoneySheet({
     });
   }
 
-  if (!category) return null;
-
-  const suggested = category.target?.suggestedAmount ?? null;
+  const suggested = category?.target?.suggestedAmount ?? null;
 
   return (
-    <Sheet open={!!category} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-sm">
-        <SheetHeader>
-          <SheetTitle>Assign to {category.categoryName}</SheetTitle>
-        </SheetHeader>
-
-        <div className="mt-6 space-y-4 px-1">
+    <ResponsiveModal
+      open={!!category}
+      onOpenChange={(open) => !open && onClose()}
+      title={category ? `Assign to ${category.categoryName}` : "Assign"}
+    >
+      {category && (
+        <div className="space-y-4">
           <div className="rounded-lg border bg-muted/30 p-4 space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Available</span>
@@ -134,7 +128,7 @@ export function AssignMoneySheet({
             </div>
           </form>
         </div>
-      </SheetContent>
-    </Sheet>
+      )}
+    </ResponsiveModal>
   );
 }

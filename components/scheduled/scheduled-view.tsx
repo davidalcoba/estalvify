@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import type { ScheduledTransactionDTO } from "@/lib/scheduled/scheduled-dto";
 import { ScheduledDesktopView } from "@/components/scheduled/views/scheduled-desktop-view";
@@ -29,8 +29,8 @@ interface ScheduledViewProps {
   currency: string;
 }
 
-// null = sheet closed, "new" = creating, DTO = editing
-type SheetState = null | "new" | ScheduledTransactionDTO;
+// null = closed, "new" = creating, DTO = editing
+type ModalState = null | "new" | ScheduledTransactionDTO;
 
 export function ScheduledView({
   transactions,
@@ -40,49 +40,45 @@ export function ScheduledView({
   timezone,
   currency,
 }: ScheduledViewProps) {
-  const [sheetState, setSheetState] = useState<SheetState>(null);
+  const [modalState, setModalState] = useState<ModalState>(null);
 
-  const sheetTitle =
-    sheetState === "new"
+  const modalTitle =
+    modalState === "new"
       ? "New scheduled transaction"
-      : sheetState
-      ? `Edit: ${sheetState.payeeName}`
+      : modalState
+      ? `Edit: ${modalState.payeeName}`
       : "";
 
-  const formTx = sheetState === "new" || sheetState === null ? undefined : sheetState;
+  const formTx = modalState === "new" || modalState === null ? undefined : modalState;
 
   const sharedProps = {
     transactions,
     locale,
     timezone,
     currency,
-    onEdit: (tx: ScheduledTransactionDTO) => setSheetState(tx),
+    onEdit: (tx: ScheduledTransactionDTO) => setModalState(tx),
   };
 
   return (
     <>
-      <Sheet open={sheetState !== null} onOpenChange={(open) => !open && setSheetState(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{sheetTitle}</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6 px-1">
-            {sheetState !== null && (
-              <ScheduledTransactionForm
-                existing={formTx}
-                bankAccounts={bankAccounts}
-                categories={categories}
-                onSuccess={() => setSheetState(null)}
-                onCancel={() => setSheetState(null)}
-              />
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <ResponsiveModal
+        open={modalState !== null}
+        onOpenChange={(open) => !open && setModalState(null)}
+        title={modalTitle}
+      >
+        {modalState !== null && (
+          <ScheduledTransactionForm
+            existing={formTx}
+            bankAccounts={bankAccounts}
+            categories={categories}
+            onSuccess={() => setModalState(null)}
+            onCancel={() => setModalState(null)}
+          />
+        )}
+      </ResponsiveModal>
 
-      {/* Page-level "New" button — visible on both breakpoints */}
       <div className="flex items-center justify-end mb-4">
-        <Button onClick={() => setSheetState("new")}>
+        <Button onClick={() => setModalState("new")}>
           <Plus className="mr-2 h-4 w-4" />
           New scheduled
         </Button>
