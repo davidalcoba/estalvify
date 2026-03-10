@@ -1,61 +1,89 @@
-// Budget page — monthly budget planning by category
-// Zero-based budgeting: plan where every euro goes before the month starts
+// Budget page — YNAB-style envelope budgeting by month
 
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { auth } from "@/auth";
 import { getUserPrefs } from "@/lib/user-prefs";
-import { formatDate } from "@/lib/formatters";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { PiggyBank, Plus } from "lucide-react";
+import { getBudgetMonth } from "@/lib/budget/budget-calculator";
+import { BudgetView } from "@/components/budget/budget-view";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = { title: "Budget" };
 
-export default async function BudgetPage() {
-  const session = await auth();
-  const { locale, timezone } = await getUserPrefs(session!.user.id);
+interface PageProps {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}
 
-  const currentMonth = formatDate(new Date(), locale, timezone, {
-    month: "long",
-    year: "numeric",
-  });
+export default async function BudgetPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const session = await auth();
+  const userId = session!.user.id;
+  const { locale, currency } = await getUserPrefs(userId);
+
+  const now = new Date();
+  const year = parseInt(params.year ?? "") || now.getFullYear();
+  const month = parseInt(params.month ?? "") || now.getMonth() + 1;
+
+  // Key drives Suspense reset when month changes
+  const bodyKey = `budget-${year}-${month}`;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Budget</h2>
-          <p className="text-muted-foreground">
-            Plan your spending for {currentMonth}.
-          </p>
-        </div>
-        <Button disabled>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Category
-        </Button>
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Budget</h2>
+        <p className="text-muted-foreground mt-1">
+          Assign every euro a job. Track spending against your plan.
+        </p>
       </div>
 
-      {/* Empty state */}
-      <Card className="border-dashed">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-              <PiggyBank className="h-6 w-6 text-purple-600" />
-            </div>
+      <Suspense key={bodyKey} fallback={<BudgetSkeleton />}>
+        <BudgetBody
+          userId={userId}
+          year={year}
+          month={month}
+          locale={locale}
+          currency={currency}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function BudgetBody({
+  userId,
+  year,
+  month,
+  locale,
+  currency,
+}: {
+  userId: string;
+  year: number;
+  month: number;
+  locale: string;
+  currency: string;
+}) {
+  const data = await getBudgetMonth(userId, year, month, currency);
+
+  return <BudgetView data={data} locale={locale} />;
+}
+
+function BudgetSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-9 w-56" />
+        <Skeleton className="h-9 w-48" />
+      </div>
+      <div className="rounded-lg border">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="flex gap-4 px-4 py-3 border-b last:border-0">
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-20" />
           </div>
-          <CardTitle>Create your first budget</CardTitle>
-          <CardDescription>
-            Set spending targets for each category and track your progress
-            throughout the month. Categorize some transactions first to get started.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <Button variant="outline" disabled>
-            <Plus className="mr-2 h-4 w-4" />
-            Set up budget
-          </Button>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
     </div>
   );
 }

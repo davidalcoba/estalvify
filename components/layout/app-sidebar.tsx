@@ -17,6 +17,7 @@ import {
   Sparkles,
   X,
   ListFilter,
+  CalendarClock,
 } from "lucide-react";
 
 import {
@@ -72,6 +73,11 @@ const navItems = [
         title: "Budget",
         url: "/budget",
         icon: PiggyBank,
+      },
+      {
+        title: "Scheduled",
+        url: "/scheduled",
+        icon: CalendarClock,
       },
       {
         title: "Reports",

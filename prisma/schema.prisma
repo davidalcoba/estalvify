@@ -29,15 +29,17 @@ model User {
   currency      String    @default("EUR")
   locale        String    @default("es-ES")
 
-  accounts        Account[]
-  sessions        Session[]
-  bankConnections BankConnection[]
-  bankAccounts    BankAccount[]
-  transactions    Transaction[]
-  categories      Category[]
-  categoryRules   CategoryRule[]
-  budgets         Budget[]
-  aiSuggestions   AiCategorySuggestion[]
+  accounts             Account[]
+  sessions             Session[]
+  bankConnections      BankConnection[]
+  bankAccounts         BankAccount[]
+  transactions         Transaction[]
+  categories           Category[]
+  categoryRules        CategoryRule[]
+  budgets              Budget[]
+  aiSuggestions        AiCategorySuggestion[]
+  categoryTargets      CategoryTarget[]
+  scheduledTransactions ScheduledTransaction[]
 
   @@map("users")
 }
@@ -155,6 +157,7 @@ model BankAccount {
   bankConnection BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
   balances       AccountBalance[]
   transactions   Transaction[]
+  scheduledTransactions ScheduledTransaction[]
 
   @@map("bank_accounts")
 }
@@ -263,6 +266,8 @@ model Category {
   sourceCategoryRules    CategoryRule[]          @relation("SourceCategoryRules")
   transactionCategories  TransactionCategorization[]
   budgetItems            BudgetItem[]
+  categoryTargets        CategoryTarget[]
+  scheduledTransactions  ScheduledTransaction[]
 
   @@map("categories")
 }
@@ -404,6 +409,84 @@ model BudgetItem {
 
   @@unique([budgetId, categoryId])
   @@map("budget_items")
+}
+
+// ─────────────────────────────────────────────
+// CATEGORY TARGETS - Recurring funding goals per category
+// ─────────────────────────────────────────────
+
+model CategoryTarget {
+  id         String @id @default(cuid())
+  userId     String
+  categoryId String
+
+  targetType     TargetType
+  amount         Decimal    @db.Decimal(15, 2)
+  currency       String     @default("EUR")
+
+  // For YEARLY: which month is due (1–12)
+  dueMonth       Int?
+  // For SPECIFIC_MONTHS: JSON array of month numbers e.g. [3, 6, 9, 12]
+  specificMonths Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@map("category_targets")
+}
+
+enum TargetType {
+  MONTHLY
+  YEARLY
+  SPECIFIC_MONTHS
+}
+
+// ─────────────────────────────────────────────
+// SCHEDULED TRANSACTIONS - Future/recurring transactions
+// ─────────────────────────────────────────────
+
+model ScheduledTransaction {
+  id     String @id @default(cuid())
+  userId String
+
+  payeeName  String
+  amount     Decimal              @db.Decimal(15, 2)
+  currency   String               @default("EUR")
+  direction  TransactionDirection
+
+  // null = income flows to Ready to Assign
+  categoryId    String?
+  bankAccountId String
+
+  nextDate       DateTime @db.Date
+  repeatRule     RepeatRule
+  // Only used when repeatRule = CUSTOM: interval in days
+  repeatInterval Int?
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+
+  @@map("scheduled_transactions")
+}
+
+enum RepeatRule {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  CUSTOM
 }
 
 // ─────────────────────────────────────────────
