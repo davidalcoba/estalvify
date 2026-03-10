@@ -257,6 +257,7 @@ model Category {
   isNonComputable Boolean @default(false) // e.g. transfers, savings movements
   isSystem        Boolean @default(false) // Predefined, cannot be deleted
   isActive        Boolean @default(true)
+  inflow          Boolean @default(false) // true = income category; transactions feed ReadyToAssign, not activity
   sortOrder       Int     @default(0)
 
   // Self-referential for subcategories

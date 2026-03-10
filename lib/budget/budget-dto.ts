@@ -20,11 +20,13 @@ export interface BudgetCategoryDTO {
   categoryIcon: string | null;
   parentId: string | null;
   parentName: string | null;
+  /** true = income category; transactions feed ReadyToAssign, not activity. */
+  inflow: boolean;
   /** Amount assigned in the viewed month. */
   assigned: number;
-  /** Net activity in the viewed month (positive = spending). */
+  /** Net activity in the viewed month (positive = spending). Inflow categories always 0. */
   activity: number;
-  /** Cumulative available = all-time assigned − all-time activity. */
+  /** Cumulative available = all-time assigned − all-time activity. Inflow categories always 0. */
   available: number;
   target: BudgetTargetDTO | null;
 }

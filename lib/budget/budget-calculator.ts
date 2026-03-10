@@ -47,12 +47,16 @@ async function getBudgetStartDate(userId: string): Promise<Date | null> {
 // ─────────────────────────────────────────────
 
 /**
- * Ready to Assign = inflows since budget_started_at − total assigned across
+ * Ready to Assign = income since budget_started_at − total assigned across
  * all budget months.
  *
- * Inflows = CREDIT transactions that are NOT approved non-computable transfers
- * (i.e., not inter-account movements). Un-categorized CREDITs are included
- * because the money exists in the user's accounts and should be assigned.
+ * Income = approved transactions categorized to an inflow category
+ * (category.inflow = true). The direction of the transaction is not used —
+ * the category flag is the single source of truth.
+ *
+ * Inflow categories are NOT shown as activity in the budget; they feed RTA.
+ * Refunds to spending categories (CREDIT to inflow=false) stay in the
+ * category and reduce activity — they do NOT increase RTA.
  *
  * Scoped to budget_started_at so income before the user started budgeting
  * does not inflate RTA.
@@ -64,19 +68,20 @@ async function computeReadyToAssign(
   if (!budgetStart) return 0;
 
   const [inflowResult, assignedResult] = await Promise.all([
-    prisma.transaction.aggregate({
+    // Sum all approved transactions to inflow categories since budget start.
+    // DEBIT to an inflow category is subtracted (rare, e.g. bank fee on income account).
+    prisma.transactionCategorization.findMany({
       where: {
-        userId,
-        direction: "CREDIT",
-        valueDate: { gte: budgetStart },
-        NOT: {
-          categorization: {
-            status: "APPROVED",
-            category: { isNonComputable: true },
-          },
+        status: "APPROVED",
+        category: { inflow: true },
+        transaction: {
+          userId,
+          valueDate: { gte: budgetStart },
         },
       },
-      _sum: { amount: true },
+      select: {
+        transaction: { select: { amount: true, direction: true } },
+      },
     }),
     prisma.budgetItem.aggregate({
       where: { budget: { userId } },
@@ -84,7 +89,11 @@ async function computeReadyToAssign(
     }),
   ]);
 
-  const inflows = Number(inflowResult._sum.amount ?? 0);
+  const inflows = inflowResult.reduce((sum, row) => {
+    const amount = Number(row.transaction.amount);
+    return sum + (row.transaction.direction === "CREDIT" ? amount : -amount);
+  }, 0);
+
   const assigned = Number(assignedResult._sum.plannedAmount ?? 0);
   return inflows - assigned;
 }
@@ -95,8 +104,14 @@ async function computeReadyToAssign(
 
 /**
  * Returns a map of categoryId → net activity for the given year/month.
- * Activity = sum(DEBIT amounts) − sum(CREDIT amounts) for approved transactions.
- * Positive = net spending; negative = net refund/income to category.
+ * Activity = sum(DEBIT amounts) − sum(CREDIT amounts) for approved transactions
+ * categorized to spending categories (inflow = false).
+ *
+ * Inflow categories are excluded: their transactions feed ReadyToAssign, not
+ * activity. Refunds (CREDIT to a spending category) reduce activity and stay
+ * in the category — they do NOT flow back to RTA.
+ *
+ * Positive = net spending; negative = net refund.
  *
  * Scoped to budget_started_at: if the budget hasn't started yet for this
  * month, returns an empty map.
@@ -117,6 +132,7 @@ async function fetchMonthlyActivity(
   const rows = await prisma.transactionCategorization.findMany({
     where: {
       status: "APPROVED",
+      category: { inflow: false },
       transaction: {
         userId,
         valueDate: {
@@ -188,9 +204,12 @@ async function fetchCumulativeAvailable(
       },
       select: { categoryId: true, plannedAmount: true },
     }),
+    // Only spending categories (inflow=false) contribute to activity.
+    // Inflow category transactions feed RTA, not category available balances.
     prisma.transactionCategorization.findMany({
       where: {
         status: "APPROVED",
+        category: { inflow: false },
         transaction: {
           userId,
           valueDate: { gte: budgetStart, lt: cutoff },
@@ -296,6 +315,7 @@ export async function getBudgetMonth(
         name: true,
         color: true,
         icon: true,
+        inflow: true,
         parentId: true,
         parent: { select: { id: true, name: true, color: true } },
       },
@@ -362,9 +382,11 @@ export async function getBudgetMonth(
       categoryIcon: cat.icon,
       parentId: cat.parentId,
       parentName: cat.parent?.name ?? null,
+      inflow: cat.inflow,
       assigned,
-      activity,
-      available,
+      // Inflow categories contribute to RTA, not to activity/available
+      activity: cat.inflow ? 0 : activity,
+      available: cat.inflow ? 0 : available,
       target,
     };
   });
