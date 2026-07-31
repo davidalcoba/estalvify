@@ -12,13 +12,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.36",
     "@auth/prisma-adapter": "^2.11.1",
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/adapter-neon": "^7.4.2",
     "@prisma/client": "^7.4.2",
     "@vercel/queue": "^0.1.3",
-    "ai": "^6.0.104",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",

@@ -232,7 +232,7 @@ existen tal cual. Los arreglos son concretos y de bajo esfuerzo:
 | C2 | ✅ **Hecho** — CI en `.github/workflows/ci.yml` (typecheck + lint + test en PR) | **P0** | Bajo | Calidad |
 | C1 | ✅ **Hecho** — 30 tests (Vitest) sobre sync/parsing, reglas, categorize, formatters | **P0** | Medio | Calidad |
 | A1 | Pinear/planificar deps beta y 0.x (next-auth, @vercel/queue) | **P1** | Bajo | Arquitectura |
-| A2 | Decidir destino del stack de AI (implementar o retirar) | **P1** | Medio | Arquitectura |
+| A2 | ✅ **Hecho** — stack de AI retirado (modelo, enum y deps `ai`/`@ai-sdk/openai`); valor `CategorizationSource.AI` reservado para el futuro | **P1** | Medio | Arquitectura |
 | — | Completar u ocultar los stubs (dashboard/budget/reports) | **P1** | Medio | Producto |
 | D1 | Activar dark mode (`next-themes` + toggle) o retirar el tema | **P1** | Bajo | Diseño |
 | AI2 | Reescribir/acotar el skill `frontend-design` + fix licencia | **P1** | Bajo | Instrucciones AI |

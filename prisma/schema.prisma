@@ -37,7 +37,6 @@ model User {
   categories      Category[]
   categoryRules   CategoryRule[]
   budgets         Budget[]
-  aiSuggestions   AiCategorySuggestion[]
 
   @@map("users")
 }
@@ -220,7 +219,6 @@ model Transaction {
   bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
 
   categorization   TransactionCategorization?
-  aiSuggestion     AiCategorySuggestion?
 
   @@unique([bankAccountId, externalTransactionId])
   @@index([userId, valueDate])
@@ -331,38 +329,8 @@ enum CategorizationStatus {
 
 enum CategorizationSource {
   RULE   // Matched a user-defined rule
-  AI     // AI suggestion
+  AI     // Reserved for AI-assisted categorization (not implemented yet)
   MANUAL // User categorized manually
-}
-
-// AI categorization suggestions with confidence score
-model AiCategorySuggestion {
-  id            String @id @default(cuid())
-  transactionId String @unique
-  userId        String
-
-  suggestedCategoryId String?
-  suggestedCategoryName String? // In case category doesn't exist yet
-  confidence    Float   // 0.0 - 1.0
-  reasoning     String? // AI explanation
-
-  // Suggestion lifecycle
-  status        AiSuggestionStatus @default(PENDING)
-  processedAt   DateTime?
-
-  createdAt DateTime @default(now())
-
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("ai_category_suggestions")
-}
-
-enum AiSuggestionStatus {
-  PENDING    // Not yet reviewed
-  ACCEPTED   // User accepted the suggestion
-  REJECTED   // User rejected it
-  SUPERSEDED // A rule now covers this transaction
 }
 
 // ─────────────────────────────────────────────
