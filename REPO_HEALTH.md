@@ -228,9 +228,9 @@ existen tal cual. Los arreglos son concretos y de bajo esfuerzo:
 
 | ID | Recomendación | Prioridad | Esfuerzo | Área |
 |---|---|---|---|---|
-| AI1 | Arreglar la ruta rota `ai-instructions/README.md` (2 sitios) | **P0** | Trivial | Instrucciones AI |
-| C2 | Añadir CI (typecheck + lint + test en PR) | **P0** | Bajo | Calidad |
-| C1 | Tests de la lógica de riesgo (sync, reglas, categorize) | **P0** | Medio | Calidad |
+| AI1 | ✅ **Hecho** — ruta rota `ai-instructions/README.md` corregida (2 sitios) | **P0** | Trivial | Instrucciones AI |
+| C2 | ✅ **Hecho** — CI en `.github/workflows/ci.yml` (typecheck + lint + test en PR) | **P0** | Bajo | Calidad |
+| C1 | ✅ **Hecho** — 30 tests (Vitest) sobre sync/parsing, reglas, categorize, formatters | **P0** | Medio | Calidad |
 | A1 | Pinear/planificar deps beta y 0.x (next-auth, @vercel/queue) | **P1** | Bajo | Arquitectura |
 | A2 | Decidir destino del stack de AI (implementar o retirar) | **P1** | Medio | Arquitectura |
 | — | Completar u ocultar los stubs (dashboard/budget/reports) | **P1** | Medio | Producto |

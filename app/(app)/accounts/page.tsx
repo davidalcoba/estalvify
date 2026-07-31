@@ -65,6 +65,7 @@ export default async function AccountsPage({
     where: {
       userId: session!.user.id,
       status: "SYNCING",
+      // eslint-disable-next-line react-hooks/purity -- async server component: runs once per request on the server, not during a React render
       updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
     },
     data: { status: "ACTIVE" },
