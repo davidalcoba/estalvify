@@ -231,7 +231,7 @@ existen tal cual. Los arreglos son concretos y de bajo esfuerzo:
 | AI1 | ✅ **Hecho** — ruta rota `ai-instructions/README.md` corregida (2 sitios) | **P0** | Trivial | Instrucciones AI |
 | C2 | ✅ **Hecho** — CI en `.github/workflows/ci.yml` (typecheck + lint + test en PR) | **P0** | Bajo | Calidad |
 | C1 | ✅ **Hecho** — 30 tests (Vitest) sobre sync/parsing, reglas, categorize, formatters | **P0** | Medio | Calidad |
-| A1 | Pinear/planificar deps beta y 0.x (next-auth, @vercel/queue) | **P1** | Bajo | Arquitectura |
+| A1 | ✅ **Hecho** — `next-auth` (beta) y `@vercel/queue` (0.x) pineados a versión exacta para evitar roturas en bumps automáticos | **P1** | Bajo | Arquitectura |
 | A2 | ✅ **Hecho** — stack de AI retirado (modelo, enum y deps `ai`/`@ai-sdk/openai`); valor `CategorizationSource.AI` reservado para el futuro | **P1** | Medio | Arquitectura |
 | — | Completar u ocultar los stubs (dashboard/budget/reports) | **P1** | Medio | Producto |
 | D1 | Activar dark mode (`next-themes` + toggle) o retirar el tema | **P1** | Bajo | Diseño |
