@@ -1,45 +1,71 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics.
-license: Complete terms in LICENSE.txt
+description: Build and refine UI for the Estalvify finance app so it stays consistent with the existing design system. Use when creating or changing pages, components, or primitives — anything touching the app's visual layer. Enforces reuse of shared shadcn/ui primitives, semantic design tokens, theme-awareness, and first-class desktop/mobile views.
 ---
 
-This skill guides creation of distinctive, production-grade frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details and creative choices.
+# Frontend design (Estalvify)
 
-The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.
+This is a **consistency-first** design skill, not a "make it distinctive" skill.
+Estalvify is a personal-finance app where users manage real bank data: the UI
+must be calm, legible, and predictable across every screen. Prefer coherence
+with what already exists over novelty. New work should look like it was always
+part of the app.
 
-## Design Thinking
+Read `ai-instructions/context/UI_RULES.md` first — it is the source of truth and
+this skill operates inside it.
 
-Before coding, understand the context and commit to a BOLD aesthetic direction:
+## The design system (use it, don't reinvent it)
 
-- **Purpose**: What problem does this interface solve? Who uses it?
-- **Tone**: Pick an extreme: brutally minimal, maximalist chaos, retro-futuristic, organic/natural, luxury/refined, playful/toy-like, editorial/magazine, brutalist/raw, art deco/geometric, soft/pastel, industrial/utilitarian, etc. There are so many flavors to choose from. Use these for inspiration but design one that is true to the aesthetic direction.
-- **Constraints**: Technical requirements (framework, performance, accessibility).
-- **Differentiation**: What makes this UNFORGETTABLE? What's the one thing someone will remember?
+- **Primitives:** shadcn/ui ("new-york") in `components/ui/*`, built on the
+  unified `radix-ui` package. Compose these; do not hand-roll buttons, inputs,
+  dialogs, selects, cards, etc. If a primitive is missing, add it to
+  `components/ui/` with a reusable API — never inline a one-off in a page
+  (UI_RULES non-negotiable).
+- **Styling:** Tailwind CSS **v4** (CSS-first, tokens in `app/globals.css`).
+  Icons from `lucide-react`. Class merging via `cn()` (`clsx` + `tailwind-merge`).
+- **Domain UI:** lives in `components/<domain>/`; pages orchestrate, they don't
+  define primitives.
 
-**CRITICAL**: Choose a clear conceptual direction and execute it with precision. Bold maximalism and refined minimalism both work - the key is intentionality, not intensity.
+## Rules that keep the UI coherent
 
-Then implement working code (HTML/CSS/JS, React, Vue, etc.) that is:
+- **Use semantic tokens, never hardcoded colors.** Reach for `bg-background`,
+  `text-foreground`, `text-muted-foreground`, `border`, `bg-card`,
+  `bg-primary`/`text-primary-foreground`, `text-destructive`, etc. Do **not**
+  write `text-green-600`, `bg-purple-100`, `bg-indigo-600` and similar literal
+  Tailwind colors — they break theme consistency and dark mode. For semantic
+  finance states (income vs expense) prefer existing tokens or add a named token
+  rather than a raw color.
+- **Be theme-aware.** The app ships a class-based `.dark` theme (OKLCH) toggled
+  via `next-themes`. Anything you build must look correct in both light and
+  dark. Because tokens already have dark values, using tokens gets this for
+  free; hardcoded colors do not.
+- **Reuse the shared visual language.** Amount formatting, date headers, row/card
+  rhythm, and title/subtitle/filter/summary structure should match sibling
+  features (especially `transactions` and `categorize`). Diverge only where the
+  behavior genuinely differs (read-only vs classify).
+- **Accessibility is not optional.** Keep Radix semantics (labels, `DialogTitle`,
+  `sr-only` where needed), visible focus states, adequate contrast, and
+  touch-friendly targets on mobile. Do not disable zoom.
 
-- Production-grade and functional
-- Visually striking and memorable
-- Cohesive with a clear aesthetic point-of-view
-- Meticulously refined in every detail
+## Desktop and mobile are both first-class
 
-## Frontend Aesthetics Guidelines
+Not desktop-only responsive. For a feature with meaningfully different layouts,
+follow the established pattern: one orchestrator holds state/actions and renders
+`FeatureDesktopView` / `FeatureMobileView`, with shared pieces in `shared/`
+(see `components/transactions/`, `components/categorize/`). Keep business logic
+out of the view components so it stays reusable (and native-migration friendly).
 
-Focus on:
+## Polish, within the system
 
-- **Typography**: Choose fonts that are beautiful, unique, and interesting. Avoid generic fonts like Arial and Inter; opt instead for distinctive choices that elevate the frontend's aesthetics; unexpected, characterful font choices. Pair a distinctive display font with a refined body font.
-- **Color & Theme**: Commit to a cohesive aesthetic. Use CSS variables for consistency. Dominant colors with sharp accents outperform timid, evenly-distributed palettes.
-- **Motion**: Use animations for effects and micro-interactions. Prioritize CSS-only solutions for HTML. Use Motion library for React when available. Focus on high-impact moments: one well-orchestrated page load with staggered reveals (animation-delay) creates more delight than scattered micro-interactions. Use scroll-triggering and hover states that surprise.
-- **Spatial Composition**: Unexpected layouts. Asymmetry. Overlap. Diagonal flow. Grid-breaking elements. Generous negative space OR controlled density.
-- **Backgrounds & Visual Details**: Create atmosphere and depth rather than defaulting to solid colors. Add contextual effects and textures that match the overall aesthetic. Apply creative forms like gradient meshes, noise textures, geometric patterns, layered transparencies, dramatic shadows, decorative borders, custom cursors, and grain overlays.
+Quality here means restraint and precision, not spectacle: consistent spacing
+and typography scale, careful empty/loading/error states, meaningful but subtle
+motion, and pixel-level alignment with neighbouring screens. Match implementation
+complexity to the need — most finance UI is refined and quiet, not maximalist.
 
-NEVER use generic AI-generated aesthetics like overused font families (Inter, Roboto, Arial, system fonts), cliched color schemes (particularly purple gradients on white backgrounds), predictable layouts and component patterns, and cookie-cutter design that lacks context-specific character.
+## When building anything
 
-Interpret creatively and make unexpected choices that feel genuinely designed for the context. No design should be the same. Vary between light and dark themes, different fonts, different aesthetics. NEVER converge on common choices (Space Grotesk, for example) across generations.
-
-**IMPORTANT**: Match implementation complexity to the aesthetic vision. Maximalist designs need elaborate code with extensive animations and effects. Minimalist or refined designs need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from executing the vision well.
-
-Remember: Claude is capable of extraordinary creative work. Don't hold back, show what can truly be created when thinking outside the box and committing fully to a distinctive vision.
+1. Look for an existing primitive or domain component to reuse or extend.
+2. Compose with tokens; check it in light **and** dark.
+3. If it's a feature UI, decide whether desktop/mobile need distinct views.
+4. Keep it consistent with `transactions`/`categorize` conventions.
+5. Run `npm run lint` and `npm run typecheck` before finishing.

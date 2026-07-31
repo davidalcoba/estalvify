@@ -235,7 +235,7 @@ existen tal cual. Los arreglos son concretos y de bajo esfuerzo:
 | A2 | ✅ **Hecho** — stack de AI retirado (modelo, enum y deps `ai`/`@ai-sdk/openai`); valor `CategorizationSource.AI` reservado para el futuro | **P1** | Medio | Arquitectura |
 | — | Completar u ocultar los stubs (dashboard/budget/reports) | **P1** | Medio | Producto |
 | D1 | ✅ **Hecho** — `next-themes` + toggle Light/Dark/System en el header; el tema `.dark` OKLCH ya es activable | **P1** | Bajo | Diseño |
-| AI2 | Reescribir/acotar el skill `frontend-design` + fix licencia | **P1** | Bajo | Instrucciones AI |
+| AI2 | ✅ **Hecho** — skill `frontend-design` reescrito (consistencia-first, alineado con UI_RULES) y referencia colgante a `LICENSE.txt` eliminada | **P1** | Bajo | Instrucciones AI |
 | AI3 | Añadir comandos y estado de tests a `CLAUDE.md` | **P1** | Trivial | Instrucciones AI |
 | C3 | Extraer la lógica de categorización duplicada | **P2** | Bajo | Calidad |
 | D2 | Migrar colores hardcodeados a tokens semánticos | **P2** | Medio | Diseño |
