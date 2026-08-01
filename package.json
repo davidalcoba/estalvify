@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@auth/prisma-adapter": "^2.11.1",
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/adapter-neon": "^7.4.2",

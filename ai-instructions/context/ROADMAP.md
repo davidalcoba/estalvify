@@ -9,7 +9,9 @@
 > hecha aquí** en el mismo cambio.
 
 **Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
-**Siguiente a construir:** Fase 6 — Recomendaciones con IA.
+**Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
+(push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
+recurrentes, etc.).
 
 ---
 
@@ -31,7 +33,7 @@
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ✅ Estable | Proyección de saldo/gasto + alerta de saldo bajo: `app/(app)/forecast/`, `lib/analytics/forecast.ts`, `components/reports/balance-forecast-chart.tsx` |
 | Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
-| Recomendaciones con IA | ❌ No existe | El valor `CategorizationSource.AI` se reservó y luego se eliminó |
+| Recomendaciones con IA | ✅ Estable | Wrapper agnóstico de proveedor + página de insights: `lib/ai/`, `app/(app)/insights/`, `components/insights/`. Envía solo agregados anonimizados. Claude por defecto (`AI_PROVIDER`) |
 
 **Convenciones a respetar** (de `ARCHITECTURE.md` / `CODING_RULES.md`): lógica de
 dominio en `lib/`, mutaciones en `actions.ts` (Server Actions) o `app/api/`, UI de
@@ -115,8 +117,11 @@ cambio). Marca el estado aquí al terminar.
   gasto fin de mes) con tests; página `/forecast` con KPIs, curva de saldo proyectado y
   próximos cargos recurrentes; y alerta `LOW_BALANCE_PROJECTED` en el centro de
   notificaciones cuando la proyección cae por debajo de 0.
-- [ ] **Fase 6 — Recomendaciones con IA.** Wrapper de proveedor; recomendaciones
-  ancladas en las agregaciones (Fase 0) y presupuestos (Fase 1) ya existentes.
+- [x] **Fase 6 — Recomendaciones con IA** ✅ — wrapper agnóstico `lib/ai/` (interfaz +
+  factory por `AI_PROVIDER`, proveedor Claude con `@anthropic-ai/sdk`), resumen financiero
+  **anonimizado** puro (con tests) + parser zod, y página `/insights` con generación bajo
+  demanda y estado "no configurado" si falta la API key. Envs: `AI_PROVIDER`,
+  `ANTHROPIC_API_KEY`, `AI_MODEL`.
 
 **Dependencias:** F1 y F4 dependen de F0. F3 depende de F1 (para la alerta de
 presupuesto). F5 depende de F0 + F2. F6 se apoya en F0 + F1 (y mejora con F2/F5).

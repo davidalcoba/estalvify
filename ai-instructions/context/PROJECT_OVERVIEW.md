@@ -23,6 +23,8 @@ In-app notifications: a header bell surfaces alerts generated from the user's da
 
 Forecast: the `/forecast` page projects spending and balance from recent averages (last 6 full months) plus confirmed recurring charges — projected spend this month (linear extrapolation), average monthly net, a projected-balance curve for the next 6 months, and the next upcoming recurring charges. Pure logic in `lib/analytics/forecast.ts`; the projected-balance area chart is `components/reports/balance-forecast-chart.tsx`. When the projection dips below zero it also emits the `LOW_BALANCE_PROJECTED` notification.
 
+AI insights: the `/insights` page generates on-demand recommendations from an **anonymized** financial summary (aggregate amounts + category names only — never IBANs, raw descriptions, or merchant names). A provider-agnostic wrapper in `lib/ai/` (interface + factory selected by `AI_PROVIDER`, default a Claude provider using `@anthropic-ai/sdk`) keeps the model swappable and the API key server-side. Pure summary-building (`lib/ai/summary.ts`) and zod response parsing (`lib/ai/parse.ts`) are unit-tested. If no API key is configured, the page shows a clear "not configured" state instead of failing.
+
 ## Core Goals
 
 - Give users a clear picture of their money across accounts
@@ -43,6 +45,7 @@ Forecast: the `/forecast` page projects spending and balance from recent average
 - Auth.js v5 (`next-auth` beta) with Google OAuth and database sessions
 - Tailwind CSS v4 + shadcn/ui (Radix), theme-aware light/dark via `next-themes`
 - Recharts for charts (dashboard/reports), wrapped in `components/reports/` and colored via the `--chart-*` tokens
+- `@anthropic-ai/sdk` for AI insights, behind a provider-agnostic wrapper in `lib/ai/` (default provider Claude; `AI_PROVIDER` / `ANTHROPIC_API_KEY` / `AI_MODEL`)
 - Enable Banking (PSD2 open banking) for bank connections and sync
 - Async job processing with `@vercel/queue` + a daily Vercel cron
 - Vercel for deployment and platform services
