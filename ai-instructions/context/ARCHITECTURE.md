@@ -5,9 +5,12 @@
 - `app/`: routes, layouts, pages, API routes, and server actions
 - `components/`: reusable UI and domain components
 - `components/ui/`: base UI primitives (shadcn-based)
+- `components/layout/`: app shell pieces (sidebar, header, `theme-provider`, `page-header`)
 - `lib/`: business and integration logic
 - `prisma/`: schema and migrations
 - `scripts/`: operational scripts
+- Tests live next to code as `lib/**/*.test.ts` (Vitest, config in `vitest.config.ts`);
+  CI is `.github/workflows/ci.yml`.
 
 ## Deployment Context
 
@@ -30,7 +33,12 @@
 
 - `components/ui/*`
   - Base visual primitives used across the app
-  - Single source for buttons, cards, dialogs, inputs, badges, etc.
+  - Single source for buttons, cards, dialogs, inputs, badges, selects, etc.
+  - Shared building blocks added here: `empty-state` (placeholder states),
+    `simple-select` (flat Radix select wrapper), plus `layout/page-header`
+    (title/subtitle/actions) and `categorize/category-select` (hierarchical picker).
+  - Theming: `.dark` OKLCH tokens live in `app/globals.css`; runtime toggle via
+    `components/layout/theme-provider` (`next-themes`). Never hardcode colors.
 
 - `components/<domain>/*`
   - Domain-aware UI components (accounts, settings, transactions, categorize)
@@ -42,6 +50,12 @@
 - `lib/*`
   - Non-visual domain logic
   - Integration logic (banking sync, categorization internals, queue helpers)
+  - Banking helpers: `banking/sync` (sync engine), `banking/enable-banking`
+    (PSD2 client), `banking/transaction-parse` (pure ID/remittance parsing),
+    `banking/sync-errors` (pure 401/429 classifiers), `banking/connection-status`
+    (`expireStaleConsents` — flips connections past `consentExpiresAt` to EXPIRED).
+  - Formatting: always render money/dates via `lib/formatters`
+    (`formatCurrency` / `formatDate`), never ad-hoc `toLocaleString`.
 
 - `app/**/actions.ts`
   - Server actions for mutations

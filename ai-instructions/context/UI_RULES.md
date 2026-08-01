@@ -25,6 +25,27 @@ Pages can compose UI, but base controls must come from `components/ui/*`.
 2. Keep API reusable and generic
 3. Reuse it from domain components and pages
 
+## Design Tokens and Theming
+
+- Use **semantic tokens**, never hardcoded Tailwind color literals. Reach for
+  `bg-background`, `text-foreground`, `text-muted-foreground`, `border`, `bg-card`,
+  `bg-primary`, `text-destructive`, and the project tokens `success` / `warning` /
+  `brand` (solid or `/10` alpha for soft fills). Do NOT write `text-green-600`,
+  `bg-indigo-600`, `bg-white`, etc.
+- Everything must render correctly in **light and dark** (the app has a live
+  `next-themes` toggle). Tokens get this for free; hardcoded colors do not.
+- Dynamic per-category colors (hex from the DB) via `style={{}}` are the one
+  allowed exception — they are user data, not tokens.
+
+## Use the Shared Controls (no one-off form controls)
+
+- Selects: use `components/ui/simple-select` (flat options) or
+  `components/categorize/category-select` (hierarchical categories). Never a raw
+  `<select>` — Radix Select is theme-aware and consistent.
+- Placeholder/empty states: use `components/ui/empty-state`.
+- Page headers: use `components/layout/page-header` (title + subtitle + actions).
+- Money/dates: format via `lib/formatters`.
+
 ## Desktop and Mobile: First-Class Views
 
 This app is not desktop-only responsive.

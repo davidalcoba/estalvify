@@ -4,13 +4,14 @@
 
 Estalvify is a personal finance management app.
 
-Users connect their bank accounts and the system regularly syncs transactions. Transactions are categorized through a combination of:
+Users connect their bank accounts (via Enable Banking / PSD2) and the system regularly syncs transactions. Transactions are categorized through a combination of:
 
 - Manual categorization
 - Rule-based categorization
-- AI suggestions
 
-The product also supports monthly spending budgets and reporting capabilities. Some features are implemented and stable, while others are still in progress.
+(An AI-assisted categorization flow is reserved for the future but is not implemented — the `CategorizationSource.AI` value exists as a placeholder only.)
+
+The product also supports monthly spending budgets and reporting. Feature maturity is mixed: bank connect/sync, transactions, categorize, rules, and settings are stable; **dashboard, budget, and reports are still stubs** (placeholder UI, no real data yet).
 
 ## Core Goals
 
@@ -27,13 +28,19 @@ The product also supports monthly spending budgets and reporting capabilities. S
 
 ## Platform and Stack
 
-- Next.js App Router
-- React + TypeScript (strict)
-- Prisma
-- NextAuth
-- Tailwind CSS + shadcn/ui
-- Async job processing with queues
+- Next.js 16 (App Router) + React 19, TypeScript (strict)
+- Prisma 7 with the Neon serverless Postgres adapter
+- Auth.js v5 (`next-auth` beta) with Google OAuth and database sessions
+- Tailwind CSS v4 + shadcn/ui (Radix), theme-aware light/dark via `next-themes`
+- Enable Banking (PSD2 open banking) for bank connections and sync
+- Async job processing with `@vercel/queue` + a daily Vercel cron
 - Vercel for deployment and platform services
+
+## Quality Gates
+
+- Unit tests with Vitest (`lib/**/*.test.ts`); run `npm run test`.
+- CI (`.github/workflows/ci.yml`) runs typecheck + lint + tests on every PR.
+- Before finishing work: `npm run typecheck && npm run lint && npm run test`.
 
 ## Deployment and Platform Policy
 
