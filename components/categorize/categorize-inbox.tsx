@@ -23,6 +23,7 @@ import {
   categorizeTransaction,
 } from "@/app/(app)/categorize/actions";
 import { useCategorizeSearch } from "@/components/categorize/search-context";
+import { matchesTransactionSearch } from "@/lib/categorize";
 
 interface Props {
   transactions: TransactionListItemDTO[];
@@ -46,12 +47,6 @@ interface FocusModalProps {
   onReverted: (txId: string) => void;
 }
 
-function matchesSearch(tx: TransactionListItemDTO, query: string): boolean {
-  const lower = query.toLowerCase();
-  return [tx.description, tx.remittanceInfo].some((field) =>
-    field?.toLowerCase().includes(lower)
-  );
-}
 
 
 function FocusModal({
@@ -217,7 +212,7 @@ export function CategorizeInbox({
   const filtered = useMemo(() => {
     const query = searchInput.trim();
     if (query.length < 3) return available;
-    return available.filter((tx) => matchesSearch(tx, query));
+    return available.filter((tx) => matchesTransactionSearch(tx, query));
   }, [available, searchInput]);
 
   const checkedVisible = useMemo(

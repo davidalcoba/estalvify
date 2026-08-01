@@ -12,6 +12,7 @@ import {
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { SimpleSelect } from "@/components/ui/simple-select";
+import { matchesTransactionSearch } from "@/lib/categorize";
 
 interface CategorizeDesktopViewProps {
   transactions: TransactionListItemDTO[];
@@ -76,12 +77,7 @@ export function CategorizeDesktopView({
 }: CategorizeDesktopViewProps) {
   const activeQuery = searchInput.trim();
   const filtered = activeQuery.length >= 3
-    ? transactions.filter((tx) => {
-        const lower = activeQuery.toLowerCase();
-        return [tx.description, tx.remittanceInfo].some((f) =>
-          f?.toLowerCase().includes(lower)
-        );
-      })
+    ? transactions.filter((tx) => matchesTransactionSearch(tx, activeQuery))
     : transactions;
 
   const checkedVisible = filtered.filter((tx) => checkedIds.has(tx.id));
