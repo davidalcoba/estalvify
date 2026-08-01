@@ -33,16 +33,33 @@ export function registerTools(server: McpServer): void {
     "list_transactions",
     {
       description:
-        "List the user's transactions, most recent first. Optionally restrict to uncategorized ones and/or filter by a search term (matches description).",
+        "List the user's transactions, most recent first. Filter by a date range " +
+        "(dateFrom / dateTo, inclusive, format YYYY-MM-DD) to reach ANY period — " +
+        "without a date filter you only get the most recent `limit` rows. Also " +
+        "supports uncategorized-only and a description search. For large ranges, " +
+        "page with `offset` (skip N rows). The result includes a `pageInfo` with " +
+        "the total matching count so you know whether to page.",
       inputSchema: {
         uncategorizedOnly: z.boolean().optional(),
         search: z.string().optional(),
-        limit: z.number().int().min(1).max(200).optional(),
+        dateFrom: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+          .optional(),
+        dateTo: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+          .optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+        offset: z.number().int().min(0).optional(),
       },
     },
-    async ({ uncategorizedOnly, search, limit }, extra) => {
+    async (
+      { uncategorizedOnly, search, dateFrom, dateTo, limit, offset },
+      extra,
+    ) => {
       const userId = requireUserId(extra as ToolExtra);
-      const where = uncategorizedOnly
+      const base = uncategorizedOnly
         ? buildUncategorizedWhere(userId, search)
         : {
             userId,
@@ -51,18 +68,38 @@ export function registerTools(server: McpServer): void {
               : {}),
           };
 
-      const txs = await prisma.transaction.findMany({
-        where,
-        orderBy: { valueDate: "desc" },
-        take: limit ?? 50,
-        include: {
-          categorization: { include: { category: { select: { name: true } } } },
-          bankAccount: { select: { name: true } },
-        },
-      });
+      // valueDate is a DATE column; parse YYYY-MM-DD as UTC midnight (inclusive).
+      const valueDate: { gte?: Date; lte?: Date } = {};
+      if (dateFrom) valueDate.gte = new Date(dateFrom);
+      if (dateTo) valueDate.lte = new Date(dateTo);
+      const where =
+        dateFrom || dateTo ? { ...base, valueDate } : base;
 
-      return json(
-        txs.map((t) => ({
+      const take = limit ?? 50;
+      const skip = offset ?? 0;
+
+      const [total, txs] = await Promise.all([
+        prisma.transaction.count({ where }),
+        prisma.transaction.findMany({
+          where,
+          orderBy: { valueDate: "desc" },
+          take,
+          skip,
+          include: {
+            categorization: { include: { category: { select: { name: true } } } },
+            bankAccount: { select: { name: true } },
+          },
+        }),
+      ]);
+
+      return json({
+        pageInfo: {
+          total,
+          returned: txs.length,
+          offset: skip,
+          hasMore: skip + txs.length < total,
+        },
+        transactions: txs.map((t) => ({
           id: t.id,
           date: t.valueDate.toISOString().slice(0, 10),
           amount: Number(t.amount),
@@ -73,7 +110,7 @@ export function registerTools(server: McpServer): void {
           category: t.categorization?.category?.name ?? null,
           categorizationStatus: t.categorization?.status ?? null,
         })),
-      );
+      });
     },
   );
 
