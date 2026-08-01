@@ -5,6 +5,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { registerClient } from "@/lib/mcp/store";
+import { isDcrDisabled } from "@/lib/mcp/clients";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/mcp/http";
 
 const registerSchema = z.object({
@@ -17,6 +18,15 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // When a pre-configured client is set, open registration is closed.
+  if (isDcrDisabled()) {
+    return oauthError(
+      "access_denied",
+      "Dynamic client registration is disabled; use the configured client_id.",
+      403,
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

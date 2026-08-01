@@ -94,6 +94,19 @@ stored hashed.
   app). Tools reuse `lib/*` logic; bulk categorization goes through
   `lib/mcp/categorize.ts` (capped), sync enqueues via the queue.
 
+### Access control
+
+- **Sign-in allowlist**: when `ALLOWED_EMAILS` is set, the Auth.js `signIn`
+  callback (`auth.ts`) only lets those Google accounts in — locking both the app
+  and the MCP (which shares the login) to the owner. This is the decisive
+  control: only an allowed account can ever obtain an MCP token.
+- **Confidential client** (`lib/mcp/clients.ts`): when `MCP_OAUTH_CLIENT_ID` is
+  set, open Dynamic Client Registration is disabled and only that client id is
+  accepted; with `MCP_OAUTH_CLIENT_SECRET` set, the token endpoint authenticates
+  the client (client_secret_post/basic). Redirect URIs are validated against
+  `MCP_OAUTH_REDIRECT_URIS` (Anthropic hosts also trusted for the static client).
+  PKCE (S256) is always required.
+
 ## Multi-User Data Isolation
 
 All data access must be filtered by current user context.
