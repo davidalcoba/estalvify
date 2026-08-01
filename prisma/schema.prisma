@@ -25,18 +25,20 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // User preferences
-  timezone      String    @default("Europe/London")
-  currency      String    @default("EUR")
-  locale        String    @default("es-ES")
+  timezone String @default("Europe/London")
+  currency String @default("EUR")
+  locale   String @default("es-ES")
 
-  accounts        Account[]
-  sessions        Session[]
-  bankConnections BankConnection[]
-  bankAccounts    BankAccount[]
-  transactions    Transaction[]
-  categories      Category[]
-  categoryRules   CategoryRule[]
-  budgets         Budget[]
+  accounts         Account[]
+  sessions         Session[]
+  bankConnections  BankConnection[]
+  bankAccounts     BankAccount[]
+  transactions     Transaction[]
+  categories       Category[]
+  categoryRules    CategoryRule[]
+  budgets          Budget[]
+  mcpAuthCodes     McpAuthCode[]
+  mcpRefreshTokens McpRefreshToken[]
 
   @@map("users")
 }
@@ -97,7 +99,7 @@ model BankConnection {
   country  String @default("ES")
 
   // Enable Banking session
-  sessionId String  @unique // Enable Banking session ID
+  sessionId String @unique // Enable Banking session ID
 
   // Set only during PENDING_REAUTH when re-authing an existing connection
   reconnectConnectionId String?
@@ -111,7 +113,7 @@ model BankConnection {
 
   status    BankConnectionStatus @default(ACTIVE)
   createdAt DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  updatedAt DateTime             @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bankAccounts BankAccount[]
@@ -121,11 +123,11 @@ model BankConnection {
 
 enum BankConnectionStatus {
   ACTIVE
-  SYNCING         // Sync in progress
-  EXPIRED         // Token expired, needs re-auth
-  PENDING_REAUTH  // User must re-authenticate with the bank (OAuth in progress)
-  PENDING_SETUP   // OAuth done, user is selecting which accounts to import
-  REVOKED         // User explicitly disconnected
+  SYNCING // Sync in progress
+  EXPIRED // Token expired, needs re-auth
+  PENDING_REAUTH // User must re-authenticate with the bank (OAuth in progress)
+  PENDING_SETUP // OAuth done, user is selecting which accounts to import
+  REVOKED // User explicitly disconnected
 }
 
 model BankAccount {
@@ -145,13 +147,13 @@ model BankAccount {
 
   // Per-account sync tracking (finer-grained than connection-level lastSyncAt)
   lastSyncAt    DateTime? // When this account last synced successfully
-  lastSyncError String?   // Error from the most recent failed sync (null on success)
+  lastSyncError String? // Error from the most recent failed sync (null on success)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bankConnection BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankConnection BankConnection   @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
   balances       AccountBalance[]
   transactions   Transaction[]
 
@@ -171,11 +173,11 @@ model AccountBalance {
   id            String @id @default(cuid())
   bankAccountId String
 
-  date          DateTime @db.Date // Day this balance corresponds to
-  balance       Decimal  @db.Decimal(15, 2)
-  available     Decimal? @db.Decimal(15, 2) // Available balance (differs from balance for credit)
-  currency      String   @default("EUR")
-  balanceType   String?  // e.g. "closingBooked", "expected" (from Enable Banking)
+  date        DateTime @db.Date // Day this balance corresponds to
+  balance     Decimal  @db.Decimal(15, 2)
+  available   Decimal? @db.Decimal(15, 2) // Available balance (differs from balance for credit)
+  currency    String   @default("EUR")
+  balanceType String? // e.g. "closingBooked", "expected" (from Enable Banking)
 
   createdAt DateTime @default(now())
 
@@ -198,9 +200,9 @@ model Transaction {
   externalTransactionId String
 
   // Core financial data
-  amount      Decimal @db.Decimal(15, 2)
-  currency    String  @default("EUR")
-  direction   TransactionDirection // DEBIT or CREDIT
+  amount    Decimal              @db.Decimal(15, 2)
+  currency  String               @default("EUR")
+  direction TransactionDirection // DEBIT or CREDIT
 
   // Dates
   valueDate DateTime @db.Date // When money actually moved (value date)
@@ -218,7 +220,7 @@ model Transaction {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
 
-  categorization   TransactionCategorization?
+  categorization TransactionCategorization?
 
   @@unique([bankAccountId, externalTransactionId])
   @@index([userId, valueDate])
@@ -227,7 +229,7 @@ model Transaction {
 }
 
 enum TransactionDirection {
-  DEBIT  // Money out
+  DEBIT // Money out
   CREDIT // Money in
 }
 
@@ -249,18 +251,18 @@ model Category {
   sortOrder       Int     @default(0)
 
   // Self-referential for subcategories
-  parentId  String?
-  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children  Category[] @relation("CategoryHierarchy")
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user                   User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoryRules          CategoryRule[]          @relation("TargetCategoryRules")
-  sourceCategoryRules    CategoryRule[]          @relation("SourceCategoryRules")
-  transactionCategories  TransactionCategorization[]
-  budgetItems            BudgetItem[]
+  user                  User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryRules         CategoryRule[]              @relation("TargetCategoryRules")
+  sourceCategoryRules   CategoryRule[]              @relation("SourceCategoryRules")
+  transactionCategories TransactionCategorization[]
+  budgetItems           BudgetItem[]
 
   @@map("categories")
 }
@@ -272,23 +274,23 @@ model CategoryRule {
   categoryId String // Target category for matched transactions
 
   name       String
-  conditions Json   // Array of RuleCondition: [{field, operator, value}]
+  conditions Json // Array of RuleCondition: [{field, operator, value}]
   // Field options: "description", "remittanceInfo", "amount", "direction"
   // Operator options: "contains", "equals", "startsWith", "endsWith", "greaterThan", "lessThan"
 
   // Optional: only match transactions already in this category (re-categorization)
   sourceCategoryId String?
 
-  isActive    Boolean @default(true)
-  priority    Int     @default(0) // Higher priority rules applied first
+  isActive           Boolean @default(true)
+  priority           Int     @default(0) // Higher priority rules applied first
   applyRetroactively Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category              Category                  @relation("TargetCategoryRules", fields: [categoryId], references: [id])
-  sourceCategory        Category?                 @relation("SourceCategoryRules", fields: [sourceCategoryId], references: [id])
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category              Category                    @relation("TargetCategoryRules", fields: [categoryId], references: [id])
+  sourceCategory        Category?                   @relation("SourceCategoryRules", fields: [sourceCategoryId], references: [id])
   transactionCategories TransactionCategorization[]
 
   @@map("category_rules")
@@ -300,8 +302,8 @@ model TransactionCategorization {
   transactionId String @unique
   categoryId    String
 
-  status    CategorizationStatus @default(PENDING)
-  source    CategorizationSource // How the categorization was suggested
+  status CategorizationStatus @default(PENDING)
+  source CategorizationSource // How the categorization was suggested
 
   // Which rule triggered this (if source = RULE)
   categoryRuleId String?
@@ -314,22 +316,22 @@ model TransactionCategorization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  category      Category      @relation(fields: [categoryId], references: [id])
-  categoryRule  CategoryRule? @relation(fields: [categoryRuleId], references: [id])
+  transaction  Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category     Category      @relation(fields: [categoryId], references: [id])
+  categoryRule CategoryRule? @relation(fields: [categoryRuleId], references: [id])
 
   @@map("transaction_categorizations")
 }
 
 enum CategorizationStatus {
-  PENDING   // Suggested, waiting for user approval
-  APPROVED  // User confirmed
-  REJECTED  // User rejected (will be re-queued for manual categorization)
+  PENDING // Suggested, waiting for user approval
+  APPROVED // User confirmed
+  REJECTED // User rejected (will be re-queued for manual categorization)
 }
 
 enum CategorizationSource {
-  RULE   // Matched a user-defined rule
-  AI     // Reserved for AI-assisted categorization (not implemented yet)
+  RULE // Matched a user-defined rule
+  AI // Reserved for AI-assisted categorization (not implemented yet)
   MANUAL // User categorized manually
 }
 
@@ -379,13 +381,13 @@ model BudgetItem {
 // ─────────────────────────────────────────────
 
 model SyncLog {
-  id     String @id @default(cuid())
+  id     String  @id @default(cuid())
   userId String?
 
-  syncDate     DateTime @db.Date // Which day's data was synced
-  status       SyncStatus
-  transactionsFetched Int @default(0)
-  accountsSynced      Int @default(0)
+  syncDate            DateTime   @db.Date // Which day's data was synced
+  status              SyncStatus
+  transactionsFetched Int        @default(0)
+  accountsSynced      Int        @default(0)
   errorMessage        String?
   durationMs          Int?
 
@@ -399,4 +401,61 @@ enum SyncStatus {
   SUCCESS
   PARTIAL // Some accounts failed
   FAILED
+}
+
+// ─────────────────────────────────────────────
+// MCP - OAuth 2.1 Authorization Server (for the MCP API)
+// See lib/mcp/oauth.ts for the crypto primitives.
+// ─────────────────────────────────────────────
+
+model McpOAuthClient {
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  clientName   String?
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  authCodes     McpAuthCode[]
+  refreshTokens McpRefreshToken[]
+
+  @@map("mcp_oauth_clients")
+}
+
+model McpAuthCode {
+  id                  String    @id @default(cuid())
+  codeHash            String    @unique
+  clientId            String
+  userId              String
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String    @default("S256")
+  scope               String?
+  expiresAt           DateTime
+  usedAt              DateTime?
+  createdAt           DateTime  @default(now())
+
+  client McpOAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("mcp_auth_codes")
+}
+
+model McpRefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  clientId  String
+  userId    String
+  scope     String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  client McpOAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("mcp_refresh_tokens")
 }
