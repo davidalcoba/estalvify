@@ -54,6 +54,7 @@ longer matches.
 - `./ai-instructions/context/CODING_RULES.md`
 - `./ai-instructions/context/PLAYBOOK_NEW_FEATURE.md`
 - `./ai-instructions/context/GLOSSARY.md`
+- `./ai-instructions/context/ROADMAP.md`
 
 ## Skills
 - `./ai-instructions/skills/frontend-design/SKILL.md`
