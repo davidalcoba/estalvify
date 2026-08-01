@@ -14,14 +14,6 @@ export const maxDuration = 60;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const handler = createMcpHandler(
-  (server) => {
-    registerTools(server);
-  },
-  { serverInfo: { name: "estalvify-mcp", version: "0.1.0" } },
-  { basePath: "/api" },
-);
-
 async function verifyToken(
   _req: Request,
   bearerToken?: string,
@@ -37,9 +29,33 @@ async function verifyToken(
   };
 }
 
-const authHandler = withMcpAuth(handler, verifyToken, {
-  required: true,
-  resourceMetadataPath: "/.well-known/oauth-protected-resource",
-});
+// Build the handler lazily on first request. Constructing it at module scope
+// runs mcp-handler setup during `next build`'s page-data collection, which
+// crashes the static-generation worker (observed as a spurious /favicon.ico
+// prerender error). Deferring to request time keeps module import side-effect-free.
+let handler: ((req: Request) => Promise<Response>) | null = null;
 
-export { authHandler as GET, authHandler as POST };
+function getHandler(): (req: Request) => Promise<Response> {
+  if (!handler) {
+    const base = createMcpHandler(
+      (server) => {
+        registerTools(server);
+      },
+      { serverInfo: { name: "estalvify-mcp", version: "0.1.0" } },
+      { basePath: "/api" },
+    );
+    handler = withMcpAuth(base, verifyToken, {
+      required: true,
+      resourceMetadataPath: "/.well-known/oauth-protected-resource",
+    });
+  }
+  return handler;
+}
+
+export function GET(req: Request): Promise<Response> {
+  return getHandler()(req);
+}
+
+export function POST(req: Request): Promise<Response> {
+  return getHandler()(req);
+}
