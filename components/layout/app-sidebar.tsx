@@ -61,6 +61,11 @@ const navItems = [
         // Badge count will come from props in the future
       },
       {
+        title: "Insights",
+        url: "/insights",
+        icon: Sparkles,
+      },
+      {
         title: "Rules",
         url: "/rules",
         icon: ListFilter,

@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/categorize": "Categorize",
+  "/insights": "Insights",
   "/rules": "Rules",
   "/budget": "Budget",
   "/transactions": "Transactions",

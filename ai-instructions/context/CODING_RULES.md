@@ -18,6 +18,7 @@
 - Always scope user-owned entities to authenticated user context
 - Validate external inputs and API payloads
 - Avoid leaking sensitive banking details in logs or errors
+- When sending data to external AI providers, send only anonymized aggregates (amounts + category names) — never IBANs, raw transaction descriptions, or merchant names. AI provider keys are server-side only and must never reach the client (see `lib/ai/`).
 
 ## Async and Reliability
 
