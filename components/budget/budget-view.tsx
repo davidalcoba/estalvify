@@ -130,18 +130,22 @@ export function BudgetView({
         title="Budget"
         description="Plan where your money goes each month, and track it against real spending."
         actions={
-          <div className="flex items-center gap-2">
-            {hasPreviousBudget && (
-              <Button variant="outline" onClick={handleCopyPrevious} disabled={pending}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy last month
+          // Only in the header when there are rows — the empty state hosts its
+          // own CTAs, so this avoids duplicate "Add category" buttons.
+          hasRows ? (
+            <div className="flex items-center gap-2">
+              {hasPreviousBudget && (
+                <Button variant="outline" onClick={handleCopyPrevious} disabled={pending}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy last month
+                </Button>
+              )}
+              <Button onClick={openAdd} disabled={pending || addableCategories.length === 0}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add category
               </Button>
-            )}
-            <Button onClick={openAdd} disabled={pending || addableCategories.length === 0}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add category
-            </Button>
-          </div>
+            </div>
+          ) : undefined
         }
       />
 
