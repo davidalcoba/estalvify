@@ -442,16 +442,25 @@ export function CategorizeInbox({
             total={total}
             page={page}
             pageSize={pageSize}
+            pageSizeOptions={pageSizeOptions}
             locale={locale}
             timezone={timezone}
             searchInput={searchInput}
             onSearchInputChange={setSearchInput}
             onCategorize={handleCategorize}
             pageUrl={pageUrl}
+            onPageSizeChange={handlePageSizeChange}
             isBulking={isBulking}
             bulkQueryCategoryId={bulkQueryCategoryId}
             onBulkQueryCategoryChange={setBulkQueryCategoryId}
             onBulkByQuery={handleBulkByQuery}
+            checkedIds={checkedIds}
+            bulkCategoryId={bulkCategoryId}
+            onBulkCategoryChange={setBulkCategoryId}
+            onBulkApply={handleBulkApply}
+            onClearSelection={() => setCheckedIds(new Set())}
+            onToggleCheck={toggleCheck}
+            onToggleAll={toggleAll}
           />
         </div>
       </div>
