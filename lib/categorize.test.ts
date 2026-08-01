@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { buildUncategorizedWhere } from "./categorize";
+import { buildUncategorizedWhere, matchesTransactionSearch } from "./categorize";
+
+describe("matchesTransactionSearch", () => {
+  const tx = { description: "MERCADONA SL", remittanceInfo: "COMPRA TARJETA" };
+
+  it("matches case-insensitively on description", () => {
+    expect(matchesTransactionSearch(tx, "mercadona")).toBe(true);
+  });
+
+  it("matches on remittanceInfo", () => {
+    expect(matchesTransactionSearch(tx, "tarjeta")).toBe(true);
+  });
+
+  it("returns false when neither field contains the query", () => {
+    expect(matchesTransactionSearch(tx, "netflix")).toBe(false);
+  });
+
+  it("tolerates null fields", () => {
+    expect(matchesTransactionSearch({ description: null, remittanceInfo: null }, "x")).toBe(false);
+  });
+});
 
 function andClauses(where: unknown): Record<string, unknown>[] {
   return (where as { AND: Record<string, unknown>[] }).AND;

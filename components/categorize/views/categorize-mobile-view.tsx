@@ -18,6 +18,7 @@ import {
 } from "@/lib/transactions/transaction-dto";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
+import { matchesTransactionSearch } from "@/lib/categorize";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
@@ -105,12 +106,7 @@ export function CategorizeMobileView({
   const activeQuery = searchInput.trim();
   const filtered =
     activeQuery.length >= 3
-      ? transactions.filter((tx) => {
-          const lower = activeQuery.toLowerCase();
-          return [tx.description, tx.remittanceInfo].some((f) =>
-            f?.toLowerCase().includes(lower)
-          );
-        })
+      ? transactions.filter((tx) => matchesTransactionSearch(tx, activeQuery))
       : transactions;
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));

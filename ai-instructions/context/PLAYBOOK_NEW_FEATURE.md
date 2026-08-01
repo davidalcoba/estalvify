@@ -35,8 +35,14 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 - Use queue-based processing for long-running operations.
 - Surface progress/status clearly in UI.
 
-8. Validate and ship
-- Run lint and relevant checks
+8. Update the docs (same change)
+- If the change touches architecture, stack, UI conventions, or feature status,
+  update the relevant file in `ai-instructions/context/` in the same PR.
+- Add/adjust env vars in `.env.example` when introducing new configuration.
+
+9. Validate and ship
+- Run `npm run typecheck && npm run lint && npm run test`
+- Add Vitest tests for any new pure logic
 - Validate key flows manually
 - Summarize what is implemented vs pending
 

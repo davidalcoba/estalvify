@@ -3,9 +3,6 @@
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Calendar,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -17,19 +14,16 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { CategorizeDesktopView } from "@/components/categorize/views/categorize-desktop-view";
 import { CategorizeMobileView } from "@/components/categorize/views/categorize-mobile-view";
-import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
+import { TransactionDetailCard } from "@/components/transactions/shared/transaction-detail-card";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
-import {
-  transactionMerchant,
-  transactionOperationType,
-  type TransactionListItemDTO,
-} from "@/lib/transactions/transaction-dto";
+import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import {
   bulkCategorize,
   bulkCategorizeByIds,
   categorizeTransaction,
 } from "@/app/(app)/categorize/actions";
 import { useCategorizeSearch } from "@/components/categorize/search-context";
+import { matchesTransactionSearch } from "@/lib/categorize";
 
 interface Props {
   transactions: TransactionListItemDTO[];
@@ -53,22 +47,7 @@ interface FocusModalProps {
   onReverted: (txId: string) => void;
 }
 
-function matchesSearch(tx: TransactionListItemDTO, query: string): boolean {
-  const lower = query.toLowerCase();
-  return [tx.description, tx.remittanceInfo].some((field) =>
-    field?.toLowerCase().includes(lower)
-  );
-}
 
-function fmtDateLong(dateIso: string, locale: string, timezone: string): string {
-  return new Date(dateIso).toLocaleDateString(locale, {
-    timeZone: timezone,
-    weekday: "short",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
 
 function FocusModal({
   snapshot,
@@ -154,48 +133,7 @@ function FocusModal({
             </div>
           ) : current ? (
             <>
-              <div className="rounded-xl border bg-muted/30 p-4 space-y-3 min-w-0 overflow-hidden">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      current.direction === "CREDIT"
-                        ? "bg-success/10 text-success"
-                        : "bg-destructive/10 text-destructive"
-                    }`}
-                  >
-                    {current.direction === "CREDIT" ? (
-                      <ArrowDownLeft className="h-4 w-4" />
-                    ) : (
-                      <ArrowUpRight className="h-4 w-4" />
-                    )}
-                  </div>
-                  <TransactionAmount
-                    amount={current.amount}
-                    currency={current.currency}
-                    direction={current.direction}
-                    locale={locale}
-                    className="text-xl"
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="font-semibold leading-tight break-words">
-                    {transactionMerchant(current)}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-0.5 break-words">
-                    {transactionOperationType(current)}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t min-w-0">
-                  <span className="flex items-center gap-1 min-w-0">
-                    <Calendar className="h-3 w-3" />
-                    <span className="truncate">
-                      {fmtDateLong(current.valueDate, locale, timezone)}
-                    </span>
-                  </span>
-                </div>
-              </div>
+              <TransactionDetailCard transaction={current} locale={locale} timezone={timezone} />
 
               <div className="flex items-center gap-2">
                 <CategorySelect
@@ -274,7 +212,7 @@ export function CategorizeInbox({
   const filtered = useMemo(() => {
     const query = searchInput.trim();
     if (query.length < 3) return available;
-    return available.filter((tx) => matchesSearch(tx, query));
+    return available.filter((tx) => matchesTransactionSearch(tx, query));
   }, [available, searchInput]);
 
   const checkedVisible = useMemo(

@@ -31,6 +31,15 @@
 - Use clear names for domain concepts
 - Prefer extending existing patterns over introducing competing ones
 - Do not modify unrelated files in a feature change
+- Render money/dates via `lib/formatters` (`formatCurrency`/`formatDate`), never ad-hoc
+
+## Testing and Checks
+
+- Pure logic (parsers, classifiers, query/where builders, formatters) should have
+  Vitest unit tests next to it (`lib/**/*.test.ts`). Extract logic to a pure module
+  when that makes it testable without the DB/network.
+- Before finishing: run `npm run typecheck && npm run lint && npm run test`.
+- CI (`.github/workflows/ci.yml`) enforces the same gate on every PR.
 
 ## Platform Preference
 

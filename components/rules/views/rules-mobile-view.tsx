@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Pencil, Play, Trash2, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +10,7 @@ import {
   FIELD_LABELS,
   OPERATOR_LABELS,
 } from "@/lib/rules/rule-dto";
-import {
-  executeRule,
-  deleteRule,
-  toggleRuleActive,
-} from "@/app/(app)/rules/actions";
+import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
 
@@ -44,33 +40,8 @@ export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
 }
 
 function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
-  const [isPending, startTransition] = useTransition();
-  const [result, setResult] = useState<string | null>(null);
+  const { isPending, result, handleExecute, handleDelete, handleToggleActive } = useRuleRowActions(rule);
   const [editing, setEditing] = useState(false);
-
-  function handleExecute() {
-    setResult(null);
-    startTransition(async () => {
-      const { categorized } = await executeRule(rule.id);
-      setResult(
-        categorized > 0
-          ? `${categorized} transaction${categorized !== 1 ? "s" : ""} categorized`
-          : "No matches"
-      );
-    });
-  }
-
-  function handleDelete() {
-    startTransition(async () => {
-      await deleteRule(rule.id);
-    });
-  }
-
-  function handleToggleActive() {
-    startTransition(async () => {
-      await toggleRuleActive(rule.id, !rule.isActive);
-    });
-  }
 
   return (
     <>

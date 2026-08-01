@@ -11,6 +11,13 @@ For AI coding assistants (Codex, Claude, Copilot), use the context docs in:
 These files define architecture, UI constraints, multi-user rules, and desktop/mobile expectations.
 They also define a Vercel-first implementation policy: deploy on Vercel and prefer Vercel built-in features when feasible.
 
+## Environment variables
+
+Copy `.env.example` to `.env.local` and fill in the values. It documents every variable
+the app reads (database, Auth.js/Google, Enable Banking, cron). Note
+`ENABLE_BANKING_REDIRECT_URI` must exactly match a redirect URI registered in the Enable
+Banking app config, and should be set on all Vercel environments.
+
 ## Getting Started
 
 First, run the development server:
