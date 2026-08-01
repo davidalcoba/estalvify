@@ -11,7 +11,9 @@ Users connect their bank accounts (via Enable Banking / PSD2) and the system reg
 
 (An AI-assisted categorization flow is reserved for the future but is not implemented — the `CategorizationSource.AI` value exists as a placeholder only.)
 
-The product also supports monthly spending budgets and reporting. Feature maturity is mixed: bank connect/sync, transactions, categorize, rules, and settings are stable; **dashboard, budget, and reports are still stubs** (placeholder UI, no real data yet).
+The product also supports monthly spending budgets and reporting. Feature maturity is mixed: bank connect/sync, transactions, categorize, rules, budgets, and settings are stable; **dashboard and reports are still stubs** (placeholder UI, no real data yet).
+
+Budgets: users set a planned amount per category for a month and track it against real spending (derived from approved-category DEBIT transactions). See `app/(app)/budget/`, `lib/budget/` (progress + DTO), `lib/analytics/spending.ts` (monthly spending aggregation), and `components/budget/`.
 
 ## Core Goals
 

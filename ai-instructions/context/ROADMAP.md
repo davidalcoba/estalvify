@@ -8,8 +8,8 @@
 > como un PR independiente siguiendo `PLAYBOOK_NEW_FEATURE.md`, y **marca la fase como
 > hecha aquí** en el mismo cambio.
 
-**Última actualización:** 2026-08-01 · **Fase en curso:** ninguna (documento inicial) ·
-**Siguiente a construir:** Fase 1 — Presupuestos.
+**Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
+**Siguiente a construir:** Fase 2 — Recurrentes + suscripciones.
 
 ---
 
@@ -26,7 +26,7 @@
 | Cuentas y balances | ✅ Estable | `app/(app)/accounts/`, modelos `BankAccount` / `AccountBalance` |
 | Ajustes / preferencias (zona, moneda, locale) | ✅ Estable | `app/(app)/settings/`, `lib/user-prefs.ts` |
 | **Dashboard** | 🟡 Stub | `app/(app)/dashboard/page.tsx` — KPIs hardcodeados a 0, sin queries |
-| **Presupuestos** | 🟡 Stub | UI deshabilitada, pero **modelos `Budget` / `BudgetItem` ya existen** en `prisma/schema.prisma` |
+| **Presupuestos** | ✅ Estable | Presupuesto mensual por categoría vs gasto real: `app/(app)/budget/`, `lib/budget/`, `lib/analytics/spending.ts`, `components/budget/` |
 | **Reports** | 🟡 Stub | `app/(app)/reports/page.tsx` — pantalla vacía; **sin librería de gráficas** (tokens `--chart-1..5` ya en `app/globals.css`) |
 | Gastos recurrentes / suscripciones | ❌ No existe | — |
 | Previsión (forecast) | ❌ No existe | — |
@@ -92,11 +92,11 @@ respeta `PLAYBOOK_NEW_FEATURE.md` (capas correctas, vistas desktop+mobile, scopi
 usuario, tests de lógica pura, y actualización de docs + `.env.example` en el mismo
 cambio). Marca el estado aquí al terminar.
 
-- [ ] **Fase 0 — Fundaciones de datos.** Módulo `lib/analytics/` con agregaciones puras
-  y testeadas: gasto real por categoría en `(year, month)`, ingresos vs gastos, totales
-  por mes. Scoping por `userId`. Lo consumen Presupuestos, Dashboard y Reports. *(Se
-  puede construir junto con la Fase 1, que es su primer consumidor.)*
-- [ ] **Fase 1 — Presupuestos** *(primera a construir — detalle en §5)*.
+- [x] **Fase 0 — Fundaciones de datos** ✅ — `lib/analytics/spending.ts` (rango de mes,
+  `where` de gasto mensual y agregación por categoría, con tests). Ampliar con ingresos
+  vs gastos y totales por mes cuando lleguen Dashboard/Reports (Fase 4).
+- [x] **Fase 1 — Presupuestos** ✅ — presupuesto mensual por categoría vs gasto real, con
+  navegación de mes, copiar mes anterior y sección de gasto sin presupuestar. Ver §5.
 - [ ] **Fase 2 — Recurrentes + suscripciones.** Modelo `RecurringSeries`, detector puro
   en `lib/recurring/` con tests, UI de revisión/confirmación de series.
 - [ ] **Fase 3 — Centro de notificaciones in-app.** Modelo `Notification`, campana en el
