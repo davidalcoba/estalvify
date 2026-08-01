@@ -11,7 +11,9 @@ Users connect their bank accounts (via Enable Banking / PSD2) and the system reg
 
 (An AI-assisted categorization flow is reserved for the future but is not implemented — the `CategorizationSource.AI` value exists as a placeholder only.)
 
-The product also supports monthly spending budgets and reporting. Feature maturity is mixed: bank connect/sync, transactions, categorize, rules, budgets, and settings are stable; **dashboard and reports are still stubs** (placeholder UI, no real data yet).
+The product also supports monthly spending budgets and reporting. Bank connect/sync, transactions, categorize, rules, budgets, recurring detection, notifications, dashboard, reports, and settings are all functional with real data.
+
+Dashboard & reports: the dashboard shows real KPIs (net worth from latest balances, income/expenses this month, transactions to categorize) plus a 6-month income-vs-expenses chart and top categories; reports show a 12-month trend, a spending-by-category donut, and top merchants. Trend/aggregation logic is in `lib/analytics/` (`spending.ts`, `trends.ts`); charts are theme-aware Recharts components in `components/reports/` using the `--chart-*` tokens.
 
 Budgets: users set a planned amount per category for a month and track it against real spending (derived from approved-category DEBIT transactions). See `app/(app)/budget/`, `lib/budget/` (progress + DTO), `lib/analytics/spending.ts` (monthly spending aggregation), and `components/budget/`.
 
@@ -38,6 +40,7 @@ In-app notifications: a header bell surfaces alerts generated from the user's da
 - Prisma 7 with the Neon serverless Postgres adapter
 - Auth.js v5 (`next-auth` beta) with Google OAuth and database sessions
 - Tailwind CSS v4 + shadcn/ui (Radix), theme-aware light/dark via `next-themes`
+- Recharts for charts (dashboard/reports), wrapped in `components/reports/` and colored via the `--chart-*` tokens
 - Enable Banking (PSD2 open banking) for bank connections and sync
 - Async job processing with `@vercel/queue` + a daily Vercel cron
 - Vercel for deployment and platform services
