@@ -127,7 +127,7 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                   href="/dashboard"
                   onClick={isMobile ? () => setOpenMobile(false) : undefined}
                 >
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-brand text-brand-foreground">
                     <Sparkles className="size-4" />
                   </div>
                   <div className="flex flex-col gap-0.5 leading-none">
@@ -176,8 +176,8 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                           <span>{item.title}</span>
                           {item.url === "/categorize" && pendingCategorizations > 0 && (
                             <Badge
-                              variant="default"
-                              className="ml-auto h-5 min-w-5 px-1 text-xs bg-indigo-600"
+                              variant="brand"
+                              className="ml-auto h-5 min-w-5 px-1 text-xs"
                             >
                               {pendingCategorizations > 99 ? "99+" : pendingCategorizations}
                             </Badge>
@@ -206,7 +206,7 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
-                    <AvatarFallback className="rounded-lg bg-indigo-100 text-indigo-700 text-xs font-semibold">
+                    <AvatarFallback className="rounded-lg bg-brand/10 text-brand text-xs font-semibold">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
@@ -229,7 +229,7 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onSignOut} className="text-red-600 focus:text-red-600">
+                <DropdownMenuItem onClick={onSignOut} className="text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out
                 </DropdownMenuItem>

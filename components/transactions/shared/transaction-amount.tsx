@@ -14,7 +14,7 @@ export function TransactionAmount({ amount, currency, direction, locale, classNa
     <p
       className={cn(
         "font-semibold tabular-nums shrink-0",
-        direction === "CREDIT" ? "text-green-600" : "text-foreground",
+        direction === "CREDIT" ? "text-success" : "text-foreground",
         className
       )}
     >

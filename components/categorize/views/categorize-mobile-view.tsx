@@ -147,8 +147,8 @@ export function CategorizeMobileView({
   return (
     <div className="space-y-4">
       {showBulkByQuery && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-          <span className="text-sm font-medium text-blue-700 w-full">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
+          <span className="text-sm font-medium text-brand w-full">
             Categorize all {filtered.length} matching as:
           </span>
           <select
@@ -165,7 +165,7 @@ export function CategorizeMobileView({
             size="sm"
             onClick={onBulkByQuery}
             disabled={!bulkQueryCategoryId || isBulking}
-            className="bg-blue-600 hover:bg-blue-700 h-8"
+            className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
           >
             {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
           </Button>
@@ -175,8 +175,8 @@ export function CategorizeMobileView({
       {allCaughtUp && (
         <Card className="border-dashed">
           <div className="flex flex-col items-center gap-3 py-12 text-center px-4">
-            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-success" />
             </div>
             <div>
               <p className="font-semibold">All caught up!</p>
@@ -318,7 +318,7 @@ export function CategorizeMobileView({
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
                     title="Create rule for this transaction"
                   >

@@ -182,7 +182,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
 
           {error && <p className="text-sm text-destructive">{error}</p>}
           {executeResult && (
-            <p className="text-sm text-green-600 font-medium">{executeResult}</p>
+            <p className="text-sm text-success font-medium">{executeResult}</p>
           )}
 
           {/* Actions */}

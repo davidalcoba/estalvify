@@ -44,10 +44,10 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Income this month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <TrendingUp className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">+€0.00</div>
+            <div className="text-2xl font-bold text-success">+€0.00</div>
             <p className="text-xs text-muted-foreground">No data yet</p>
           </CardContent>
         </Card>
@@ -55,10 +55,10 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Expenses this month</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">-€0.00</div>
+            <div className="text-2xl font-bold text-destructive">-€0.00</div>
             <p className="text-xs text-muted-foreground">No data yet</p>
           </CardContent>
         </Card>
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">To categorize</CardTitle>
-            <Tag className="h-4 w-4 text-indigo-500" />
+            <Tag className="h-4 w-4 text-brand" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">0</div>
@@ -79,8 +79,8 @@ export default async function DashboardPage() {
       <Card className="border-dashed">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
-              <Wallet className="h-6 w-6 text-indigo-600" />
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <Wallet className="h-6 w-6 text-muted-foreground" />
             </div>
           </div>
           <CardTitle>Connect your first bank account</CardTitle>

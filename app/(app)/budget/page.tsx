@@ -39,8 +39,8 @@ export default async function BudgetPage() {
       <Card className="border-dashed">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-              <PiggyBank className="h-6 w-6 text-purple-600" />
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <PiggyBank className="h-6 w-6 text-muted-foreground" />
             </div>
           </div>
           <CardTitle>Create your first budget</CardTitle>

@@ -20,8 +20,8 @@ export default function ReportsPage() {
       <Card className="border-dashed">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-              <BarChart3 className="h-6 w-6 text-amber-600" />
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <BarChart3 className="h-6 w-6 text-muted-foreground" />
             </div>
           </div>
           <CardTitle>Reports coming soon</CardTitle>

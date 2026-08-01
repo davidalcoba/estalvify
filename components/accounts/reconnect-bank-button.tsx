@@ -50,13 +50,13 @@ export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, lab
         disabled={isPending}
         className={secondary
           ? "gap-1.5 h-7 text-xs text-muted-foreground hover:text-foreground"
-          : "gap-1.5 h-7 text-xs border border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700"}
+          : "gap-1.5 h-7 text-xs border border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"}
       >
         {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
         {!isPending && !secondary && <RefreshCw className="h-3 w-3" />}
         {label}
       </Button>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

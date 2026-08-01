@@ -61,26 +61,26 @@ export function AccountSelectionForm({
               disabled={isPending}
               className={`w-full text-left rounded-lg border px-4 py-3 transition-colors flex items-center gap-3 ${
                 isSelected
-                  ? "border-indigo-500 bg-indigo-50"
+                  ? "border-brand bg-brand/10"
                   : "border-border bg-background hover:bg-muted/50"
               }`}
             >
               {/* Checkbox indicator */}
               <span
                 className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
-                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-input"
+                  isSelected ? "bg-brand border-brand" : "border-input"
                 }`}
               >
                 {isSelected && (
-                  <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 8" fill="none">
+                  <svg className="w-2.5 h-2.5 text-brand-foreground" viewBox="0 0 10 8" fill="none">
                     <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </span>
 
               {/* Account icon */}
-              <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center shrink-0">
-                <Building2 className="h-4 w-4 text-slate-500" />
+              <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
               </div>
 
               {/* Account info */}

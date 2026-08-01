@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 function BankAccountRowSkeleton() {
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50">
+    <div className="flex items-center gap-3 px-3 py-2.5 bg-muted/50">
       <div className="flex-1 min-w-0 space-y-1">
         <Skeleton className="h-4 w-36" />
         <Skeleton className="h-3 w-28" />
@@ -38,7 +38,7 @@ function BankCardSkeleton({ rows = 2 }: { rows?: number }) {
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
-        <div className="divide-y divide-slate-100 rounded-lg border border-slate-100 overflow-hidden">
+        <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
           {Array.from({ length: rows }).map((_, i) => (
             <BankAccountRowSkeleton key={i} />
           ))}
@@ -61,7 +61,7 @@ export default function AccountsLoading() {
       </div>
 
       {/* PSD2 security info card */}
-      <Card className="bg-indigo-50 border-indigo-200">
+      <Card className="bg-brand/5 border-brand/20">
         <CardContent className="flex items-start gap-3 pt-4 pb-4">
           <Skeleton className="h-5 w-5 shrink-0 mt-0.5 rounded" />
           <div className="space-y-1.5 flex-1">

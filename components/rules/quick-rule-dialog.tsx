@@ -124,7 +124,7 @@ export function QuickRuleDialog({
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+        <Zap className="h-4 w-4 text-warning shrink-0" />
         <h2 className="font-semibold text-base">Create rule</h2>
       </div>
 
@@ -223,7 +223,7 @@ export function QuickRuleDialog({
 
       {result ? (
         <div className="space-y-3">
-          <p className="text-sm text-green-600 font-medium">{result.msg}</p>
+          <p className="text-sm text-success font-medium">{result.msg}</p>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>
               Close

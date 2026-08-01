@@ -9,7 +9,11 @@ import { getUserPrefs } from "@/lib/user-prefs";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { badgeVariants } from "@/components/ui/badge";
+import type { VariantProps } from "class-variance-authority";
 import { Shield, Building2, AlertTriangle, CheckCircle2, RefreshCw, XCircle, CheckCircle } from "lucide-react";
+
+type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
 import { ConnectBankDialog } from "@/components/accounts/connect-bank-dialog";
 import { DisconnectBankButton } from "@/components/accounts/disconnect-bank-button";
 import { ReconnectBankButton } from "@/components/accounts/reconnect-bank-button";
@@ -21,13 +25,13 @@ import type { BankConnectionStatus } from "@/app/generated/prisma";
 
 export const metadata: Metadata = { title: "Bank Accounts" };
 
-const STATUS_CONFIG: Record<BankConnectionStatus, { label: string; icon: React.ElementType; className: string }> = {
-  ACTIVE: { label: "Connected", icon: CheckCircle2, className: "text-green-600 bg-green-50 border-green-200" },
-  SYNCING: { label: "Syncing...", icon: RefreshCw, className: "text-blue-600 bg-blue-50 border-blue-200" },
-  EXPIRED: { label: "Session expired", icon: AlertTriangle, className: "text-red-600 bg-red-50 border-red-200" },
-  PENDING_REAUTH: { label: "Re-auth needed", icon: RefreshCw, className: "text-amber-600 bg-amber-50 border-amber-200" },
-  PENDING_SETUP: { label: "Setup pending", icon: RefreshCw, className: "text-amber-600 bg-amber-50 border-amber-200" },
-  REVOKED: { label: "Disconnected", icon: AlertTriangle, className: "text-slate-600 bg-slate-50 border-slate-200" },
+const STATUS_CONFIG: Record<BankConnectionStatus, { label: string; icon: React.ElementType; variant: BadgeVariant }> = {
+  ACTIVE: { label: "Connected", icon: CheckCircle2, variant: "success-soft" },
+  SYNCING: { label: "Syncing...", icon: RefreshCw, variant: "brand-soft" },
+  EXPIRED: { label: "Session expired", icon: AlertTriangle, variant: "destructive-soft" },
+  PENDING_REAUTH: { label: "Re-auth needed", icon: RefreshCw, variant: "warning-soft" },
+  PENDING_SETUP: { label: "Setup pending", icon: RefreshCw, variant: "warning-soft" },
+  REVOKED: { label: "Disconnected", icon: AlertTriangle, variant: "secondary" },
 };
 
 // Show the most urgent status when multiple connections share a bank
@@ -149,7 +153,7 @@ export default async function AccountsPage({
 
       {/* Callback feedback banners */}
       {params.connected === "true" && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
           <CheckCircle className="h-4 w-4 shrink-0" />
           {hasSyncing
             ? "Bank connected. Syncing your recent transactions — this page will update automatically."
@@ -157,13 +161,13 @@ export default async function AccountsPage({
         </div>
       )}
       {params.reconnected === "true" && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
           <CheckCircle className="h-4 w-4 shrink-0" />
           Bank reconnected successfully. Your accounts and transaction history are intact.
         </div>
       )}
       {callbackError && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <XCircle className="h-4 w-4 shrink-0" />
           {callbackError}
         </div>
@@ -180,12 +184,12 @@ export default async function AccountsPage({
         <ConnectBankDialog />
       </div>
 
-      <Card className="bg-indigo-50 border-indigo-200">
+      <Card className="bg-brand/5 border-brand/20">
         <CardContent className="flex items-start gap-3 pt-4 pb-4">
-          <Shield className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
+          <Shield className="h-5 w-5 text-brand mt-0.5 shrink-0" />
           <div className="text-sm">
-            <p className="font-medium text-indigo-900">Read-only access via PSD2 open banking</p>
-            <p className="text-indigo-700">
+            <p className="font-medium text-foreground">Read-only access via PSD2 open banking</p>
+            <p className="text-muted-foreground">
               We connect through Enable Banking — we can never initiate payments or modify your account.
               Your bank credentials are never shared with us.
             </p>
@@ -197,8 +201,8 @@ export default async function AccountsPage({
         <Card className="border-dashed">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-3">
-              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-                <Building2 className="h-6 w-6 text-slate-600" />
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                <Building2 className="h-6 w-6 text-muted-foreground" />
               </div>
             </div>
             <CardTitle>No bank accounts connected</CardTitle>
@@ -220,17 +224,17 @@ export default async function AccountsPage({
             const hasSyncError = !isSyncing && !isExpired && !!groupSyncError;
             const isRateLimitError = hasSyncError && !!groupSyncError?.includes("RATE_LIMIT:");
             const badgeConfig = isRateLimitError
-              ? { label: "Quota reached", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
+              ? { label: "Quota reached", icon: AlertTriangle, variant: "warning-soft" as BadgeVariant }
               : hasSyncError
-                ? { label: "Sync error", icon: AlertTriangle, className: "text-amber-600 bg-amber-50 border-amber-200" }
+                ? { label: "Sync error", icon: AlertTriangle, variant: "warning-soft" as BadgeVariant }
                 : STATUS_CONFIG[group.status];
             const StatusIcon = badgeConfig.icon;
             return (
-              <Card key={group.bankId} className={isExpired ? "border-red-200" : undefined}>
+              <Card key={group.bankId} className={isExpired ? "border-destructive/30" : undefined}>
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                      <Building2 className="h-5 w-5 text-slate-600" />
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Building2 className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm leading-tight">{group.bankName}</p>
@@ -242,7 +246,7 @@ export default async function AccountsPage({
                       </p>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                      <Badge variant="outline" className={`gap-1 text-xs ${badgeConfig.className}`}>
+                      <Badge variant={badgeConfig.variant} className="gap-1 text-xs">
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
                         {badgeConfig.label}
                       </Badge>
@@ -278,7 +282,7 @@ export default async function AccountsPage({
 
                 {hasSyncError && (
                   <CardContent className="pt-0 pb-3">
-                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                    <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/10 px-3 py-2.5 text-xs text-warning">
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                       <span>
                         {isRateLimitError ? (
@@ -299,11 +303,11 @@ export default async function AccountsPage({
 
                 {group.allAccounts.length > 0 && (
                   <CardContent className="pt-0 pb-3">
-                    <div className="divide-y divide-slate-100 rounded-lg border border-slate-100 overflow-hidden">
+                    <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
                       {group.allAccounts.map((account) => {
                         const latestBalance = account.balances[0];
                         return (
-                          <div key={account.id} className="flex items-center gap-3 px-3 py-2.5 bg-slate-50">
+                          <div key={account.id} className="flex items-center gap-3 px-3 py-2.5 bg-muted/50">
                             {/* Account identity */}
                             <div className="flex-1 min-w-0">
                               <AccountNameEditor
@@ -325,23 +329,23 @@ export default async function AccountsPage({
                                 </p>
                               )}
                               {account.lastSyncError ? (
-                                <span title={account.lastSyncError} className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                <Badge variant="warning-soft" title={account.lastSyncError} className="gap-1">
                                   <AlertTriangle className="h-3 w-3 shrink-0" />
                                   Sync error
-                                </span>
+                                </Badge>
                               ) : latestBalance ? (
-                                <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                                <Badge variant="success-soft">
                                   Synced {formatDate(latestBalance.date, locale, timezone)}
-                                </span>
+                                </Badge>
                               ) : isSyncing ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                                <Badge variant="brand-soft" className="gap-1">
                                   <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
                                   Syncing…
-                                </span>
+                                </Badge>
                               ) : (
-                                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                                <Badge variant="secondary">
                                   Never synced
-                                </span>
+                                </Badge>
                               )}
                             </div>
 

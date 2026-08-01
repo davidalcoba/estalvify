@@ -140,8 +140,8 @@ function FocusModal({
         <div className="space-y-4 overflow-y-auto pr-2">
           {done ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-success" />
               </div>
               <div>
                 <p className="font-semibold">Page done!</p>
@@ -158,8 +158,8 @@ function FocusModal({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                       current.direction === "CREDIT"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-red-100 text-red-500"
+                        ? "bg-success/10 text-success"
+                        : "bg-destructive/10 text-destructive"
                     }`}
                   >
                     {current.direction === "CREDIT" ? (
@@ -212,7 +212,7 @@ function FocusModal({
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                  className="h-10 w-10 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                   onClick={() => setRuleOpen(true)}
                   title="Create rule for this transaction"
                 >

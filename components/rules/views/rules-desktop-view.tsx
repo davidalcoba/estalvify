@@ -99,7 +99,7 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
           aria-label={rule.isActive ? "Deactivate rule" : "Activate rule"}
         >
           {rule.isActive ? (
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <CheckCircle2 className="h-4 w-4 text-success" />
           ) : (
             <Circle className="h-4 w-4" />
           )}
@@ -115,7 +115,7 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
           )}
         </div>
         {result && (
-          <p className="text-xs text-green-600 font-medium mt-0.5">{result}</p>
+          <p className="text-xs text-success font-medium mt-0.5">{result}</p>
         )}
       </td>
 

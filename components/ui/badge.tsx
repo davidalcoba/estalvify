@@ -22,6 +22,8 @@ const badgeVariants = cva(
           "bg-brand text-brand-foreground [a&]:hover:bg-brand/90",
         "success-soft":
           "bg-success/10 text-success border-success/20",
+        "destructive-soft":
+          "bg-destructive/10 text-destructive border-destructive/20",
         "warning-soft":
           "bg-warning/10 text-warning border-warning/20",
         "brand-soft":

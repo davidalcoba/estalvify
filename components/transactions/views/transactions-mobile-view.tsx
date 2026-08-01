@@ -208,7 +208,7 @@ export function TransactionsMobileView({
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
                     disabled={saving}
                     title="Create rule for this transaction"
