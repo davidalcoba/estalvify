@@ -15,6 +15,8 @@ The product also supports monthly spending budgets and reporting. Feature maturi
 
 Budgets: users set a planned amount per category for a month and track it against real spending (derived from approved-category DEBIT transactions). See `app/(app)/budget/`, `lib/budget/` (progress + DTO), `lib/analytics/spending.ts` (monthly spending aggregation), and `components/budget/`.
 
+Recurring payments / subscriptions: candidates are detected on the fly from the last ~13 months of transactions (grouped by a normalized merchant key, classified into weekly/monthly/quarterly/yearly cadences); the user confirms or ignores each, and decisions are stored in the `RecurringSeries` model (with a snapshot of cadence/amount for future forecasting and alerts). See `app/(app)/recurring/`, `lib/recurring/` (pure detector + DTO), and `components/recurring/`.
+
 ## Core Goals
 
 - Give users a clear picture of their money across accounts
