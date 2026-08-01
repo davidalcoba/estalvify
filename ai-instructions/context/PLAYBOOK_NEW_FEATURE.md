@@ -45,6 +45,8 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 - Add Vitest tests for any new pure logic
 - Validate key flows manually
 - Summarize what is implemented vs pending
+- After pushing the branch / opening the PR, report the Vercel preview URL
+  (see `CLAUDE.md` → "Deployment & preview URLs").
 
 ## Delivery Notes Template
 
