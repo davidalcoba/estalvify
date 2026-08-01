@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, Calendar, Loader2, Zap } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
+import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
@@ -102,9 +103,9 @@ export function TransactionDetailDialog({
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t min-w-0">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground pt-1 border-t min-w-0">
                   <span className="flex items-center gap-1 min-w-0">
-                    <Calendar className="h-3 w-3" />
+                    <Calendar className="h-3 w-3 shrink-0" />
                     <span className="truncate">
                       {new Date(transaction.valueDate).toLocaleDateString(locale, {
                         timeZone: timezone,
@@ -115,6 +116,16 @@ export function TransactionDetailDialog({
                       })}
                     </span>
                   </span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <CreditCard className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{transaction.bankAccount.name}</span>
+                  </span>
+                  {transaction.categoryName && (
+                    <span className="flex items-center gap-1 min-w-0">
+                      <Tag className="h-3 w-3 shrink-0" />
+                      <CategoryChip name={transaction.categoryName} color={transaction.categoryColor} />
+                    </span>
+                  )}
                 </div>
               </div>
 
