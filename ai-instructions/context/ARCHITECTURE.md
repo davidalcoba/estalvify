@@ -74,6 +74,26 @@
 - `app/api/**/route.ts`
   - API handlers and webhook/sync endpoints
 
+## MCP API
+
+An MCP (Model Context Protocol) server exposes app actions to MCP clients
+(e.g. Claude), authenticated with an OAuth 2.1 Authorization Server that
+**delegates the human login to the existing Auth.js Google flow**. Personal /
+household scope. Access tokens are self-verifying JWTs (HS256, signed with
+`MCP_JWT_SECRET` or `AUTH_SECRET`); auth codes and refresh tokens are opaque and
+stored hashed.
+
+- Endpoints: `/api/mcp` (Streamable HTTP, via `mcp-handler`),
+  `/api/oauth/{authorize,token,register}`, and discovery metadata at
+  `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource`.
+- `lib/mcp/oauth.ts` — PKCE (S256), opaque-token hashing, JWT sign/verify.
+- `lib/mcp/store.ts` — Prisma-backed clients / single-use codes / refresh tokens
+  (`McpOAuthClient`, `McpAuthCode`, `McpRefreshToken`).
+- `lib/mcp/tools.ts` — tool registry. **Every tool derives `userId` from the
+  token and scopes all access to it** (same multi-user rule as the rest of the
+  app). Tools reuse `lib/*` logic; bulk categorization goes through
+  `lib/mcp/categorize.ts` (capped), sync enqueues via the queue.
+
 ## Multi-User Data Isolation
 
 All data access must be filtered by current user context.

@@ -12,12 +12,29 @@ export const metadata: Metadata = {
   title: "Sign In",
 };
 
-export default async function LoginPage() {
-  const session = await auth();
+/**
+ * Only allow same-origin relative paths as post-login destinations, to prevent
+ * open-redirects. Anything else falls back to the dashboard. Used by the MCP
+ * OAuth authorize flow, which sends unauthenticated users here with a
+ * `callbackUrl` pointing back at `/api/oauth/authorize`.
+ */
+function safeCallbackPath(raw?: string): string {
+  if (!raw) return "/dashboard";
+  // Must be a relative path ("/x"), not protocol-relative ("//x") or absolute.
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
 
-  // Already authenticated → go to dashboard
+export default async function LoginPage(props: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const session = await auth();
+  const { callbackUrl } = await props.searchParams;
+  const destination = safeCallbackPath(callbackUrl);
+
+  // Already authenticated → go straight to the intended destination
   if (session?.user) {
-    redirect("/dashboard");
+    redirect(destination);
   }
 
   return (
@@ -43,7 +60,7 @@ export default async function LoginPage() {
             const headersList = await headers();
             const host = headersList.get("x-forwarded-host") ?? headersList.get("host") ?? "";
             const proto = headersList.get("x-forwarded-proto") ?? "https";
-            await signIn("google", { redirectTo: `${proto}://${host}/dashboard` });
+            await signIn("google", { redirectTo: `${proto}://${host}${destination}` });
           }}
         >
           <Button type="submit" variant="outline" className="w-full h-11 gap-2">
