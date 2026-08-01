@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { toNotificationDTO } from "@/lib/notifications/notification-dto";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -15,17 +16,36 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
-  const [pendingCategorizations] = await Promise.all([
+  const userId = session.user.id;
+
+  const [pendingCategorizations, notificationRows, unreadCount] = await Promise.all([
     prisma.transaction.count({
       where: {
-        userId: session.user.id,
+        userId,
         OR: [
           { categorization: null },
           { categorization: { status: "REJECTED" } },
         ],
       },
     }),
+    prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        type: true,
+        severity: true,
+        title: true,
+        body: true,
+        readAt: true,
+        createdAt: true,
+      },
+    }),
+    prisma.notification.count({ where: { userId, readAt: null } }),
   ]);
+
+  const notifications = notificationRows.map(toNotificationDTO);
 
   async function handleSignOut() {
     "use server";
@@ -40,7 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         onSignOut={handleSignOut}
       />
       <SidebarInset>
-        <AppHeader />
+        <AppHeader notifications={notifications} unreadCount={unreadCount} />
         <main className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
           {children}
         </main>

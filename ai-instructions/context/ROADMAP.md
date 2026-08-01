@@ -9,7 +9,7 @@
 > hecha aquí** en el mismo cambio.
 
 **Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
-**Siguiente a construir:** Fase 3 — Centro de notificaciones in-app.
+**Siguiente a construir:** Fase 4 — Reports + Dashboard con datos reales.
 
 ---
 
@@ -30,7 +30,7 @@
 | **Reports** | 🟡 Stub | `app/(app)/reports/page.tsx` — pantalla vacía; **sin librería de gráficas** (tokens `--chart-1..5` ya en `app/globals.css`) |
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ❌ No existe | — |
-| Notificaciones | ❌ No existe | Solo hay un service worker PWA base sin push (`public/sw.js`) |
+| Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
 | Recomendaciones con IA | ❌ No existe | El valor `CategorizationSource.AI` se reservó y luego se eliminó |
 
 **Convenciones a respetar** (de `ARCHITECTURE.md` / `CODING_RULES.md`): lógica de
@@ -102,9 +102,10 @@ cambio). Marca el estado aquí al terminar.
   consistencia) con tests, y `/recurring` con detección en vivo + confirmar/ignorar y
   resumen de coste mensual. Falta (fases futuras): asignar categoría a una serie desde la
   UI y persistir snapshots de forma proactiva en el sync.
-- [ ] **Fase 3 — Centro de notificaciones in-app.** Modelo `Notification`, campana en el
-  header, generadores idempotentes. Primer generador: "presupuesto excedido" (ya tiene
-  datos tras la Fase 1). Se pueden ejecutar en el cron diario existente.
+- [x] **Fase 3 — Centro de notificaciones in-app** ✅ — modelo `Notification`, campana en
+  el header con badge de no leídas, generadores puros (presupuesto excedido/cercano y
+  cargo recurrente próximo) idempotentes por `(userId, dedupeKey)`, ejecutados en el cron
+  diario y por un botón "Check now". Falta (fases futuras): push (PWA) y email.
 - [ ] **Fase 4 — Reports + Dashboard con datos reales.** Instalar librería de charts,
   construir sobre la Fase 0. Envolver los charts en `components/ui/`.
 - [ ] **Fase 5 — Forecast.** Proyección usando recurrentes (Fase 2) + medias (Fase 0).

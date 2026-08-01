@@ -38,6 +38,7 @@ model User {
   categoryRules   CategoryRule[]
   budgets         Budget[]
   recurringSeries RecurringSeries[]
+  notifications   Notification[]
 
   @@map("users")
 }
@@ -425,6 +426,49 @@ enum RecurringCadence {
   QUARTERLY
   YEARLY
   IRREGULAR
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS - In-app alerts (budget, recurring, …)
+// ─────────────────────────────────────────────
+
+// In-app notifications shown in the header bell. Generated idempotently from the
+// user's data (budgets, recurring series) — the (userId, dedupeKey) unique index
+// means re-running generation never creates duplicates.
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+
+  type     NotificationType
+  severity NotificationSeverity @default(INFO)
+
+  title String
+  body  String
+
+  // Idempotency key, e.g. "budget-over:2026-8:<categoryId>". Unique per user.
+  dedupeKey String
+  metadata  Json? // Extra context for future deep-links (categoryId, merchantKey…)
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  BUDGET_OVER
+  BUDGET_NEAR
+  RECURRING_UPCOMING
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  ALERT
 }
 
 // ─────────────────────────────────────────────
