@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
+import { formatDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,11 +48,12 @@ function formatMobileDate(dateIso: string, locale: string, timezone: string) {
 }
 
 function formatSectionDate(dateIso: string, locale: string, timezone: string) {
-  return new Date(dateIso + "T12:00:00").toLocaleDateString(locale, {
-    timeZone: timezone,
-    weekday: "short",
+  // Match the desktop section header (weekday long + year) via the shared formatter.
+  return formatDate(dateIso + "T12:00:00", locale, timezone, {
+    weekday: "long",
     day: "numeric",
     month: "long",
+    year: "numeric",
   });
 }
 
