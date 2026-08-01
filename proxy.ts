@@ -10,12 +10,20 @@ export async function proxy(request: NextRequest) {
   const session = await auth();
   const { pathname } = request.nextUrl;
 
-  // Public routes that don't need auth
+  // Public routes that don't need an Auth.js session.
   const isPublicPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/banking/callback") ||
+    // MCP API: the endpoint enforces its own bearer-token auth (returns 401 with
+    // OAuth discovery metadata), and the OAuth Authorization Server endpoints must
+    // be reachable without a session so MCP clients can discover, register, and
+    // complete the flow. /api/oauth/authorize does its own session check and
+    // redirects to /login with a callbackUrl when needed.
+    pathname.startsWith("/api/mcp") ||
+    pathname.startsWith("/api/oauth") ||
+    pathname.startsWith("/.well-known") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/manifest") ||
