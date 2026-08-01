@@ -17,6 +17,17 @@
 - Primary deployment platform: Vercel.
 - Architecture decisions should assume Vercel hosting/runtime constraints and capabilities by default.
 - When multiple implementation options exist, prefer Vercel-native features unless there is a clear technical reason not to.
+- Project `estalvify` (`projectId: prj_MwnNS5SFs4qNiRu6G6DFfrzYbYjI`); production
+  at `https://estalvify.vercel.app`. Every branch push creates a preview
+  deployment; merges to `main` promote to production. Vercel-native features in
+  use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
+  (`/api/queues/sync-connection`).
+- Tooling access to Vercel: a read-scoped API token is exposed as the
+  `VERCEL_TOKEN` environment variable (secret — never commit or print it). Use it
+  with the REST API at `https://api.vercel.com` to look up deployment URLs,
+  status, and logs. After a branch push or PR, report the preview URL: query
+  `/v6/deployments?projectId=…&target=preview` and match `meta.githubCommitRef`
+  to the branch. See `CLAUDE.md` → "Deployment & preview URLs" for the exact call.
 
 ## Route Groups
 
