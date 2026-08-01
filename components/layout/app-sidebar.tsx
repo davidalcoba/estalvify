@@ -17,6 +17,8 @@ import {
   Sparkles,
   X,
   ListFilter,
+  Repeat,
+  LineChart,
 } from "lucide-react";
 
 import {
@@ -59,6 +61,11 @@ const navItems = [
         // Badge count will come from props in the future
       },
       {
+        title: "Insights",
+        url: "/insights",
+        icon: Sparkles,
+      },
+      {
         title: "Rules",
         url: "/rules",
         icon: ListFilter,
@@ -72,6 +79,16 @@ const navItems = [
         title: "Budget",
         url: "/budget",
         icon: PiggyBank,
+      },
+      {
+        title: "Recurring",
+        url: "/recurring",
+        icon: Repeat,
+      },
+      {
+        title: "Forecast",
+        url: "/forecast",
+        icon: LineChart,
       },
       {
         title: "Reports",

@@ -6,11 +6,14 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { NotificationBell } from "@/components/notifications/notification-bell";
+import type { NotificationDTO } from "@/lib/notifications/notification-dto";
 import { usePathname } from "next/navigation";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/categorize": "Categorize",
+  "/insights": "Insights",
   "/rules": "Rules",
   "/budget": "Budget",
   "/transactions": "Transactions",
@@ -18,10 +21,18 @@ const PAGE_TITLES: Record<string, string> = {
   "/accounts/setup": "Connect Bank",
   "/accounts": "Bank Accounts",
   "/reports": "Reports",
+  "/recurring": "Recurring",
+  "/forecast": "Forecast",
   "/settings": "Settings",
 };
 
-export function AppHeader() {
+export function AppHeader({
+  notifications,
+  unreadCount,
+}: {
+  notifications: NotificationDTO[];
+  unreadCount: number;
+}) {
   const pathname = usePathname();
 
   // Find the best matching title
@@ -35,7 +46,8 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <h1 className="text-sm font-medium text-foreground">{title}</h1>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        <NotificationBell notifications={notifications} unreadCount={unreadCount} />
         <ThemeToggle />
       </div>
     </header>
