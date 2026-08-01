@@ -11,6 +11,8 @@ import { verifyAccessToken } from "@/lib/mcp/oauth";
 import { registerTools } from "@/lib/mcp/tools";
 
 export const maxDuration = 60;
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const handler = createMcpHandler(
   (server) => {
