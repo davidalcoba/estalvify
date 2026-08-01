@@ -37,6 +37,17 @@ Pages can compose UI, but base controls must come from `components/ui/*`.
 - Dynamic per-category colors (hex from the DB) via `style={{}}` are the one
   allowed exception — they are user data, not tokens.
 
+## Charts
+
+- Charts use **Recharts**, wrapped in reusable client components under
+  `components/reports/` (e.g. `income-expenses-chart`, `category-breakdown-chart`) —
+  never build a chart inline in a `page.tsx`.
+- Wrap every chart in `ResponsiveContainer` (fixed-height parent) so it reflows.
+- Color categorical series with the `--chart-1..5` tokens (`app/globals.css`), or the
+  category's own hex when the series maps to a category. Axis/grid/tooltip use semantic
+  tokens (`--muted-foreground`, `--border`, `--popover`) so charts read in light **and**
+  dark. Format values with `lib/formatters` (`formatCurrency`).
+
 ## Use the Shared Controls (no one-off form controls)
 
 - Selects: use `components/ui/simple-select` (flat options) or

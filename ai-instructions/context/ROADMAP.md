@@ -9,7 +9,7 @@
 > hecha aquí** en el mismo cambio.
 
 **Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
-**Siguiente a construir:** Fase 4 — Reports + Dashboard con datos reales.
+**Siguiente a construir:** Fase 5 — Forecast.
 
 ---
 
@@ -25,9 +25,9 @@
 | Categorías (usuario + sistema, jerárquicas) | ✅ Estable | `components/settings/category-manager.tsx`, `app/(app)/settings/actions.ts` |
 | Cuentas y balances | ✅ Estable | `app/(app)/accounts/`, modelos `BankAccount` / `AccountBalance` |
 | Ajustes / preferencias (zona, moneda, locale) | ✅ Estable | `app/(app)/settings/`, `lib/user-prefs.ts` |
-| **Dashboard** | 🟡 Stub | `app/(app)/dashboard/page.tsx` — KPIs hardcodeados a 0, sin queries |
+| **Dashboard** | ✅ Estable | KPIs reales (patrimonio, ingresos/gastos del mes, por categorizar) + gráfica 6 meses + top categorías: `app/(app)/dashboard/page.tsx`, `lib/analytics/trends.ts`, `components/reports/` |
 | **Presupuestos** | ✅ Estable | Presupuesto mensual por categoría vs gasto real: `app/(app)/budget/`, `lib/budget/`, `lib/analytics/spending.ts`, `components/budget/` |
-| **Reports** | 🟡 Stub | `app/(app)/reports/page.tsx` — pantalla vacía; **sin librería de gráficas** (tokens `--chart-1..5` ya en `app/globals.css`) |
+| **Reports** | ✅ Estable | Tendencia 12 meses (ingresos vs gastos), donut por categoría y top comercios con **Recharts**: `app/(app)/reports/page.tsx`, `components/reports/` |
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ❌ No existe | — |
 | Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
@@ -106,8 +106,11 @@ cambio). Marca el estado aquí al terminar.
   el header con badge de no leídas, generadores puros (presupuesto excedido/cercano y
   cargo recurrente próximo) idempotentes por `(userId, dedupeKey)`, ejecutados en el cron
   diario y por un botón "Check now". Falta (fases futuras): push (PWA) y email.
-- [ ] **Fase 4 — Reports + Dashboard con datos reales.** Instalar librería de charts,
-  construir sobre la Fase 0. Envolver los charts en `components/ui/`.
+- [x] **Fase 4 — Reports + Dashboard con datos reales** ✅ — `recharts` instalado;
+  `lib/analytics/trends.ts` (meses, ingresos vs gastos, top categorías) con tests;
+  charts theme-aware en `components/reports/` (barras ingresos/gastos, donut por
+  categoría) usando tokens `--chart-*`; Dashboard con KPIs reales y Reports con
+  tendencia + donut + top comercios.
 - [ ] **Fase 5 — Forecast.** Proyección usando recurrentes (Fase 2) + medias (Fase 0).
   Alimenta una notificación de "saldo bajo previsto".
 - [ ] **Fase 6 — Recomendaciones con IA.** Wrapper de proveedor; recomendaciones
