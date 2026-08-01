@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/page-header";
 import { CategorizeView } from "@/components/categorize/categorize-view";
 import { CategorizeSearchProvider, CategorizeSearchBar } from "@/components/categorize/search-context";
 import { buildUncategorizedWhere } from "@/lib/categorize";
@@ -145,10 +146,7 @@ export default async function CategorizePage({ searchParams }: PageProps) {
     <CategorizeSearchProvider>
       <div className="space-y-4">
         {/* Title — always visible, never skeletons on page/size change */}
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Categorize</h2>
-          <p className="text-muted-foreground text-sm">Classify transactions to get accurate reports.</p>
-        </div>
+        <PageHeader title="Categorize" description="Classify transactions to get accurate reports." />
 
         {/* Search bar — always visible, state persists across page changes */}
         <CategorizeSearchBar />

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
+import { PageHeader } from "@/components/layout/page-header";
 import { RulesView } from "@/components/rules/rules-view";
 import { toCategoryRuleDTO } from "@/lib/rules/rule-dto";
 
@@ -31,12 +32,10 @@ export default async function RulesPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Rules</h2>
-        <p className="text-muted-foreground text-sm">
-          Create rules to automatically categorize transactions.
-        </p>
-      </div>
+      <PageHeader
+        title="Rules"
+        description="Create rules to automatically categorize transactions."
+      />
 
       <RulesView
         categories={categories}

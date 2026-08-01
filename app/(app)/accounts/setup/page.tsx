@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { AccountSelectionForm } from "@/components/accounts/account-selection-form";
+import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2 } from "lucide-react";
 
@@ -54,12 +55,10 @@ export default async function SetupPage({
 
   return (
     <div className="max-w-lg space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Select accounts</h2>
-        <p className="text-muted-foreground">
-          Choose which accounts from {connection.bankName} you want to import.
-        </p>
-      </div>
+      <PageHeader
+        title="Select accounts"
+        description={`Choose which accounts from ${connection.bankName} you want to import.`}
+      />
 
       <Card>
         <CardHeader className="pb-3">

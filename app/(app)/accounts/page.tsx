@@ -8,7 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { expireStaleConsents } from "@/lib/banking/connection-status";
 import { formatDate, formatCurrency } from "@/lib/formatters";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import type { badgeVariants } from "@/components/ui/badge";
 import type { VariantProps } from "class-variance-authority";
@@ -177,17 +179,15 @@ export default async function AccountsPage({
           {callbackError}
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Bank Accounts</h2>
-          <p className="text-muted-foreground">
-            {totalAccounts > 0
-              ? `${totalAccounts} account${totalAccounts !== 1 ? "s" : ""} connected across ${bankGroups.length} bank${bankGroups.length !== 1 ? "s" : ""}`
-              : "Connect your bank accounts to sync transactions automatically."}
-          </p>
-        </div>
-        <ConnectBankDialog />
-      </div>
+      <PageHeader
+        title="Bank Accounts"
+        description={
+          totalAccounts > 0
+            ? `${totalAccounts} account${totalAccounts !== 1 ? "s" : ""} connected across ${bankGroups.length} bank${bankGroups.length !== 1 ? "s" : ""}`
+            : "Connect your bank accounts to sync transactions automatically."
+        }
+        actions={<ConnectBankDialog />}
+      />
 
       <Card className="bg-brand/5 border-brand/20">
         <CardContent className="flex items-start gap-3 pt-4 pb-4">
@@ -203,23 +203,13 @@ export default async function AccountsPage({
       </Card>
 
       {bankGroups.length === 0 ? (
-        <Card className="border-dashed">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-3">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                <Building2 className="h-6 w-6 text-muted-foreground" />
-              </div>
-            </div>
-            <CardTitle>No bank accounts connected</CardTitle>
-            <CardDescription>
-              Connect your first bank account to start tracking your finances.
-              Estalvify supports thousands of banks across Europe.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center pb-6">
-            <ConnectBankDialog />
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Building2}
+          title="No bank accounts connected"
+          description="Connect your first bank account to start tracking your finances. Estalvify supports thousands of banks across Europe."
+        >
+          <ConnectBankDialog />
+        </EmptyState>
       ) : (
         <div className="space-y-4">
           {bankGroups.map((group) => {

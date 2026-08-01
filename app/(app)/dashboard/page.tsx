@@ -2,11 +2,14 @@
 // Shows: net worth, income vs expenses, account balances, uncategorized transactions
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { auth } from "@/auth";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { formatDate } from "@/lib/formatters";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TrendingUp, TrendingDown, Wallet, Tag } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -17,16 +20,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Good morning, {session?.user?.name?.split(" ")[0] ?? "there"} 👋
-        </h2>
-        <p className="text-muted-foreground">
-          Here&apos;s your financial overview for{" "}
-          {formatDate(new Date(), locale, timezone, { month: "long", year: "numeric" })}.
-        </p>
-      </div>
+      <PageHeader
+        title={`Good morning, ${session?.user?.name?.split(" ")[0] ?? "there"} 👋`}
+        description={`Here's your financial overview for ${formatDate(new Date(), locale, timezone, { month: "long", year: "numeric" })}.`}
+      />
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -76,25 +73,15 @@ export default async function DashboardPage() {
       </div>
 
       {/* Empty state — no bank accounts connected */}
-      <Card className="border-dashed">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <Wallet className="h-6 w-6 text-muted-foreground" />
-            </div>
-          </div>
-          <CardTitle>Connect your first bank account</CardTitle>
-          <CardDescription>
-            Link your bank accounts to start tracking your finances automatically.
-            Your data syncs every day so you always have a fresh overview.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <Badge variant="secondary" className="cursor-pointer">
-            Go to Accounts →
-          </Badge>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Wallet}
+        title="Connect your first bank account"
+        description="Link your bank accounts to start tracking your finances automatically. Your data syncs every day so you always have a fresh overview."
+      >
+        <Button asChild variant="outline">
+          <Link href="/accounts">Go to Accounts →</Link>
+        </Button>
+      </EmptyState>
     </div>
   );
 }
