@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
+import { expireStaleConsents } from "@/lib/banking/connection-status";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,10 @@ export default async function AccountsPage({
     },
     data: { status: "ACTIVE" },
   });
+
+  // Proactively flip connections whose PSD2 consent has expired to EXPIRED, so
+  // the Reconnect button appears without waiting for a sync to 401.
+  await expireStaleConsents({ userId: session!.user.id });
 
   const [connections, prefs] = await Promise.all([
     prisma.bankConnection.findMany({

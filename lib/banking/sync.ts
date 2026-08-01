@@ -4,6 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { getBalances, getTransactions } from "./enable-banking";
 import type { EnableBankingTransaction } from "./enable-banking";
 import { buildExternalId, parseRemittanceFields } from "./transaction-parse";
+import {
+  isAuthError,
+  isRateLimitError,
+  RATE_LIMIT_PREFIX,
+  AUTH_ERROR_PREFIX,
+} from "./sync-errors";
 import type { BankAccount } from "@/app/generated/prisma";
 
 export interface AccountSyncResult {
@@ -31,6 +37,7 @@ export async function syncAccount(
 
   const errors: string[] = [];
   let rateLimitReached = false;
+  let authErrorReached = false;
   let transactionsFetched = 0;
   let transactionsSkipped = 0;
   let balancesFetched = 0;
@@ -76,19 +83,22 @@ export async function syncAccount(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(`[sync] Account ${account.externalAccountId} balances error:`, msg);
-    const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
-    errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}balances: ${msg}`);
-    if (isRateLimit) rateLimitReached = true;
+    const rateLimit = isRateLimitError(msg);
+    const auth = !rateLimit && isAuthError(msg);
+    errors.push(`${rateLimit ? RATE_LIMIT_PREFIX : auth ? AUTH_ERROR_PREFIX : ""}balances: ${msg}`);
+    if (rateLimit) rateLimitReached = true;
+    if (auth) authErrorReached = true;
   }
 
   // ── Transactions (with automatic pagination) ─────────────────────────────
-  // Skip entirely if rate limit was already hit on balances — further calls
-  // would also fail and would only burn more of the limited daily PSD2 quota.
+  // Skip entirely if a rate limit or an auth/consent error was already hit on
+  // balances — further calls would also fail and would only burn more of the
+  // limited daily PSD2 quota (or hit the same 401).
   // The Enable Banking API may return a `continuation_key` when there are
   // more records beyond the current page. We loop until it stops coming.
   // Some account types (CARD, LOAN, etc.) may not support the transactions
   // endpoint — a 404 is logged as a warning but does not fail the sync.
-  if (!rateLimitReached) {
+  if (!rateLimitReached && !authErrorReached) {
     try {
       let continuationKey: string | undefined;
       let pageCount = 0;
@@ -163,8 +173,9 @@ export async function syncAccount(
         );
       } else {
         console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
-        const isRateLimit = msg.includes("429") || msg.includes("ASPSP_RATE_LIMIT") || msg.includes("HUB046");
-        errors.push(`${isRateLimit ? "RATE_LIMIT:" : ""}transactions: ${msg}`);
+        const rateLimit = isRateLimitError(msg);
+        const auth = !rateLimit && isAuthError(msg);
+        errors.push(`${rateLimit ? RATE_LIMIT_PREFIX : auth ? AUTH_ERROR_PREFIX : ""}transactions: ${msg}`);
       }
     }
   }

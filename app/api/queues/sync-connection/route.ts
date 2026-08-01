@@ -17,6 +17,7 @@
 import { handleCallback, send } from "@vercel/queue";
 import { prisma } from "@/lib/prisma";
 import { syncAccount, toDateString } from "@/lib/banking/sync";
+import { AUTH_ERROR_PREFIX } from "@/lib/banking/sync-errors";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
 export const POST = handleCallback<SyncConnectionMessage>(
@@ -108,6 +109,20 @@ export const POST = handleCallback<SyncConnectionMessage>(
       }
 
       throw err; // retryable — let Vercel retry the message
+    }
+
+    // ── Auth/consent expiry ───────────────────────────────────────────────────
+    // A 401/403 from the bank means the PSD2 consent expired. syncAccount
+    // accumulates these as AUTH_ERROR:-tagged errors instead of throwing, so the
+    // outer catch above never sees them. Handle them here: mark the whole
+    // connection EXPIRED (which surfaces the Reconnect button in the UI) and
+    // acknowledge — retrying a 401 is pointless. Must run BEFORE the done-count
+    // block below, which would otherwise flip the connection back to ACTIVE.
+    if (result.errors.some((e) => e.includes(AUTH_ERROR_PREFIX))) {
+      await prisma.bankConnection
+        .update({ where: { id: connectionId }, data: { status: "EXPIRED" } })
+        .catch(() => {});
+      return;
     }
 
     // ── Check whether all accounts for this connection are now done ───────────

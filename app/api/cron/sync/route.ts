@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { send } from "@vercel/queue";
+import { expireStaleConsents } from "@/lib/banking/connection-status";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
 export async function GET(request: NextRequest) {
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
     where: { status: "SYNCING", updatedAt: { lt: staleThreshold } },
     data: { status: "ACTIVE" },
   });
+
+  // Drop connections with an expired PSD2 consent out of the sync rotation —
+  // they would only 401. They resurface once the user reconnects.
+  await expireStaleConsents();
 
   const activeConnections = await prisma.bankConnection.findMany({
     where: { status: "ACTIVE" },
