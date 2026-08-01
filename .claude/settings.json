@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/vercel-preview-url.sh\"",
+            "timeout": 25,
+            "statusMessage": "Fetching Vercel preview URL…"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/vercel-preview-url.sh\"",
+            "timeout": 25,
+            "statusMessage": "Fetching Vercel preview URL…"
+          }
+        ]
+      }
+    ]
+  }
+}
