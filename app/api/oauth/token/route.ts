@@ -1,8 +1,12 @@
 // POST /api/oauth/token — OAuth 2.1 token endpoint.
 // Supports the authorization_code (with PKCE) and refresh_token grants.
-// Public clients: no client authentication; PKCE binds the code to the client.
+//
+// Client authentication:
+//  - Confidential static client (MCP_OAUTH_CLIENT_SECRET set): the client must
+//    authenticate with its secret (client_secret_basic or client_secret_post).
+//  - Public client (no secret / dynamic client): PKCE binds the code to the client.
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   consumeAuthCode,
   getValidRefreshToken,
@@ -13,6 +17,11 @@ import {
   verifyPkce,
   ACCESS_TOKEN_TTL_SECONDS,
 } from "@/lib/mcp/oauth";
+import {
+  resolveClient,
+  extractClientAuth,
+  clientSecretMatches,
+} from "@/lib/mcp/clients";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/mcp/http";
 
 /** Parse either form-encoded (OAuth default) or JSON bodies into a flat map. */
@@ -28,6 +37,33 @@ async function readParams(request: NextRequest): Promise<Record<string, string>>
   const out: Record<string, string> = {};
   for (const [k, v] of form.entries()) out[k] = String(v);
   return out;
+}
+
+/**
+ * Resolve and authenticate the client for this token request. Returns the
+ * verified clientId, or a NextResponse error to return directly.
+ */
+async function authenticateClient(
+  request: NextRequest,
+  params: Record<string, string>,
+): Promise<{ clientId: string } | NextResponse> {
+  const { clientId, clientSecret } = extractClientAuth(
+    request.headers.get("authorization"),
+    params,
+  );
+  if (!clientId) {
+    return oauthError("invalid_request", "client_id is required");
+  }
+  const client = await resolveClient(clientId);
+  if (!client) {
+    return oauthError("invalid_client", "Unknown client", 401);
+  }
+  if (client.clientSecret) {
+    if (!clientSecret || !clientSecretMatches(clientSecret, client.clientSecret)) {
+      return oauthError("invalid_client", "Client authentication failed", 401);
+    }
+  }
+  return { clientId: client.clientId };
 }
 
 async function issueTokens(userId: string, clientId: string, scope?: string) {
@@ -50,15 +86,19 @@ export async function POST(request: NextRequest) {
     return oauthError("invalid_request", "Malformed request body");
   }
 
+  const auth = await authenticateClient(request, params);
+  if (auth instanceof NextResponse) return auth;
+  const clientId = auth.clientId;
+
   const grantType = params.grant_type;
 
   // ── authorization_code ──────────────────────────────────────────────────────
   if (grantType === "authorization_code") {
-    const { code, redirect_uri, client_id, code_verifier } = params;
-    if (!code || !client_id || !code_verifier) {
+    const { code, redirect_uri, code_verifier } = params;
+    if (!code || !code_verifier) {
       return oauthError(
         "invalid_request",
-        "code, client_id and code_verifier are required",
+        "code and code_verifier are required",
       );
     }
 
@@ -66,7 +106,7 @@ export async function POST(request: NextRequest) {
     if (!record) {
       return oauthError("invalid_grant", "Authorization code invalid or expired");
     }
-    if (record.clientId !== client_id) {
+    if (record.clientId !== clientId) {
       return oauthError("invalid_grant", "client_id mismatch");
     }
     if (record.redirectUri !== redirect_uri) {
@@ -81,15 +121,12 @@ export async function POST(request: NextRequest) {
 
   // ── refresh_token ─────────────────────────────────────────────────────────────
   if (grantType === "refresh_token") {
-    const { refresh_token, client_id } = params;
-    if (!refresh_token || !client_id) {
-      return oauthError(
-        "invalid_request",
-        "refresh_token and client_id are required",
-      );
+    const { refresh_token } = params;
+    if (!refresh_token) {
+      return oauthError("invalid_request", "refresh_token is required");
     }
     const record = await getValidRefreshToken(refresh_token);
-    if (!record || record.clientId !== client_id) {
+    if (!record || record.clientId !== clientId) {
       return oauthError("invalid_grant", "Refresh token invalid or expired");
     }
     // Non-rotating for the MVP: issue a fresh access token, keep the refresh.

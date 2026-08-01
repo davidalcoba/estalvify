@@ -20,6 +20,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/login",
   },
   callbacks: {
+    // Restrict who can sign in. When ALLOWED_EMAILS is set (comma-separated),
+    // only those Google accounts may authenticate — this locks both the app and
+    // the MCP API (which delegates to the same login) to the owner. When unset,
+    // sign-in stays open (previous behaviour).
+    signIn({ profile, user }) {
+      const allowed = (process.env.ALLOWED_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (allowed.length === 0) return true;
+      const email = (profile?.email ?? user?.email ?? "").toLowerCase();
+      return email.length > 0 && allowed.includes(email);
+    },
     // Expose user.id in the session object
     session({ session, user }) {
       session.user.id = user.id;

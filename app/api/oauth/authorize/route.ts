@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getClient, createAuthCode } from "@/lib/mcp/store";
+import { createAuthCode } from "@/lib/mcp/store";
+import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
 
 /** Redirect back to the client with an OAuth error (RFC 6749 §4.1.2.1). */
 function errorRedirect(
@@ -37,11 +38,11 @@ export async function GET(request: NextRequest) {
   if (!clientId) {
     return new NextResponse("Missing client_id", { status: 400 });
   }
-  const client = await getClient(clientId);
+  const client = await resolveClient(clientId);
   if (!client) {
     return new NextResponse("Unknown client_id", { status: 400 });
   }
-  if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
+  if (!redirectUri || !isAllowedRedirectUri(redirectUri, client)) {
     return new NextResponse("Invalid redirect_uri", { status: 400 });
   }
 
