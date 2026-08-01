@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/formatters";
 import type { TransactionDirection } from "@/lib/transactions/transaction-dto";
 
 interface TransactionAmountProps {
@@ -19,10 +20,7 @@ export function TransactionAmount({ amount, currency, direction, locale, classNa
       )}
     >
       {direction === "CREDIT" ? "+" : "−"}
-      {amount.toLocaleString(locale, {
-        style: "currency",
-        currency,
-      })}
+      {formatCurrency(amount, currency, locale)}
     </p>
   );
 }

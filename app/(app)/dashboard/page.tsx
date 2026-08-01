@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { getUserPrefs } from "@/lib/user-prefs";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
@@ -16,7 +16,8 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const session = await auth();
-  const { locale, timezone } = await getUserPrefs(session!.user.id);
+  const { locale, timezone, currency } = await getUserPrefs(session!.user.id);
+  const zero = formatCurrency(0, currency, locale);
 
   return (
     <div className="space-y-6">
@@ -33,7 +34,7 @@ export default async function DashboardPage() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">€0.00</div>
+            <div className="text-2xl font-bold">{zero}</div>
             <p className="text-xs text-muted-foreground">Across all accounts</p>
           </CardContent>
         </Card>
@@ -44,7 +45,7 @@ export default async function DashboardPage() {
             <TrendingUp className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">+€0.00</div>
+            <div className="text-2xl font-bold text-success">+{zero}</div>
             <p className="text-xs text-muted-foreground">No data yet</p>
           </CardContent>
         </Card>
@@ -55,7 +56,7 @@ export default async function DashboardPage() {
             <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">-€0.00</div>
+            <div className="text-2xl font-bold text-destructive">−{zero}</div>
             <p className="text-xs text-muted-foreground">No data yet</p>
           </CardContent>
         </Card>
