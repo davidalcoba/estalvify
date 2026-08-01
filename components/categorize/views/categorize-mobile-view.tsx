@@ -15,7 +15,8 @@ import {
   transactionOperationType,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
@@ -151,16 +152,14 @@ export function CategorizeMobileView({
           <span className="text-sm font-medium text-brand w-full">
             Categorize all {filtered.length} matching as:
           </span>
-          <select
+          <CategorySelect
             value={bulkQueryCategoryId ?? ""}
-            onChange={(e) => onBulkQueryCategoryChange?.(e.target.value)}
-            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="" disabled>
-              Pick a category…
-            </option>
-            <CategoryOptions categories={categories} />
-          </select>
+            onValueChange={(v) => onBulkQueryCategoryChange?.(v)}
+            categories={categories}
+            size="sm"
+            ariaLabel="Category to apply to all matches"
+            className="flex-1"
+          />
           <Button
             size="sm"
             onClick={onBulkByQuery}
@@ -303,17 +302,15 @@ export function CategorizeMobileView({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <select
+                  <CategorySelect
                     key={currentTx.id}
-                    defaultValue=""
-                    onChange={(e) => handleCategorySelect(e.target.value)}
-                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
-                  >
-                    <option value="" disabled>
-                      Select a category…
-                    </option>
-                    <CategoryOptions categories={categories} />
-                  </select>
+                    value=""
+                    onValueChange={handleCategorySelect}
+                    categories={categories}
+                    placeholder="Select a category…"
+                    ariaLabel="Select a category"
+                    className="flex-1 h-11"
+                  />
                   <Button
                     type="button"
                     variant="outline"

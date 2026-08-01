@@ -15,7 +15,8 @@ import { TransactionItem } from "@/components/transactions/shared/transaction-it
 import { TransactionPagination } from "@/components/transactions/shared/transaction-pagination";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
@@ -194,16 +195,16 @@ export function TransactionsMobileView({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <select
+                  <CategorySelect
                     key={activeTx.id}
-                    defaultValue={activeTx.categoryId ?? ""}
-                    onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                    defaultValue={activeTx.categoryId ?? undefined}
+                    onValueChange={(v) => { if (v) handleRecategorize(v); }}
                     disabled={saving || sheetJustOpened}
-                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
-                  >
-                    <option value="" disabled>Select a category…</option>
-                    <CategoryOptions categories={categories} />
-                  </select>
+                    categories={categories}
+                    placeholder="Select a category…"
+                    ariaLabel="Recategorize transaction"
+                    className="flex-1 h-11"
+                  />
                   <Button
                     type="button"
                     variant="outline"

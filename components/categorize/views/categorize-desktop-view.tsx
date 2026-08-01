@@ -9,7 +9,9 @@ import {
   transactionMerchant,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
+import { SimpleSelect } from "@/components/ui/simple-select";
 
 interface CategorizeDesktopViewProps {
   transactions: TransactionListItemDTO[];
@@ -102,16 +104,14 @@ export function CategorizeDesktopView({
           <span className="text-sm font-medium text-brand shrink-0">
             Categorize all {filtered.length} matching as:
           </span>
-          <select
+          <CategorySelect
             value={bulkQueryCategoryId}
-            onChange={(e) => onBulkQueryCategoryChange(e.target.value)}
-            className="flex-1 min-w-40 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="" disabled>
-              Pick a category…
-            </option>
-            <CategoryOptions categories={categories} />
-          </select>
+            onValueChange={onBulkQueryCategoryChange}
+            categories={categories}
+            size="sm"
+            ariaLabel="Category to apply to all matches"
+            className="flex-1 min-w-40"
+          />
           <Button
             size="sm"
             onClick={onBulkByQuery}
@@ -128,16 +128,14 @@ export function CategorizeDesktopView({
           <span className="text-sm font-medium text-brand shrink-0">
             {checkedVisible.length} selected — categorize as:
           </span>
-          <select
+          <CategorySelect
             value={bulkCategoryId}
-            onChange={(e) => onBulkCategoryChange(e.target.value)}
-            className="flex-1 min-w-40 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="" disabled>
-              Pick a category…
-            </option>
-            <CategoryOptions categories={categories} />
-          </select>
+            onValueChange={onBulkCategoryChange}
+            categories={categories}
+            size="sm"
+            ariaLabel="Category for selected transactions"
+            className="flex-1 min-w-40"
+          />
           <Button
             size="sm"
             onClick={onBulkApply}
@@ -196,17 +194,13 @@ export function CategorizeDesktopView({
                   ? `Showing ${filtered.length} of ${transactions.length} on this page`
                   : `Showing ${rangeStart}–${rangeEnd} of ${total} transactions`}
               </p>
-              <select
-                value={pageSize}
-                onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="h-8 rounded border border-input bg-background px-2 text-sm text-muted-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                {pageSizeOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {s} / page
-                  </option>
-                ))}
-              </select>
+              <SimpleSelect
+                value={String(pageSize)}
+                onValueChange={(v) => onPageSizeChange(Number(v))}
+                ariaLabel="Rows per page"
+                size="sm"
+                options={pageSizeOptions.map((s) => ({ value: String(s), label: `${s} / page` }))}
+              />
             </div>
 
             {totalPages > 1 && (
@@ -268,22 +262,19 @@ export function CategorizeDesktopView({
                         />
                       }
                       trailing={
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              onCategorize(tx.id, e.target.value);
-                            }
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-8 max-w-40 min-w-28 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer shrink-0"
-                          aria-label={`Categorize: ${merchant}`}
-                        >
-                          <option value="" disabled>
-                            Category…
-                          </option>
-                          <CategoryOptions categories={categories} />
-                        </select>
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                          <CategorySelect
+                            value=""
+                            onValueChange={(v) => {
+                              if (v) onCategorize(tx.id, v);
+                            }}
+                            categories={categories}
+                            placeholder="Category…"
+                            size="sm"
+                            ariaLabel={`Categorize: ${merchant}`}
+                            className="max-w-40 min-w-28"
+                          />
+                        </div>
                       }
                     />
                   );

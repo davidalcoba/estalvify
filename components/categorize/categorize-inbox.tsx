@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { CategorizeDesktopView } from "@/components/categorize/views/categorize-desktop-view";
 import { CategorizeMobileView } from "@/components/categorize/views/categorize-mobile-view";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
@@ -197,17 +198,14 @@ function FocusModal({
               </div>
 
               <div className="flex items-center gap-2">
-                <select
+                <CategorySelect
                   key={current.id}
-                  defaultValue=""
-                  onChange={(e) => handleCategorySelect(e.target.value)}
-                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none disabled:opacity-60"
-                >
-                  <option value="" disabled>
-                    Pick a category…
-                  </option>
-                  <CategoryOptions categories={categories} />
-                </select>
+                  value=""
+                  onValueChange={handleCategorySelect}
+                  categories={categories}
+                  ariaLabel="Pick a category"
+                  className="flex-1 h-10"
+                />
                 <Button
                   type="button"
                   variant="outline"

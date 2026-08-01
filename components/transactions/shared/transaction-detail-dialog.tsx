@@ -6,7 +6,8 @@ import { ArrowDownLeft, ArrowUpRight, Calendar, Loader2, Zap } from "lucide-reac
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
@@ -118,16 +119,15 @@ export function TransactionDetailDialog({
               </div>
 
               <div className="flex items-center gap-2">
-                <select
+                <CategorySelect
                   key={transaction.id}
-                  defaultValue={transaction.categoryId ?? ""}
-                  onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                  defaultValue={transaction.categoryId ?? undefined}
+                  onValueChange={(v) => { if (v) handleRecategorize(v); }}
                   disabled={saving}
-                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
-                >
-                  <option value="" disabled>Pick a category…</option>
-                  <CategoryOptions categories={categories} />
-                </select>
+                  categories={categories}
+                  ariaLabel="Recategorize transaction"
+                  className="flex-1 h-10"
+                />
                 <Button
                   type="button"
                   variant="outline"

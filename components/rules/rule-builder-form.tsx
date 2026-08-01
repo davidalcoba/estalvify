@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Plus, Search, Play, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CategoryOptions } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
 import { RulePreviewList } from "@/components/rules/rule-preview-list";
@@ -169,14 +169,14 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
             {/* Target category — inline with conditions block */}
             <div className="flex items-center gap-3 pt-1 flex-wrap sm:flex-nowrap">
               <span className="text-sm text-muted-foreground shrink-0">→ Categorize as</span>
-              <select
+              <CategorySelect
                 value={targetCategoryId}
-                onChange={(e) => setTargetCategoryId(e.target.value)}
-                className="flex-1 min-w-[200px] h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="">— Select category —</option>
-                <CategoryOptions categories={categories} />
-              </select>
+                onValueChange={setTargetCategoryId}
+                categories={categories}
+                placeholder="— Select category —"
+                ariaLabel="Categorize as"
+                className="flex-1 min-w-[200px]"
+              />
             </div>
           </div>
 

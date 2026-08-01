@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
 import {
   type CategoryRuleDTO,
@@ -114,14 +115,14 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
           {/* Target category */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Categorize as</label>
-            <select
+            <CategorySelect
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">— Select category —</option>
-              <CategoryOptions categories={categories} />
-            </select>
+              onValueChange={setCategoryId}
+              categories={categories}
+              placeholder="— Select category —"
+              ariaLabel="Categorize as"
+              className="w-full"
+            />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
