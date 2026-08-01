@@ -10,6 +10,7 @@ Read these files in order:
 4. `CODING_RULES.md`: Engineering standards for TypeScript, server/client boundaries, data safety, and maintainability.
 5. `PLAYBOOK_NEW_FEATURE.md`: Execution checklist for implementing features safely and consistently.
 6. `GLOSSARY.md`: Shared domain terminology for product, banking, categorization, budgets, and operations.
+7. `ROADMAP.md`: Product roadmap and phased delivery plan for upcoming features (budgets, recurring expenses, forecasting, reports, notifications, AI recommendations). Read it to pick up the next phase to build; update the phase checklist in the same change.
 
 All documents in this folder must be consistent with each other.
 
