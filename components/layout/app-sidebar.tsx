@@ -17,6 +17,7 @@ import {
   Sparkles,
   X,
   ListFilter,
+  Repeat,
 } from "lucide-react";
 
 import {
@@ -72,6 +73,11 @@ const navItems = [
         title: "Budget",
         url: "/budget",
         icon: PiggyBank,
+      },
+      {
+        title: "Recurring",
+        url: "/recurring",
+        icon: Repeat,
       },
       {
         title: "Reports",

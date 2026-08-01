@@ -37,6 +37,7 @@ model User {
   categories      Category[]
   categoryRules   CategoryRule[]
   budgets         Budget[]
+  recurringSeries RecurringSeries[]
 
   @@map("users")
 }
@@ -261,6 +262,7 @@ model Category {
   sourceCategoryRules    CategoryRule[]          @relation("SourceCategoryRules")
   transactionCategories  TransactionCategorization[]
   budgetItems            BudgetItem[]
+  recurringSeries        RecurringSeries[]
 
   @@map("categories")
 }
@@ -372,6 +374,57 @@ model BudgetItem {
 
   @@unique([budgetId, categoryId])
   @@map("budget_items")
+}
+
+// ─────────────────────────────────────────────
+// RECURRING SERIES - Detected recurring payments / subscriptions
+// ─────────────────────────────────────────────
+
+// A recurring payment or income stream detected from transaction history
+// (e.g. Netflix monthly, rent, salary). Candidates are detected on the fly from
+// transactions; a row here stores the user's decision (confirm / ignore) plus a
+// snapshot of the detected cadence and amount for future forecasting/alerts.
+model RecurringSeries {
+  id     String @id @default(cuid())
+  userId String
+
+  // Normalized grouping key derived from the transaction descriptor; stable
+  // across syncs so a user's decision keeps matching the same merchant.
+  merchantKey String
+  displayName String // Best human-readable merchant/label seen
+  direction   TransactionDirection // DEBIT (expense) or CREDIT (income)
+
+  // Optional category (majority category of the series' transactions at decision time)
+  categoryId String?
+
+  status           RecurringStatus
+  cadence          RecurringCadence
+  averageAmount    Decimal          @db.Decimal(15, 2)
+  currency         String           @default("EUR")
+  lastSeenAt       DateTime?        @db.Date
+  nextExpectedDate DateTime?        @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@unique([userId, merchantKey])
+  @@map("recurring_series")
+}
+
+enum RecurringStatus {
+  CONFIRMED // User confirmed this is a real recurring series
+  IGNORED   // User dismissed it (not recurring / not interesting)
+}
+
+enum RecurringCadence {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  IRREGULAR
 }
 
 // ─────────────────────────────────────────────

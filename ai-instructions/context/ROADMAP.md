@@ -9,7 +9,7 @@
 > hecha aquí** en el mismo cambio.
 
 **Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
-**Siguiente a construir:** Fase 2 — Recurrentes + suscripciones.
+**Siguiente a construir:** Fase 3 — Centro de notificaciones in-app.
 
 ---
 
@@ -28,7 +28,7 @@
 | **Dashboard** | 🟡 Stub | `app/(app)/dashboard/page.tsx` — KPIs hardcodeados a 0, sin queries |
 | **Presupuestos** | ✅ Estable | Presupuesto mensual por categoría vs gasto real: `app/(app)/budget/`, `lib/budget/`, `lib/analytics/spending.ts`, `components/budget/` |
 | **Reports** | 🟡 Stub | `app/(app)/reports/page.tsx` — pantalla vacía; **sin librería de gráficas** (tokens `--chart-1..5` ya en `app/globals.css`) |
-| Gastos recurrentes / suscripciones | ❌ No existe | — |
+| Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ❌ No existe | — |
 | Notificaciones | ❌ No existe | Solo hay un service worker PWA base sin push (`public/sw.js`) |
 | Recomendaciones con IA | ❌ No existe | El valor `CategorizationSource.AI` se reservó y luego se eliminó |
@@ -97,8 +97,11 @@ cambio). Marca el estado aquí al terminar.
   vs gastos y totales por mes cuando lleguen Dashboard/Reports (Fase 4).
 - [x] **Fase 1 — Presupuestos** ✅ — presupuesto mensual por categoría vs gasto real, con
   navegación de mes, copiar mes anterior y sección de gasto sin presupuestar. Ver §5.
-- [ ] **Fase 2 — Recurrentes + suscripciones.** Modelo `RecurringSeries`, detector puro
-  en `lib/recurring/` con tests, UI de revisión/confirmación de series.
+- [x] **Fase 2 — Recurrentes + suscripciones** ✅ — modelo `RecurringSeries`, detector puro
+  en `lib/recurring/` (normalización de comercio, clasificación de cadencia con check de
+  consistencia) con tests, y `/recurring` con detección en vivo + confirmar/ignorar y
+  resumen de coste mensual. Falta (fases futuras): asignar categoría a una serie desde la
+  UI y persistir snapshots de forma proactiva en el sync.
 - [ ] **Fase 3 — Centro de notificaciones in-app.** Modelo `Notification`, campana en el
   header, generadores idempotentes. Primer generador: "presupuesto excedido" (ya tiene
   datos tras la Fase 1). Se pueden ejecutar en el cron diario existente.
