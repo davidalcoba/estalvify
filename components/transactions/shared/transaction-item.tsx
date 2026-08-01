@@ -39,7 +39,7 @@ export function TransactionItem({
       <div
         className={cn(
           "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-          isCredit ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"
+          isCredit ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
         )}
       >
         {isCredit ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}

@@ -87,7 +87,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
             aria-label={rule.isActive ? "Deactivate" : "Activate"}
           >
             {rule.isActive ? (
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <CheckCircle2 className="h-5 w-5 text-success" />
             ) : (
               <Circle className="h-5 w-5" />
             )}
@@ -135,7 +135,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
             </div>
 
             {result && (
-              <p className="text-xs text-green-600 font-medium">{result}</p>
+              <p className="text-xs text-success font-medium">{result}</p>
             )}
           </div>
 

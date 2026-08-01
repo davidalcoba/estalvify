@@ -55,12 +55,21 @@ export async function POST(request: NextRequest) {
   try {
     const state = crypto.randomUUID();
 
+    // Enable Banking requires the redirect_url to exactly match one registered
+    // in the app config. Vercel preview deployments have per-deploy origins
+    // (ts-<hash>.vercel.app) that will never be registered, so prefer a fixed
+    // ENABLE_BANKING_REDIRECT_URI when set and only fall back to the request
+    // origin (e.g. localhost in dev, where that origin is the registered one).
+    const redirectUri =
+      process.env.ENABLE_BANKING_REDIRECT_URI ??
+      `${request.nextUrl.origin}/api/banking/callback`;
+
     const { url } = await createBankingSession({
       aspspName,
       aspspCountry,
       psuIpAddress,
       state,
-      redirectUri: `${request.nextUrl.origin}/api/banking/callback`,
+      redirectUri,
     });
 
     await prisma.bankConnection.create({

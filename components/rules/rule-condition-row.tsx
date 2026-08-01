@@ -2,6 +2,8 @@
 
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SimpleSelect } from "@/components/ui/simple-select";
 import {
   type RuleCondition,
   type RuleConditionField,
@@ -43,43 +45,32 @@ export function RuleConditionRow({
 
   const operators = getOperatorsForField(condition.field);
 
-  const selectCls = "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
-  const inputCls = "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
-
   return (
     // Mobile: 2-column grid (field+operator row 1, value full-width row 2)
     // Desktop (sm+): single flex row
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-nowrap sm:items-center sm:gap-2">
-      <select
+      <SimpleSelect
         value={condition.field}
-        onChange={(e) => handleFieldChange(e.target.value as RuleConditionField)}
-        className={`${selectCls} col-span-1`}
-      >
-        {ALL_FIELDS.map((f) => (
-          <option key={f} value={f}>
-            {FIELD_LABELS[f]}
-          </option>
-        ))}
-      </select>
+        onValueChange={(v) => handleFieldChange(v as RuleConditionField)}
+        ariaLabel="Condition field"
+        className="col-span-1 w-full"
+        options={ALL_FIELDS.map((f) => ({ value: f, label: FIELD_LABELS[f] }))}
+      />
 
-      <select
+      <SimpleSelect
         value={condition.operator}
-        onChange={(e) => handleOperatorChange(e.target.value as RuleConditionOperator)}
-        className={`${selectCls} col-span-1`}
-      >
-        {operators.map((op) => (
-          <option key={op} value={op}>
-            {OPERATOR_LABELS[op]}
-          </option>
-        ))}
-      </select>
+        onValueChange={(v) => handleOperatorChange(v as RuleConditionOperator)}
+        ariaLabel="Condition operator"
+        className="col-span-1 w-full"
+        options={operators.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
+      />
 
-      <input
+      <Input
         type="text"
         value={condition.value}
         onChange={(e) => handleValueChange(e.target.value)}
         placeholder="Value..."
-        className={`${inputCls} col-span-2 sm:col-span-1 sm:flex-1`}
+        className="col-span-2 sm:col-span-1 sm:flex-1"
       />
 
       {canRemove && (

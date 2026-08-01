@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/layout/page-header";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { CategoryManager } from "@/components/settings/category-manager";
 import { seedDefaultCategories } from "./actions";
@@ -61,10 +62,7 @@ function SettingsLayout({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
-        <p className="text-muted-foreground">Manage your account and regional preferences.</p>
-      </div>
+      <PageHeader title="Settings" description="Manage your account and regional preferences." />
 
       <div className="max-w-lg space-y-6">
         <SettingsForm

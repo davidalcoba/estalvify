@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SimpleSelect } from "@/components/ui/simple-select";
+
+// Radix Select forbids an empty option value, so "All accounts" uses a sentinel.
+const ALL_ACCOUNTS = "__all__";
 
 interface Account {
   id: string;
@@ -61,19 +65,19 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
   return (
     <div className="space-y-3 rounded-xl border bg-card p-4">
       {accounts.length > 1 && (
-        <select
-          value={accountId}
-          onChange={(e) => navigate({ accountId: e.target.value })}
-          className="h-9 w-full sm:w-[280px] min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">All accounts</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-              {a.iban ? ` (${a.iban.slice(-4)})` : ""}
-            </option>
-          ))}
-        </select>
+        <SimpleSelect
+          value={accountId || ALL_ACCOUNTS}
+          onValueChange={(v) => navigate({ accountId: v === ALL_ACCOUNTS ? "" : v })}
+          ariaLabel="Filter by account"
+          className="w-full sm:w-[280px]"
+          options={[
+            { value: ALL_ACCOUNTS, label: "All accounts" },
+            ...accounts.map((a) => ({
+              value: a.id,
+              label: `${a.name}${a.iban ? ` (${a.iban.slice(-4)})` : ""}`,
+            })),
+          ]}
+        />
       )}
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2">

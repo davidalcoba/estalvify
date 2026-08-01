@@ -7,7 +7,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/layout/page-header";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { TransactionsView } from "@/components/transactions/transactions-view";
 import {
@@ -148,21 +149,15 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
 
   if (txDtos.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-              <ArrowLeftRight className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-          <CardTitle>No transactions found</CardTitle>
-          <CardDescription>
-            {total === 0
-              ? 'Connect a bank account and click "Sync Now" on the Accounts page to import your transactions.'
-              : "No transactions in this date range. Try widening the filter."}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <EmptyState
+        icon={ArrowLeftRight}
+        title="No transactions found"
+        description={
+          total === 0
+            ? 'Connect a bank account and click "Sync Now" on the Accounts page to import your transactions.'
+            : "No transactions in this date range. Try widening the filter."
+        }
+      />
     );
   }
 
@@ -211,12 +206,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Transactions</h2>
-        <p className="text-muted-foreground">
-          Your complete transaction history across all bank accounts.
-        </p>
-      </div>
+      <PageHeader
+        title="Transactions"
+        description="Your complete transaction history across all bank accounts."
+      />
 
       {/* Filters stay visible during pagination and filter changes — only the list body skeletons */}
       <Suspense>

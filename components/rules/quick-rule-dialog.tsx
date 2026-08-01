@@ -5,7 +5,9 @@ import { Zap, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog as Primitive } from "radix-ui";
 import { cn } from "@/lib/utils";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
+import { SimpleSelect } from "@/components/ui/simple-select";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
 import { type RuleCondition, getDefaultOperator } from "@/lib/rules/rule-dto";
 import { executeRuleOnce, addConditionToRule, getUserRules } from "@/app/(app)/rules/actions";
@@ -124,7 +126,7 @@ export function QuickRuleDialog({
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+        <Zap className="h-4 w-4 text-warning shrink-0" />
         <h2 className="font-semibold text-base">Create rule</h2>
       </div>
 
@@ -173,14 +175,14 @@ export function QuickRuleDialog({
           {/* Target category */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Categorize as</p>
-            <select
+            <CategorySelect
               value={targetCategoryId}
-              onChange={(e) => setTargetCategoryId(e.target.value)}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">— Select category —</option>
-              <CategoryOptions categories={categories} />
-            </select>
+              onValueChange={setTargetCategoryId}
+              categories={categories}
+              placeholder="— Select category —"
+              ariaLabel="Categorize as"
+              className="w-full h-10"
+            />
           </div>
 
           {/* Rule name */}
@@ -201,18 +203,14 @@ export function QuickRuleDialog({
         /* Existing rule selector */
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add to rule</p>
-          <select
+          <SimpleSelect
             value={selectedRuleId}
-            onChange={(e) => setSelectedRuleId(e.target.value)}
-            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">— Select rule —</option>
-            {existingRules.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setSelectedRuleId}
+            placeholder="— Select rule —"
+            ariaLabel="Add to rule"
+            className="w-full h-10"
+            options={existingRules.map((r) => ({ value: r.id, label: r.name }))}
+          />
           {existingRules.length === 0 && (
             <p className="text-xs text-muted-foreground">Loading rules…</p>
           )}
@@ -223,7 +221,7 @@ export function QuickRuleDialog({
 
       {result ? (
         <div className="space-y-3">
-          <p className="text-sm text-green-600 font-medium">{result.msg}</p>
+          <p className="text-sm text-success font-medium">{result.msg}</p>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>
               Close

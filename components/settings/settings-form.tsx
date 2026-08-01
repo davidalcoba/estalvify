@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { SimpleSelect } from "@/components/ui/simple-select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { updatePreferences } from "@/app/(app)/settings/actions";
 import { Check } from "lucide-react";
@@ -67,24 +68,22 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) {
+  const [tz, setTz] = useState(timezone);
+  const [curr, setCurr] = useState(currency);
+  const [loc, setLoc] = useState(locale);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
 
     setError(null);
     setSaved(false);
 
     startTransition(async () => {
       try {
-        await updatePreferences({
-          timezone: fd.get("timezone") as string,
-          currency: fd.get("currency") as string,
-          locale: fd.get("locale") as string,
-        });
+        await updatePreferences({ timezone: tz, currency: curr, locale: loc });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
@@ -92,9 +91,6 @@ export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) 
       }
     });
   }
-
-  const selectClass =
-    "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
   return (
     <Card>
@@ -107,38 +103,38 @@ export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) 
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <Label htmlFor="timezone">Timezone</Label>
-            <select id="timezone" name="timezone" defaultValue={timezone} className={selectClass}>
-              {TIMEZONES.map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
+            <Label>Timezone</Label>
+            <SimpleSelect
+              value={tz}
+              onValueChange={setTz}
+              options={TIMEZONES}
+              ariaLabel="Timezone"
+              className="w-full"
+            />
             <p className="text-xs text-muted-foreground">Used to display transaction booking dates correctly.</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="currency">Default currency</Label>
-            <select id="currency" name="currency" defaultValue={currency} className={selectClass}>
-              {CURRENCIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <Label>Default currency</Label>
+            <SimpleSelect
+              value={curr}
+              onValueChange={setCurr}
+              options={CURRENCIES}
+              ariaLabel="Default currency"
+              className="w-full"
+            />
             <p className="text-xs text-muted-foreground">Used for totals and summaries. Individual transactions always show in their own currency.</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="locale">Number format</Label>
-            <select id="locale" name="locale" defaultValue={locale} className={selectClass}>
-              {LOCALES.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
+            <Label>Number format</Label>
+            <SimpleSelect
+              value={loc}
+              onValueChange={setLoc}
+              options={LOCALES}
+              ariaLabel="Number format"
+              className="w-full"
+            />
             <p className="text-xs text-muted-foreground">Controls decimal separators and thousands grouping.</p>
           </div>
 
@@ -147,7 +143,7 @@ export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) 
               {isPending ? "Saving…" : "Save preferences"}
             </Button>
             {saved && (
-              <span className="flex items-center gap-1 text-sm text-green-600">
+              <span className="flex items-center gap-1 text-sm text-success">
                 <Check className="h-4 w-4" />
                 Saved
               </span>

@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, Calendar, Loader2, Zap } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { CategoryChip } from "@/components/transactions/shared/category-chip";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
@@ -73,8 +75,8 @@ export function TransactionDetailDialog({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                       transaction.direction === "CREDIT"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-red-100 text-red-500"
+                        ? "bg-success/10 text-success"
+                        : "bg-destructive/10 text-destructive"
                     }`}
                   >
                     {transaction.direction === "CREDIT" ? (
@@ -101,9 +103,9 @@ export function TransactionDetailDialog({
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 border-t min-w-0">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground pt-1 border-t min-w-0">
                   <span className="flex items-center gap-1 min-w-0">
-                    <Calendar className="h-3 w-3" />
+                    <Calendar className="h-3 w-3 shrink-0" />
                     <span className="truncate">
                       {new Date(transaction.valueDate).toLocaleDateString(locale, {
                         timeZone: timezone,
@@ -114,25 +116,34 @@ export function TransactionDetailDialog({
                       })}
                     </span>
                   </span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <CreditCard className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{transaction.bankAccount.name}</span>
+                  </span>
+                  {transaction.categoryName && (
+                    <span className="flex items-center gap-1 min-w-0">
+                      <Tag className="h-3 w-3 shrink-0" />
+                      <CategoryChip name={transaction.categoryName} color={transaction.categoryColor} />
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <select
+                <CategorySelect
                   key={transaction.id}
-                  defaultValue={transaction.categoryId ?? ""}
-                  onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                  defaultValue={transaction.categoryId ?? undefined}
+                  onValueChange={(v) => { if (v) handleRecategorize(v); }}
                   disabled={saving}
-                  className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
-                >
-                  <option value="" disabled>Pick a category…</option>
-                  <CategoryOptions categories={categories} />
-                </select>
+                  categories={categories}
+                  ariaLabel="Recategorize transaction"
+                  className="flex-1 h-10"
+                />
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                  className="h-10 w-10 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                   onClick={() => setRuleOpen(true)}
                   disabled={saving}
                   title="Create rule for this transaction"

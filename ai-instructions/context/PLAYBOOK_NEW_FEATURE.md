@@ -7,7 +7,7 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 ## Step-by-Step Checklist
 
 1. Read context
-- Read `ai-instructions/README.md` and linked docs before coding.
+- Read `ai-instructions/context/README.md` and linked docs before coding.
 
 2. Define scope
 - Confirm if feature is net-new, extension, or refactor.

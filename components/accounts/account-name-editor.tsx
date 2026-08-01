@@ -52,10 +52,10 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={isPending}
-          className="text-sm font-medium bg-white border border-input rounded px-1.5 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-ring"
+          className="text-sm font-medium bg-background border border-input rounded px-1.5 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-ring"
           autoFocus
         />
-        <button onClick={save} disabled={isPending} className="text-green-600 hover:text-green-700">
+        <button onClick={save} disabled={isPending} className="text-success hover:text-success/80">
           <Check className="h-3.5 w-3.5" />
         </button>
         <button onClick={cancel} disabled={isPending} className="text-muted-foreground hover:text-foreground">

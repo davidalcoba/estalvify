@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
+import { formatDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +16,8 @@ import { TransactionItem } from "@/components/transactions/shared/transaction-it
 import { TransactionPagination } from "@/components/transactions/shared/transaction-pagination";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import {
@@ -46,11 +48,12 @@ function formatMobileDate(dateIso: string, locale: string, timezone: string) {
 }
 
 function formatSectionDate(dateIso: string, locale: string, timezone: string) {
-  return new Date(dateIso + "T12:00:00").toLocaleDateString(locale, {
-    timeZone: timezone,
-    weekday: "short",
+  // Match the desktop section header (weekday long + year) via the shared formatter.
+  return formatDate(dateIso + "T12:00:00", locale, timezone, {
+    weekday: "long",
     day: "numeric",
     month: "long",
+    year: "numeric",
   });
 }
 
@@ -194,21 +197,21 @@ export function TransactionsMobileView({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <select
+                  <CategorySelect
                     key={activeTx.id}
-                    defaultValue={activeTx.categoryId ?? ""}
-                    onChange={(e) => { if (e.target.value) handleRecategorize(e.target.value); }}
+                    defaultValue={activeTx.categoryId ?? undefined}
+                    onValueChange={(v) => { if (v) handleRecategorize(v); }}
                     disabled={saving || sheetJustOpened}
-                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
-                  >
-                    <option value="" disabled>Select a category…</option>
-                    <CategoryOptions categories={categories} />
-                  </select>
+                    categories={categories}
+                    placeholder="Select a category…"
+                    ariaLabel="Recategorize transaction"
+                    className="flex-1 h-11"
+                  />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
                     disabled={saving}
                     title="Create rule for this transaction"

@@ -5,13 +5,17 @@
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { usePathname } from "next/navigation";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
-  "/categorize": "Categorize Transactions",
+  "/categorize": "Categorize",
+  "/rules": "Rules",
   "/budget": "Budget",
   "/transactions": "Transactions",
+  // More specific route first — the matcher sorts by length, but keep it explicit.
+  "/accounts/setup": "Connect Bank",
   "/accounts": "Bank Accounts",
   "/reports": "Reports",
   "/settings": "Settings",
@@ -31,6 +35,9 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <h1 className="text-sm font-medium text-foreground">{title}</h1>
+      <div className="ml-auto">
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

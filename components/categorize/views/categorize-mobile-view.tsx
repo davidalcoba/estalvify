@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight, CreditCard, Inbox, Loader2, Tag, CheckCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SimpleSelect } from "@/components/ui/simple-select";
 import {
   Sheet,
   SheetContent,
@@ -15,7 +16,8 @@ import {
   transactionOperationType,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
-import { CategoryOptions, type Category } from "@/components/categorize/category-options";
+import { type Category } from "@/components/categorize/category-options";
+import { CategorySelect } from "@/components/categorize/category-select";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
@@ -27,16 +29,26 @@ interface CategorizeMobileViewProps {
   total: number;
   page: number;
   pageSize: number;
+  pageSizeOptions?: number[];
   locale: string;
   timezone: string;
   searchInput: string;
   onSearchInputChange: (value: string) => void;
   onCategorize: (txId: string, categoryId: string) => void;
   pageUrl: (page: number) => string;
+  onPageSizeChange?: (size: number) => void;
   isBulking?: boolean;
   bulkQueryCategoryId?: string;
   onBulkQueryCategoryChange?: (value: string) => void;
   onBulkByQuery?: () => void;
+  // Bulk selection (parity with desktop)
+  checkedIds?: Set<string>;
+  bulkCategoryId?: string;
+  onBulkCategoryChange?: (value: string) => void;
+  onBulkApply?: () => void;
+  onClearSelection?: () => void;
+  onToggleCheck?: (txId: string) => void;
+  onToggleAll?: () => void;
 }
 
 function fmtDate(dateIso: string, locale: string, timezone: string) {
@@ -63,16 +75,25 @@ export function CategorizeMobileView({
   total,
   page,
   pageSize,
+  pageSizeOptions,
   locale,
   timezone,
   searchInput,
   onSearchInputChange,
   onCategorize,
   pageUrl,
+  onPageSizeChange,
   isBulking,
   bulkQueryCategoryId,
   onBulkQueryCategoryChange,
   onBulkByQuery,
+  checkedIds,
+  bulkCategoryId,
+  onBulkCategoryChange,
+  onBulkApply,
+  onClearSelection,
+  onToggleCheck,
+  onToggleAll,
 }: CategorizeMobileViewProps) {
   // Queue of transactions currently being processed in the sheet
   const [sheetQueue, setSheetQueue] = useState<TransactionListItemDTO[] | null>(null);
@@ -101,6 +122,10 @@ export function CategorizeMobileView({
   const showBulkByQuery =
     onBulkByQuery && activeQuery.length >= 3 && filtered.length > 0 && categories.length > 0;
 
+  const canBulkSelect = !!onToggleCheck && !!onBulkApply && categories.length > 0;
+  const checkedVisible = filtered.filter((tx) => checkedIds?.has(tx.id));
+  const allChecked = filtered.length > 0 && checkedVisible.length === filtered.length;
+
   const sheetOpen = sheetQueue !== null && sheetIndex < (sheetQueue?.length ?? 0);
   const currentTx = sheetOpen ? sheetQueue![sheetIndex] : null;
 
@@ -127,6 +152,11 @@ export function CategorizeMobileView({
     closeSheet();
   }
 
+  // Step back to a previously-skipped transaction in the queue.
+  function goBack() {
+    setSheetIndex((i) => Math.max(0, i - 1));
+  }
+
   function handleCategorySelect(categoryId: string) {
     if (!categoryId || !currentTx || !sheetQueue) return;
     const txId = currentTx.id;
@@ -147,27 +177,52 @@ export function CategorizeMobileView({
   return (
     <div className="space-y-4">
       {showBulkByQuery && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-          <span className="text-sm font-medium text-blue-700 w-full">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
+          <span className="text-sm font-medium text-brand w-full">
             Categorize all {filtered.length} matching as:
           </span>
-          <select
+          <CategorySelect
             value={bulkQueryCategoryId ?? ""}
-            onChange={(e) => onBulkQueryCategoryChange?.(e.target.value)}
-            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="" disabled>
-              Pick a category…
-            </option>
-            <CategoryOptions categories={categories} />
-          </select>
+            onValueChange={(v) => onBulkQueryCategoryChange?.(v)}
+            categories={categories}
+            size="sm"
+            ariaLabel="Category to apply to all matches"
+            className="flex-1"
+          />
           <Button
             size="sm"
             onClick={onBulkByQuery}
             disabled={!bulkQueryCategoryId || isBulking}
-            className="bg-blue-600 hover:bg-blue-700 h-8"
+            className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
           >
             {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+          </Button>
+        </div>
+      )}
+
+      {canBulkSelect && checkedVisible.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
+          <span className="text-sm font-medium text-brand w-full">
+            {checkedVisible.length} selected — categorize as:
+          </span>
+          <CategorySelect
+            value={bulkCategoryId ?? ""}
+            onValueChange={(v) => onBulkCategoryChange?.(v)}
+            categories={categories}
+            size="sm"
+            ariaLabel="Category for selected transactions"
+            className="flex-1"
+          />
+          <Button
+            size="sm"
+            onClick={onBulkApply}
+            disabled={!bulkCategoryId || isBulking}
+            className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
+          >
+            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClearSelection} className="h-8 text-muted-foreground">
+            Clear
           </Button>
         </div>
       )}
@@ -175,8 +230,8 @@ export function CategorizeMobileView({
       {allCaughtUp && (
         <Card className="border-dashed">
           <div className="flex flex-col items-center gap-3 py-12 text-center px-4">
-            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-success" />
             </div>
             <div>
               <p className="font-semibold">All caught up!</p>
@@ -213,10 +268,21 @@ export function CategorizeMobileView({
 
       {filtered.length > 0 && (
         <>
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {rangeStart}–{rangeEnd} of {total}
-            </p>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-xs text-muted-foreground shrink-0">
+                {rangeStart}–{rangeEnd} of {total}
+              </p>
+              {pageSizeOptions && onPageSizeChange && (
+                <SimpleSelect
+                  value={String(pageSize)}
+                  onValueChange={(v) => onPageSizeChange(Number(v))}
+                  ariaLabel="Rows per page"
+                  size="sm"
+                  options={pageSizeOptions.map((s) => ({ value: String(s), label: `${s}/page` }))}
+                />
+              )}
+            </div>
             <div className="flex items-center gap-1">
               {page > 1 ? (
                 <Button variant="outline" size="sm" asChild className="h-7 w-7 p-0">
@@ -246,6 +312,18 @@ export function CategorizeMobileView({
             </div>
           </div>
 
+          {canBulkSelect && (
+            <label className="flex items-center gap-2 px-1 text-xs text-muted-foreground w-fit">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={onToggleAll}
+                className="h-4 w-4 rounded border-input accent-brand cursor-pointer"
+              />
+              {allChecked ? "Deselect all" : "Select all"}
+            </label>
+          )}
+
           <div className="space-y-3">
             {filtered.map((tx) => (
               <Card
@@ -258,6 +336,20 @@ export function CategorizeMobileView({
                     tx={tx}
                     locale={locale}
                     dateText={fmtDate(tx.valueDate, locale, timezone)}
+                    leading={
+                      canBulkSelect ? (
+                        <input
+                          type="checkbox"
+                          checked={checkedIds?.has(tx.id) ?? false}
+                          onChange={() => {}}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleCheck?.(tx.id);
+                          }}
+                          className="h-4 w-4 rounded border-input accent-brand cursor-pointer shrink-0"
+                        />
+                      ) : undefined
+                    }
                   />
                 </CardContent>
               </Card>
@@ -275,6 +367,22 @@ export function CategorizeMobileView({
                 <SheetTitle className="text-base">{transactionMerchant(currentTx)}</SheetTitle>
                 <p className="text-sm text-muted-foreground">{transactionOperationType(currentTx)}</p>
               </SheetHeader>
+
+              <div className="flex items-center justify-between px-4 pb-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={goBack}
+                  disabled={sheetIndex === 0}
+                  className="h-8 gap-1 text-muted-foreground"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {sheetIndex + 1} / {sheetQueue?.length ?? 0}
+                </span>
+              </div>
 
               <div className="px-4 space-y-4">
                 <TransactionAmount
@@ -303,22 +411,20 @@ export function CategorizeMobileView({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <select
+                  <CategorySelect
                     key={currentTx.id}
-                    defaultValue=""
-                    onChange={(e) => handleCategorySelect(e.target.value)}
-                    className="flex-1 h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none"
-                  >
-                    <option value="" disabled>
-                      Select a category…
-                    </option>
-                    <CategoryOptions categories={categories} />
-                  </select>
+                    value=""
+                    onValueChange={handleCategorySelect}
+                    categories={categories}
+                    placeholder="Select a category…"
+                    ariaLabel="Select a category"
+                    className="flex-1 h-11"
+                  />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-11 w-11 shrink-0 text-amber-600 border-amber-200 hover:bg-amber-50"
+                    className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
                     title="Create rule for this transaction"
                   >

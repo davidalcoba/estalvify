@@ -6,7 +6,7 @@ Personal finance management app with bank connections, transaction sync, categor
 
 For AI coding assistants (Codex, Claude, Copilot), use the context docs in:
 
-- `ai-instructions/README.md`
+- `ai-instructions/context/README.md`
 
 These files define architecture, UI constraints, multi-user rules, and desktop/mobile expectations.
 They also define a Vercel-first implementation policy: deploy on Vercel and prefer Vercel built-in features when feasible.
