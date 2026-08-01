@@ -4,7 +4,9 @@
 
 import type { NotificationType, NotificationSeverity } from "@/app/generated/prisma";
 import type { BudgetRow } from "@/lib/budget/budget-progress";
-import { formatCurrency } from "@/lib/formatters";
+import type { ProjectedBalance } from "@/lib/analytics/forecast";
+import { firstBelowThreshold } from "@/lib/analytics/forecast";
+import { formatCurrency, formatDate } from "@/lib/formatters";
 import { daysBetween } from "@/lib/recurring/detect";
 
 export interface NotificationSpec {
@@ -94,4 +96,38 @@ export function upcomingRecurringNotifications(
     });
   }
   return specs;
+}
+
+// Alert when the projected balance is set to fall below a threshold (default 0)
+// within the forecast horizon. One alert for the earliest breaching month.
+export function lowBalanceNotifications(
+  projected: ProjectedBalance[],
+  threshold: number,
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  const breach = firstBelowThreshold(projected, threshold);
+  if (!breach) return [];
+
+  const monthLabel = formatDate(
+    new Date(Date.UTC(breach.year, breach.month - 1, 1)),
+    locale,
+    "UTC",
+    { month: "long", year: "numeric" }
+  );
+
+  return [
+    {
+      type: "LOW_BALANCE_PROJECTED",
+      severity: "ALERT",
+      title: "Low balance projected",
+      body: `At your recent pace, your balance is projected to reach ${formatCurrency(
+        breach.balance,
+        currency,
+        locale
+      )} by ${monthLabel}.`,
+      dedupeKey: `low-balance:${breach.year}-${breach.month}`,
+      metadata: { year: String(breach.year), month: String(breach.month) },
+    },
+  ];
 }

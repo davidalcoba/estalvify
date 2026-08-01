@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lastNMonths, monthlyIncomeExpenses, topCategories } from "./trends";
+import { lastNMonths, forwardMonths, monthlyIncomeExpenses, topCategories } from "./trends";
 
 describe("lastNMonths", () => {
   it("returns the trailing months oldest-first", () => {
@@ -16,6 +16,16 @@ describe("lastNMonths", () => {
       { year: 2025, month: 12 },
       { year: 2026, month: 1 },
       { year: 2026, month: 2 },
+    ]);
+  });
+});
+
+describe("forwardMonths", () => {
+  it("returns the next months soonest-first, crossing the year", () => {
+    expect(forwardMonths(2026, 11, 3)).toEqual([
+      { year: 2026, month: 12 },
+      { year: 2027, month: 1 },
+      { year: 2027, month: 2 },
     ]);
   });
 });

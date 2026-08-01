@@ -9,7 +9,7 @@
 > hecha aquí** en el mismo cambio.
 
 **Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
-**Siguiente a construir:** Fase 5 — Forecast.
+**Siguiente a construir:** Fase 6 — Recomendaciones con IA.
 
 ---
 
@@ -29,7 +29,7 @@
 | **Presupuestos** | ✅ Estable | Presupuesto mensual por categoría vs gasto real: `app/(app)/budget/`, `lib/budget/`, `lib/analytics/spending.ts`, `components/budget/` |
 | **Reports** | ✅ Estable | Tendencia 12 meses (ingresos vs gastos), donut por categoría y top comercios con **Recharts**: `app/(app)/reports/page.tsx`, `components/reports/` |
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
-| Previsión (forecast) | ❌ No existe | — |
+| Previsión (forecast) | ✅ Estable | Proyección de saldo/gasto + alerta de saldo bajo: `app/(app)/forecast/`, `lib/analytics/forecast.ts`, `components/reports/balance-forecast-chart.tsx` |
 | Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
 | Recomendaciones con IA | ❌ No existe | El valor `CategorizationSource.AI` se reservó y luego se eliminó |
 
@@ -111,8 +111,10 @@ cambio). Marca el estado aquí al terminar.
   charts theme-aware en `components/reports/` (barras ingresos/gastos, donut por
   categoría) usando tokens `--chart-*`; Dashboard con KPIs reales y Reports con
   tendencia + donut + top comercios.
-- [ ] **Fase 5 — Forecast.** Proyección usando recurrentes (Fase 2) + medias (Fase 0).
-  Alimenta una notificación de "saldo bajo previsto".
+- [x] **Fase 5 — Forecast** ✅ — `lib/analytics/forecast.ts` (medias, proyección de saldo,
+  gasto fin de mes) con tests; página `/forecast` con KPIs, curva de saldo proyectado y
+  próximos cargos recurrentes; y alerta `LOW_BALANCE_PROJECTED` en el centro de
+  notificaciones cuando la proyección cae por debajo de 0.
 - [ ] **Fase 6 — Recomendaciones con IA.** Wrapper de proveedor; recomendaciones
   ancladas en las agregaciones (Fase 0) y presupuestos (Fase 1) ya existentes.
 

@@ -18,6 +18,7 @@ import {
   X,
   ListFilter,
   Repeat,
+  LineChart,
 } from "lucide-react";
 
 import {
@@ -78,6 +79,11 @@ const navItems = [
         title: "Recurring",
         url: "/recurring",
         icon: Repeat,
+      },
+      {
+        title: "Forecast",
+        url: "/forecast",
+        icon: LineChart,
       },
       {
         title: "Reports",
