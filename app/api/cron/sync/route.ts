@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { send } from "@vercel/queue";
 import { expireStaleConsents } from "@/lib/banking/connection-status";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
+import { generateNotificationsForUser } from "@/lib/notifications/generate";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -48,6 +49,11 @@ export async function GET(request: NextRequest) {
 
   const queued = results.filter((r) => r.status === "fulfilled").length;
   const failed = results.filter((r) => r.status === "rejected").length;
+
+  // Refresh in-app notifications (budget / recurring alerts) for each affected
+  // user. Idempotent and best-effort — failures must not break the sync run.
+  const userIds = [...new Set(activeConnections.map((c) => c.userId))];
+  await Promise.allSettled(userIds.map((id) => generateNotificationsForUser(id)));
 
   return NextResponse.json({
     success: true,
