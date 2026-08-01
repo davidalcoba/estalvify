@@ -19,6 +19,19 @@ export function lastNMonths(year: number, month: number, n: number): MonthBucket
   return buckets;
 }
 
+/** The `n` months AFTER (year, month), soonest first. */
+export function forwardMonths(year: number, month: number, n: number): MonthBucket[] {
+  const buckets: MonthBucket[] = [];
+  for (let k = 1; k <= n; k++) {
+    const zeroBased = month - 1 + k;
+    buckets.push({
+      year: year + Math.floor(zeroBased / 12),
+      month: ((zeroBased % 12) + 12) % 12 + 1,
+    });
+  }
+  return buckets;
+}
+
 export interface TrendRow {
   amount: number;
   direction: "DEBIT" | "CREDIT";

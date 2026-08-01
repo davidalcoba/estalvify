@@ -11,7 +11,7 @@ Users connect their bank accounts (via Enable Banking / PSD2) and the system reg
 
 (An AI-assisted categorization flow is reserved for the future but is not implemented — the `CategorizationSource.AI` value exists as a placeholder only.)
 
-The product also supports monthly spending budgets and reporting. Bank connect/sync, transactions, categorize, rules, budgets, recurring detection, notifications, dashboard, reports, and settings are all functional with real data.
+The product also supports monthly spending budgets and reporting. Bank connect/sync, transactions, categorize, rules, budgets, recurring detection, notifications, dashboard, reports, forecast, and settings are all functional with real data.
 
 Dashboard & reports: the dashboard shows real KPIs (net worth from latest balances, income/expenses this month, transactions to categorize) plus a 6-month income-vs-expenses chart and top categories; reports show a 12-month trend, a spending-by-category donut, and top merchants. Trend/aggregation logic is in `lib/analytics/` (`spending.ts`, `trends.ts`); charts are theme-aware Recharts components in `components/reports/` using the `--chart-*` tokens.
 
@@ -19,7 +19,9 @@ Budgets: users set a planned amount per category for a month and track it agains
 
 Recurring payments / subscriptions: candidates are detected on the fly from the last ~13 months of transactions (grouped by a normalized merchant key, classified into weekly/monthly/quarterly/yearly cadences); the user confirms or ignores each, and decisions are stored in the `RecurringSeries` model (with a snapshot of cadence/amount for future forecasting and alerts). See `app/(app)/recurring/`, `lib/recurring/` (pure detector + DTO), and `components/recurring/`.
 
-In-app notifications: a header bell surfaces alerts generated from the user's data — over/near budget (from Phase 1) and upcoming confirmed recurring charges (from Phase 2). Generation is idempotent (upsert by `(userId, dedupeKey)` on the `Notification` model) and runs in the daily cron (`app/api/cron/sync`) plus an on-demand "Check now" action. Pure generators live in `lib/notifications/generators.ts` (with the impure gather/upsert in `generate.ts`); UI in `components/notifications/`. Push/email are future channels.
+In-app notifications: a header bell surfaces alerts generated from the user's data — over/near budget (from Phase 1), upcoming confirmed recurring charges (from Phase 2), and a projected low-balance alert (from the forecast). Generation is idempotent (upsert by `(userId, dedupeKey)` on the `Notification` model) and runs in the daily cron (`app/api/cron/sync`) plus an on-demand "Check now" action. Pure generators live in `lib/notifications/generators.ts` (with the impure gather/upsert in `generate.ts`); UI in `components/notifications/`. Push/email are future channels.
+
+Forecast: the `/forecast` page projects spending and balance from recent averages (last 6 full months) plus confirmed recurring charges — projected spend this month (linear extrapolation), average monthly net, a projected-balance curve for the next 6 months, and the next upcoming recurring charges. Pure logic in `lib/analytics/forecast.ts`; the projected-balance area chart is `components/reports/balance-forecast-chart.tsx`. When the projection dips below zero it also emits the `LOW_BALANCE_PROJECTED` notification.
 
 ## Core Goals
 

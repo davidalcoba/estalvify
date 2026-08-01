@@ -5,15 +5,21 @@ import type { Prisma } from "@/app/generated/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import {
   currentYearMonth,
+  monthRange,
   buildMonthlySpendingWhere,
   aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
+import { lastNMonths, forwardMonths, monthlyIncomeExpenses } from "@/lib/analytics/trends";
+import { averageMonthly, projectBalances } from "@/lib/analytics/forecast";
 import { buildBudgetData } from "@/lib/budget/budget-dto";
 import {
   budgetNotifications,
   upcomingRecurringNotifications,
+  lowBalanceNotifications,
   type NotificationSpec,
 } from "./generators";
+
+const FORECAST_MONTHS = 6;
 
 /** Today's date (YYYY-MM-DD) in a given IANA timezone. */
 function todayInTimezone(timezone: string, now: Date = new Date()): string {
@@ -36,7 +42,12 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
   const prefs = await getUserPrefs(userId);
   const { year, month } = currentYearMonth(prefs.timezone);
 
-  const [budget, spendingRows, categories, recurring] = await Promise.all([
+  // Forecast baseline: the 6 full months ending last month.
+  const prevMonth = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+  const fullMonths = lastNMonths(prevMonth.year, prevMonth.month, 6);
+  const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
+
+  const [budget, spendingRows, categories, recurring, accounts, trendTx] = await Promise.all([
     prisma.budget.findUnique({
       where: { userId_year_month: { userId, year, month } },
       select: {
@@ -68,6 +79,14 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
         nextExpectedDate: true,
       },
     }),
+    prisma.bankAccount.findMany({
+      where: { userId, isActive: true },
+      select: { balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } } },
+    }),
+    prisma.transaction.findMany({
+      where: { userId, valueDate: { gte: trendStart } },
+      select: { amount: true, direction: true, valueDate: true },
+    }),
   ]);
 
   const spendingByCategory = aggregateSpendingByCategory(spendingRows);
@@ -81,6 +100,22 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
   });
 
   const today = todayInTimezone(prefs.timezone);
+
+  // Project the balance forward and alert if it dips below zero.
+  const netWorth = accounts.reduce(
+    (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
+    0
+  );
+  const trend = monthlyIncomeExpenses(
+    trendTx.map((t) => ({
+      amount: Number(t.amount.toString()),
+      direction: t.direction,
+      valueDate: t.valueDate.toISOString(),
+    })),
+    fullMonths
+  );
+  const avg = averageMonthly(trend);
+  const projected = projectBalances(netWorth, avg.net, forwardMonths(year, month, FORECAST_MONTHS));
 
   const specs: NotificationSpec[] = [
     ...budgetNotifications(year, month, budgetData.rows, prefs.currency, prefs.locale),
@@ -98,6 +133,7 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
       prefs.currency,
       prefs.locale
     ),
+    ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale),
   ];
 
   if (specs.length === 0) return 0;

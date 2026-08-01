@@ -463,6 +463,7 @@ enum NotificationType {
   BUDGET_OVER
   BUDGET_NEAR
   RECURRING_UPCOMING
+  LOW_BALANCE_PROJECTED
 }
 
 enum NotificationSeverity {
