@@ -17,6 +17,7 @@ import {
   listRulesForUser,
   createRuleForUser,
   updateRuleForUser,
+  deleteRuleForUser,
   runRuleForUser,
   runAllRulesForUser,
 } from "@/lib/mcp/manage";
@@ -521,6 +522,29 @@ export function registerTools(server: McpServer): void {
         );
       } catch (err) {
         return errorResult(err, "update_rule failed");
+      }
+    },
+  );
+
+  // ── delete_rule ───────────────────────────────────────────────────────────────
+  server.registerTool(
+    "delete_rule",
+    {
+      description:
+        "Delete a rule permanently. Transactions it categorized KEEP their category but " +
+        "lose the link to the rule, so they can no longer be reverted — call undo_rule_run " +
+        "FIRST if you want them uncategorized again. To stop a rule without losing it, use " +
+        "update_rule with isActive: false instead.",
+      inputSchema: {
+        ruleId: z.string(),
+      },
+    },
+    async ({ ruleId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await deleteRuleForUser(userId, ruleId));
+      } catch (err) {
+        return errorResult(err, "delete_rule failed");
       }
     },
   );
