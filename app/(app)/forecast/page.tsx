@@ -6,14 +6,22 @@ import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
-import { lastNMonths, forwardMonths, monthlyIncomeExpenses } from "@/lib/analytics/trends";
+import {
+  lastNMonths,
+  forwardMonths,
+  monthlyIncomeExpenses,
+} from "@/lib/analytics/trends";
 import {
   averageMonthly,
   projectBalances,
   projectBalancesVariable,
   projectMonthEndSpend,
 } from "@/lib/analytics/forecast";
-import { plannedForMonth, planTotals, type PlanItemInput } from "@/lib/plan/plan-item";
+import {
+  plannedForMonth,
+  planTotals,
+  type PlanItemInput,
+} from "@/lib/plan/plan-item";
 import { daysBetween } from "@/lib/recurring/detect";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -33,18 +41,31 @@ export default async function ForecastPage() {
   const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
-  const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+  const prev =
+    month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const fullMonths = lastNMonths(prev.year, prev.month, HISTORY_MONTHS);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
   const [accounts, trendTx, planItems] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { userId, isActive: true },
-      select: { balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } } },
+      select: {
+        balances: {
+          orderBy: { date: "desc" },
+          take: 1,
+          select: { balance: true },
+        },
+      },
     }),
     prisma.transaction.findMany({
       where: { userId, valueDate: { gte: trendStart } },
-      select: { amount: true, direction: true, valueDate: true },
+      select: {
+        amount: true,
+        direction: true,
+        valueDate: true,
+        // Category kind so transfers can be excluded from income/expense totals.
+        categorization: { select: { category: { select: { kind: true } } } },
+      },
     }),
     prisma.planItem.findMany({
       where: { userId, active: true },
@@ -61,17 +82,20 @@ export default async function ForecastPage() {
     }),
   ]);
 
-  const hasData = accounts.length > 0 || trendTx.length > 0 || planItems.length > 0;
+  const hasData =
+    accounts.length > 0 || trendTx.length > 0 || planItems.length > 0;
 
   const netWorth = accounts.reduce(
-    (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
-    0
+    (sum, a) =>
+      sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
+    0,
   );
 
   const rows = trendTx.map((t) => ({
     amount: Number(t.amount.toString()),
     direction: t.direction,
     valueDate: t.valueDate.toISOString(),
+    categoryKind: t.categorization?.category?.kind ?? null,
   }));
   const trend = monthlyIncomeExpenses(rows, fullMonths);
   const avg = averageMonthly(trend);
@@ -95,26 +119,45 @@ export default async function ForecastPage() {
     ? projectBalancesVariable(
         netWorth,
         horizon,
-        horizon.map((b) =>
-          Math.round(
-            planInputs.reduce((sum, item) => sum + plannedForMonth(item, b.year, b.month), 0) * 100
-          ) / 100
-        )
+        horizon.map(
+          (b) =>
+            Math.round(
+              planInputs.reduce(
+                (sum, item) => sum + plannedForMonth(item, b.year, b.month),
+                0,
+              ) * 100,
+            ) / 100,
+        ),
       )
     : projectBalances(netWorth, avg.net, horizon);
 
   // This month's projected spend by linear extrapolation.
   const dayOfMonth = Number(
-    new Intl.DateTimeFormat("en-CA", { timeZone: timezone, day: "2-digit" }).format(new Date())
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      day: "2-digit",
+    }).format(new Date()),
   );
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const projectedSpend = projectMonthEndSpend(current.expenses, dayOfMonth, daysInMonth);
+  const projectedSpend = projectMonthEndSpend(
+    current.expenses,
+    dayOfMonth,
+    daysInMonth,
+  );
 
   const monthShort = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", {
+      month: "short",
+    });
   const chartData = [
-    { label: monthShort(year, month), balance: Math.round(netWorth * 100) / 100 },
-    ...projected.map((p) => ({ label: monthShort(p.year, p.month), balance: p.balance })),
+    {
+      label: monthShort(year, month),
+      balance: Math.round(netWorth * 100) / 100,
+    },
+    ...projected.map((p) => ({
+      label: monthShort(p.year, p.month),
+      balance: p.balance,
+    })),
   ];
 
   const today = new Intl.DateTimeFormat("en-CA", {
@@ -154,14 +197,20 @@ export default async function ForecastPage() {
       }
       if (!date) return null;
       return {
-        displayName: p.label ?? p.category?.name ?? (p.direction === "CREDIT" ? "Income" : "Expense"),
+        displayName:
+          p.label ??
+          p.category?.name ??
+          (p.direction === "CREDIT" ? "Income" : "Expense"),
         direction: p.direction,
         amount: Number(p.amount.toString()),
         date,
         inDays: daysBetween(today, date),
       };
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null && r.inDays >= 0 && r.inDays <= UPCOMING_HORIZON_DAYS)
+    .filter(
+      (r): r is NonNullable<typeof r> =>
+        r !== null && r.inDays >= 0 && r.inDays <= UPCOMING_HORIZON_DAYS,
+    )
     .sort((a, b) => a.inDays - b.inDays)
     .slice(0, 8);
 
@@ -178,47 +227,72 @@ export default async function ForecastPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-3">
-            <Kpi title="Projected spend this month" icon={<CalendarClock className="h-4 w-4 text-muted-foreground" />}>
-              <div className="text-2xl font-bold">{formatCurrency(projectedSpend, currency, locale)}</div>
+            <Kpi
+              title="Projected spend this month"
+              icon={<CalendarClock className="h-4 w-4 text-muted-foreground" />}
+            >
+              <div className="text-2xl font-bold">
+                {formatCurrency(projectedSpend, currency, locale)}
+              </div>
               <p className="text-xs text-muted-foreground">
-                {formatCurrency(current.expenses, currency, locale)} so far · avg{" "}
-                {formatCurrency(avg.expenses, currency, locale)}
+                {formatCurrency(current.expenses, currency, locale)} so far ·
+                avg {formatCurrency(avg.expenses, currency, locale)}
               </p>
             </Kpi>
 
-            <Kpi title="Avg monthly net" icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}>
-              <div className={`text-2xl font-bold ${avg.net >= 0 ? "text-success" : "text-destructive"}`}>
+            <Kpi
+              title="Avg monthly net"
+              icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
+            >
+              <div
+                className={`text-2xl font-bold ${avg.net >= 0 ? "text-success" : "text-destructive"}`}
+              >
                 {avg.net >= 0 ? "+" : "−"}
                 {formatCurrency(Math.abs(avg.net), currency, locale)}
               </div>
-              <p className="text-xs text-muted-foreground">Over the last {HISTORY_MONTHS} months</p>
+              <p className="text-xs text-muted-foreground">
+                Over the last {HISTORY_MONTHS} months
+              </p>
             </Kpi>
 
-            <Kpi title="Net worth now" icon={<LineChart className="h-4 w-4 text-muted-foreground" />}>
-              <div className="text-2xl font-bold">{formatCurrency(netWorth, currency, locale)}</div>
-              <p className="text-xs text-muted-foreground">Across all accounts</p>
+            <Kpi
+              title="Net worth now"
+              icon={<LineChart className="h-4 w-4 text-muted-foreground" />}
+            >
+              <div className="text-2xl font-bold">
+                {formatCurrency(netWorth, currency, locale)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Across all accounts
+              </p>
             </Kpi>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Projected balance · next {HORIZON_MONTHS} months</CardTitle>
+              <CardTitle className="text-base">
+                Projected balance · next {HORIZON_MONTHS} months
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <BalanceForecastChart data={chartData} currency={currency} locale={locale} />
+              <BalanceForecastChart
+                data={chartData}
+                currency={currency}
+                locale={locale}
+              />
               <p className="mt-2 text-xs text-muted-foreground">
                 {hasPlan ? (
                   <>
-                    Based on your Plan (monthly net{" "}
-                    {planNet >= 0 ? "+" : "−"}
-                    {formatCurrency(Math.abs(planNet), currency, locale)}). A projection, not a guarantee.
+                    Based on your Plan (monthly net {planNet >= 0 ? "+" : "−"}
+                    {formatCurrency(Math.abs(planNet), currency, locale)}). A
+                    projection, not a guarantee.
                   </>
                 ) : (
                   <>
                     Assumes your average monthly net of{" "}
                     {avg.net >= 0 ? "+" : "−"}
-                    {formatCurrency(Math.abs(avg.net), currency, locale)} continues. Add a Plan for a sharper
-                    forecast.
+                    {formatCurrency(Math.abs(avg.net), currency, locale)}{" "}
+                    continues. Add a Plan for a sharper forecast.
                   </>
                 )}
               </p>
@@ -233,10 +307,18 @@ export default async function ForecastPage() {
               {upcoming.length > 0 ? (
                 <ul className="divide-y">
                   {upcoming.map((r, i) => (
-                    <li key={`${r.displayName}-${i}`} className="flex items-center gap-3 py-2 text-sm">
-                      <span className="min-w-0 flex-1 truncate">{r.displayName}</span>
+                    <li
+                      key={`${r.displayName}-${i}`}
+                      className="flex items-center gap-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {r.displayName}
+                      </span>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatDate(r.date, language, "UTC", { day: "numeric", month: "short" })}
+                        {formatDate(r.date, language, "UTC", {
+                          day: "numeric",
+                          month: "short",
+                        })}
                       </span>
                       <span
                         className={`w-24 shrink-0 text-right tabular-nums ${
@@ -251,7 +333,8 @@ export default async function ForecastPage() {
                 </ul>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No dated charges ahead. Add planned items with a date or day of month to see them here.
+                  No dated charges ahead. Add planned items with a date or day
+                  of month to see them here.
                 </p>
               )}
             </CardContent>

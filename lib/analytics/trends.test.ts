@@ -80,3 +80,48 @@ describe("topCategories", () => {
     });
   });
 });
+
+describe("monthlyIncomeExpenses — transfers", () => {
+  const buckets = [{ year: 2026, month: 4 }];
+
+  it("ignores a TRANSFER on both sides of the ledger", () => {
+    // The real case: a 15.000 € move between the user's own accounts arrives as
+    // two rows and, split on direction alone, showed up as 15.000 of income AND
+    // 15.000 of expenses in the same month.
+    const rows = [
+      { amount: 15000, direction: "DEBIT" as const, valueDate: "2026-04-29", categoryKind: "TRANSFER" as const },
+      { amount: 15000, direction: "CREDIT" as const, valueDate: "2026-04-29", categoryKind: "TRANSFER" as const },
+      { amount: 100, direction: "DEBIT" as const, valueDate: "2026-04-10", categoryKind: "EXPENSE" as const },
+    ];
+    const [april] = monthlyIncomeExpenses(rows, buckets);
+
+    expect(april.income).toBe(0);
+    expect(april.expenses).toBe(100);
+    expect(april.net).toBe(-100);
+  });
+
+  it("still counts an uncategorized row by direction", () => {
+    // Dropping these would understate every month — worse than the problem the
+    // kind filter exists to solve.
+    const rows = [
+      { amount: 50, direction: "DEBIT" as const, valueDate: "2026-04-05", categoryKind: null },
+      { amount: 200, direction: "CREDIT" as const, valueDate: "2026-04-06" },
+    ];
+    const [april] = monthlyIncomeExpenses(rows, buckets);
+
+    expect(april.expenses).toBe(50);
+    expect(april.income).toBe(200);
+  });
+
+  it("counts EXPENSE and INCOME normally", () => {
+    const rows = [
+      { amount: 30, direction: "DEBIT" as const, valueDate: "2026-04-05", categoryKind: "EXPENSE" as const },
+      { amount: 900, direction: "CREDIT" as const, valueDate: "2026-04-06", categoryKind: "INCOME" as const },
+    ];
+    const [april] = monthlyIncomeExpenses(rows, buckets);
+
+    expect(april.expenses).toBe(30);
+    expect(april.income).toBe(900);
+    expect(april.net).toBe(870);
+  });
+});

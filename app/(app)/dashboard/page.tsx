@@ -14,7 +14,11 @@ import {
   buildMonthlySpendingWhere,
   aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
-import { lastNMonths, monthlyIncomeExpenses, topCategories } from "@/lib/analytics/trends";
+import {
+  lastNMonths,
+  monthlyIncomeExpenses,
+  topCategories,
+} from "@/lib/analytics/trends";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
@@ -36,35 +40,55 @@ export default async function DashboardPage() {
   const months = lastNMonths(year, month, TREND_MONTHS);
   const rangeStart = monthRange(months[0].year, months[0].month).start;
 
-  const [accounts, trendTx, spendRows, categories, toCategorize] = await Promise.all([
-    prisma.bankAccount.findMany({
-      where: { userId, isActive: true },
-      select: { balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } } },
-    }),
-    prisma.transaction.findMany({
-      where: { userId, valueDate: { gte: rangeStart } },
-      select: { amount: true, direction: true, valueDate: true },
-    }),
-    prisma.transaction.findMany({
-      where: buildMonthlySpendingWhere(userId, year, month),
-      select: { amount: true, categorization: { select: { categoryId: true } } },
-    }),
-    prisma.category.findMany({
-      where: { isActive: true, OR: [{ userId }, { userId: null }] },
-      select: { id: true, name: true, color: true },
-    }),
-    prisma.transaction.count({
-      where: {
-        userId,
-        OR: [{ categorization: null }, { categorization: { status: "REJECTED" } }],
-      },
-    }),
-  ]);
+  const [accounts, trendTx, spendRows, categories, toCategorize] =
+    await Promise.all([
+      prisma.bankAccount.findMany({
+        where: { userId, isActive: true },
+        select: {
+          balances: {
+            orderBy: { date: "desc" },
+            take: 1,
+            select: { balance: true },
+          },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: { userId, valueDate: { gte: rangeStart } },
+        select: {
+          amount: true,
+          direction: true,
+          valueDate: true,
+          // Category kind so transfers can be excluded from income/expense totals.
+          categorization: { select: { category: { select: { kind: true } } } },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: buildMonthlySpendingWhere(userId, year, month),
+        select: {
+          amount: true,
+          categorization: { select: { categoryId: true } },
+        },
+      }),
+      prisma.category.findMany({
+        where: { isActive: true, OR: [{ userId }, { userId: null }] },
+        select: { id: true, name: true, color: true },
+      }),
+      prisma.transaction.count({
+        where: {
+          userId,
+          OR: [
+            { categorization: null },
+            { categorization: { status: "REJECTED" } },
+          ],
+        },
+      }),
+    ]);
 
   const hasAccounts = accounts.length > 0;
   const netWorth = accounts.reduce(
-    (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
-    0
+    (sum, a) =>
+      sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
+    0,
   );
 
   const trend = monthlyIncomeExpenses(
@@ -72,8 +96,9 @@ export default async function DashboardPage() {
       amount: Number(t.amount.toString()),
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
+      categoryKind: t.categorization?.category?.kind ?? null,
     })),
-    months
+    months,
   );
   const thisMonth = trend[trend.length - 1];
 
@@ -81,7 +106,9 @@ export default async function DashboardPage() {
   const topCats = topCategories(spendingByCategory, categories, 6);
 
   const monthLabel = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", {
+      month: "short",
+    });
   const chartData = trend.map((t) => ({
     label: monthLabel(t.year, t.month),
     income: t.income,
@@ -96,28 +123,44 @@ export default async function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Kpi title="Net Worth" icon={<Wallet className="h-4 w-4 text-muted-foreground" />}>
-          <div className="text-2xl font-bold">{formatCurrency(netWorth, currency, locale)}</div>
+        <Kpi
+          title="Net Worth"
+          icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
+        >
+          <div className="text-2xl font-bold">
+            {formatCurrency(netWorth, currency, locale)}
+          </div>
           <p className="text-xs text-muted-foreground">Across all accounts</p>
         </Kpi>
 
-        <Kpi title="Income this month" icon={<TrendingUp className="h-4 w-4 text-success" />}>
+        <Kpi
+          title="Income this month"
+          icon={<TrendingUp className="h-4 w-4 text-success" />}
+        >
           <div className="text-2xl font-bold text-success">
             +{formatCurrency(thisMonth.income, currency, locale)}
           </div>
           <p className="text-xs text-muted-foreground">Money in this month</p>
         </Kpi>
 
-        <Kpi title="Expenses this month" icon={<TrendingDown className="h-4 w-4 text-destructive" />}>
+        <Kpi
+          title="Expenses this month"
+          icon={<TrendingDown className="h-4 w-4 text-destructive" />}
+        >
           <div className="text-2xl font-bold text-destructive">
             −{formatCurrency(thisMonth.expenses, currency, locale)}
           </div>
           <p className="text-xs text-muted-foreground">Money out this month</p>
         </Kpi>
 
-        <Kpi title="To categorize" icon={<Tag className="h-4 w-4 text-brand" />}>
+        <Kpi
+          title="To categorize"
+          icon={<Tag className="h-4 w-4 text-brand" />}
+        >
           <div className="text-2xl font-bold">{toCategorize}</div>
-          <p className="text-xs text-muted-foreground">Transactions pending review</p>
+          <p className="text-xs text-muted-foreground">
+            Transactions pending review
+          </p>
         </Kpi>
       </div>
 
@@ -128,17 +171,27 @@ export default async function DashboardPage() {
               <CardTitle className="text-base">Income vs expenses</CardTitle>
             </CardHeader>
             <CardContent>
-              <IncomeExpensesChart data={chartData} currency={currency} locale={locale} />
+              <IncomeExpensesChart
+                data={chartData}
+                currency={currency}
+                locale={locale}
+              />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Top categories this month</CardTitle>
+              <CardTitle className="text-base">
+                Top categories this month
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {topCats.length > 0 ? (
-                <CategoryBars items={topCats} currency={currency} locale={locale} />
+                <CategoryBars
+                  items={topCats}
+                  currency={currency}
+                  locale={locale}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No categorized spending yet this month.

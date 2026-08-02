@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import type { CategoryKind } from "@/app/generated/prisma";
 
 export async function updatePreferences(data: {
   timezone: string;
@@ -42,7 +43,7 @@ export async function updatePreferences(data: {
 const DEFAULT_CATEGORIES: Array<{
   name: string;
   color: string;
-  isNonComputable?: boolean;
+  kind?: CategoryKind;
   children: string[];
 }> = [
   { name: "Food & Groceries", color: "#22c55e", children: ["Supermarket", "Restaurants", "Cafes", "Takeaway"] },
@@ -51,8 +52,8 @@ const DEFAULT_CATEGORIES: Array<{
   { name: "Health", color: "#ec4899", children: ["Pharmacy", "Doctor", "Gym"] },
   { name: "Entertainment", color: "#8b5cf6", children: ["Streaming", "Cinema", "Sports & hobbies"] },
   { name: "Shopping", color: "#eab308", children: ["Clothing", "Electronics", "Home & garden"] },
-  { name: "Income", color: "#14b8a6", children: ["Salary", "Freelance", "Other income"] },
-  { name: "Transfers", color: "#6b7280", isNonComputable: true, children: ["Savings transfer", "Internal transfer"] },
+  { name: "Income", color: "#14b8a6", kind: "INCOME", children: ["Salary", "Freelance", "Other income"] },
+  { name: "Transfers", color: "#6b7280", kind: "TRANSFER", children: ["Savings transfer", "Internal transfer"] },
 ];
 
 export async function seedDefaultCategories() {
@@ -70,7 +71,7 @@ export async function seedDefaultCategories() {
         userId,
         name: cat.name,
         color: cat.color,
-        isNonComputable: cat.isNonComputable ?? false,
+        kind: cat.kind ?? "EXPENSE",
         sortOrder: i,
       },
     });
@@ -80,6 +81,10 @@ export async function seedDefaultCategories() {
           userId,
           name: cat.children[j],
           color: cat.color,
+          // Children inherit the parent's kind. The previous seed only flagged
+          // the parent, so "Savings transfer" and "Internal transfer" were left
+          // looking like ordinary expenses.
+          kind: cat.kind ?? "EXPENSE",
           parentId: parent.id,
           sortOrder: j,
         },

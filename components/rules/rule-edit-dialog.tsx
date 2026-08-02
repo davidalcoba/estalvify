@@ -164,7 +164,13 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
               className="w-32"
             />
             <p className="text-sm text-muted-foreground">
-              Lower runs first. First match wins.
+              Lower runs first. First match wins. Bands: 0-99 transfers, 100-199
+              income, 200-299 fixed costs, 300+ variable spending.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Match a merchant by description below 300 so it beats the bank&apos;s
+              own category label, which is used from 300 up and gets some
+              merchants wrong.
             </p>
           </div>
 

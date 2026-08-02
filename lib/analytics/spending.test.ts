@@ -25,7 +25,9 @@ describe("buildMonthlySpendingWhere", () => {
     const where = buildMonthlySpendingWhere("user-1", 2026, 5);
     expect(where.userId).toBe("user-1");
     expect(where.direction).toBe("DEBIT");
-    expect(where.categorization).toEqual({ is: { status: "APPROVED" } });
+    expect(where.categorization).toEqual({
+      is: { status: "APPROVED", category: { is: { kind: "EXPENSE" } } },
+    });
     const valueDate = where.valueDate as { gte: Date; lt: Date };
     expect(valueDate.gte.toISOString()).toBe("2026-05-01T00:00:00.000Z");
     expect(valueDate.lt.toISOString()).toBe("2026-06-01T00:00:00.000Z");
@@ -68,5 +70,17 @@ describe("currentYearMonth", () => {
       year: 2026,
       month: 1,
     });
+  });
+});
+
+describe("buildMonthlySpendingWhere — kind", () => {
+  it("restricts to EXPENSE categories", () => {
+    // Without this, the outgoing leg of every savings transfer counted as
+    // spending: one 15.000 € move was landing in the month's expenses.
+    const where = buildMonthlySpendingWhere("user-1", 2026, 8);
+    const categorization = where.categorization as {
+      is: { category: { is: { kind: string } } };
+    };
+    expect(categorization.is.category.is.kind).toBe("EXPENSE");
   });
 });

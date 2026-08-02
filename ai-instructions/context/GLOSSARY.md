@@ -47,6 +47,17 @@
   category but lose the undo trail. Deactivating (`isActive: false`) pauses a rule instead.
 - (AI suggestion: reserved for a future flow; not implemented.)
 
+## Category Terms
+
+- `kind` (`CategoryKind`): what a category means for totals — `EXPENSE` counts as spending,
+  `INCOME` as earnings, `TRANSFER` as neither (money moving between the user's own accounts).
+  Every sum in the app derives from this, never from a name or id list.
+- Two-level nesting: parents and their children only. Enforced on move, because the pickers
+  and the settings manager render exactly two levels — a third would be invisible but still
+  counted. The schema itself permits any depth.
+- (`isNonComputable`: the previous boolean. Seeded on "Transfers" and read by nothing, so no
+  total ever excluded anything. Replaced by `kind`.)
+
 ## Planning and Reporting Terms
 
 - Plan: the single place a user declares expected income and expenses by hand. Replaces

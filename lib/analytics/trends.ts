@@ -36,6 +36,12 @@ export interface TrendRow {
   amount: number;
   direction: "DEBIT" | "CREDIT";
   valueDate: string; // ISO
+  /**
+   * Kind of the row's category, or null when it has none. Null keeps counting by
+   * direction: dropping uncategorized rows would quietly understate every month,
+   * which is worse than the transfer contamination this field exists to fix.
+   */
+  categoryKind?: "EXPENSE" | "INCOME" | "TRANSFER" | null;
 }
 
 export interface MonthlyTotals extends MonthBucket {
@@ -47,6 +53,10 @@ export interface MonthlyTotals extends MonthBucket {
 /**
  * Income (CREDIT) vs expenses (DEBIT) totals per month, restricted to the given
  * buckets (months with no activity come back as zeros so charts stay continuous).
+ *
+ * TRANSFER rows are skipped entirely. Splitting on `direction` alone counted a
+ * movement between the user's own accounts as income AND as an expense in the
+ * same month — a 15.000 € transfer showed up as 15.000 on both sides.
  */
 export function monthlyIncomeExpenses(
   rows: TrendRow[],
@@ -58,6 +68,7 @@ export function monthlyIncomeExpenses(
   }
 
   for (const row of rows) {
+    if (row.categoryKind === "TRANSFER") continue;
     const date = new Date(row.valueDate);
     const key = `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}`;
     const entry = totals.get(key);
