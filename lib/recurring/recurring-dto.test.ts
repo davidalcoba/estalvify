@@ -41,6 +41,23 @@ describe("mergeRecurring", () => {
     );
     expect(items.map((i) => i.status)).toEqual(["SUGGESTED", "CONFIRMED", "IGNORED"]);
   });
+
+  it("flags the series that already mirror a plan item", () => {
+    const items = mergeRecurring(
+      [candidate({ merchantKey: "NETFLIX" }), candidate({ merchantKey: "SPOTIFY" })],
+      [
+        { merchantKey: "NETFLIX", status: "CONFIRMED" },
+        { merchantKey: "SPOTIFY", status: "CONFIRMED" },
+      ],
+      ["NETFLIX"]
+    );
+    expect(items.map((i) => i.inPlan)).toEqual([true, false]);
+  });
+
+  it("defaults inPlan to false when no plan links are given", () => {
+    const items = mergeRecurring([candidate({})], []);
+    expect(items[0].inPlan).toBe(false);
+  });
 });
 
 describe("monthlyEquivalent", () => {
@@ -55,14 +72,23 @@ describe("monthlyEquivalent", () => {
 describe("summarizeRecurring", () => {
   it("totals confirmed monthly cost and counts suggestions", () => {
     const items: RecurringItem[] = [
-      { ...candidate({ averageAmount: 13.99, cadence: "MONTHLY" }), status: "CONFIRMED" },
-      { ...candidate({ averageAmount: 120, cadence: "YEARLY" }), status: "CONFIRMED" },
+      {
+        ...candidate({ averageAmount: 13.99, cadence: "MONTHLY" }),
+        status: "CONFIRMED",
+        inPlan: true,
+      },
+      {
+        ...candidate({ averageAmount: 120, cadence: "YEARLY" }),
+        status: "CONFIRMED",
+        inPlan: true,
+      },
       {
         ...candidate({ direction: "CREDIT", averageAmount: 2000, cadence: "MONTHLY" }),
         status: "CONFIRMED",
+        inPlan: true,
       },
-      { ...candidate({ merchantKey: "NEW" }), status: "SUGGESTED" },
-      { ...candidate({ merchantKey: "OLD" }), status: "IGNORED" },
+      { ...candidate({ merchantKey: "NEW" }), status: "SUGGESTED", inPlan: false },
+      { ...candidate({ merchantKey: "OLD" }), status: "IGNORED", inPlan: false },
     ];
     const summary = summarizeRecurring(items);
     expect(summary.monthlyExpenses).toBe(23.99); // 13.99 + 120/12

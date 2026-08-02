@@ -83,6 +83,7 @@ export async function generateNotificationsForUser(
         amount: true,
         cadence: true,
         onDate: true,
+        endDate: true,
       },
     }),
     prisma.transaction.findMany({
@@ -156,8 +157,9 @@ export async function generateNotificationsForUser(
     amount: Number(p.amount.toString()),
     cadence: p.cadence,
     onDate: p.onDate ? p.onDate.toISOString().slice(0, 10) : null,
+    endDate: p.endDate ? p.endDate.toISOString().slice(0, 10) : null,
   }));
-  const limitByCategory = plannedMonthlyByCategory(planInputs);
+  const limitByCategory = plannedMonthlyByCategory(planInputs, { year, month });
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const planItemRecords = Object.entries(limitByCategory)
     .map(([categoryId, planned]) => {

@@ -185,6 +185,23 @@ Rules:
 - Reflect processing state to users
 - Ensure retries are safe and idempotent where possible
 
+## Cached Reads
+
+Pages read live from Prisma. The one exception is a value the **app shell**
+needs on every navigation but is too expensive to recompute there: the Recurring
+"to review" count, which requires running detection over ~13 months of
+transactions (`lib/recurring/review-count.ts`).
+
+Rules for that kind of value:
+
+- Wrap the computation in `unstable_cache` with the `userId` in the key parts —
+  never cache anything user-scoped without it.
+- Tag the entry (`recurring-review-count:<userId>`) and expire it from the server
+  action that invalidates it, via `updateTag` (immediate, read-your-own-writes).
+  `revalidateTag` in Next 16 needs a cache-life profile as its second argument.
+- Give it a TTL as well, for the paths that change the value without going
+  through an action (a sync importing new transactions).
+
 ## Server to Client DTO Boundary
 
 Do not pass ORM-rich objects directly to client components.
