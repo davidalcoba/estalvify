@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planRun, sortRulesForRun } from "./rule-plan";
+import { chunk, planRun, sortRulesForRun, WRITE_CHUNK } from "./rule-plan";
 import type { PlannableRule, PlannableTransaction } from "./rule-plan";
 
 function rule(overrides: Partial<PlannableRule> & { id: string }): PlannableRule {
@@ -35,6 +35,37 @@ function tx(
 const contains = (value: string) => ({
   op: "OR" as const,
   children: [{ field: "any" as const, operator: "contains" as const, value }],
+});
+
+describe("chunk", () => {
+  it("splits into batches of at most the given size", () => {
+    expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it("returns nothing for an empty list, so callers issue no statement", () => {
+    expect(chunk([], 10)).toEqual([]);
+  });
+
+  it("keeps a short list in one batch", () => {
+    expect(chunk([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+  });
+
+  it("bounds a realistic bulk run to a handful of statements", () => {
+    // The run that timed out touched ~1.3k rows one statement at a time.
+    const rows = Array.from({ length: 1300 }, (_, i) => i);
+    expect(chunk(rows).length).toBe(3);
+    expect(chunk(rows).flat()).toEqual(rows);
+  });
+
+  it("stays inside the Postgres bind-parameter ceiling", () => {
+    // Worst case is roughly one parameter per field per row; 500 keeps even a
+    // wide insert an order of magnitude below 65535.
+    expect(WRITE_CHUNK).toBeLessThanOrEqual(1000);
+  });
+
+  it("rejects a zero size instead of looping forever", () => {
+    expect(() => chunk([1, 2], 0)).toThrow();
+  });
 });
 
 describe("sortRulesForRun", () => {

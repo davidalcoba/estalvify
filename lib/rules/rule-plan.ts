@@ -8,6 +8,21 @@ import type { ConditionGroup } from "./rule-dto";
 
 export type CategorizationSourceLike = "RULE" | "AI" | "MANUAL";
 
+/**
+ * Rows per write statement, used by the writer in apply.ts. Bounded so a bulk
+ * operation stays well inside Postgres' 65535 bind-parameter ceiling and inside
+ * the request timeout — writes must be a handful of statements, never one per
+ * transaction. Lives here so it stays testable without a database.
+ */
+export const WRITE_CHUNK = 500;
+
+export function chunk<T>(items: T[], size = WRITE_CHUNK): T[][] {
+  if (size < 1) throw new Error("chunk size must be at least 1");
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export interface PlannableRule {
   id: string;
   name: string;

@@ -9,7 +9,7 @@ import { parseConditions } from "./rule-dto";
 import type { ConditionGroup } from "./rule-dto";
 import { buildRulePrefilterWhere } from "./rule-evaluator";
 import { matchesNode } from "./rule-matcher";
-import { planRun } from "./rule-plan";
+import { chunk, planRun } from "./rule-plan";
 import type {
   CategorizationSourceLike,
   PlannableRule,
@@ -139,7 +139,7 @@ function toSample(tx: LoadedTransaction): RuleRunSample {
  */
 async function loadCandidates(
   userId: string,
-  onlyUncategorized: boolean
+  onlyUncategorized: boolean,
 ): Promise<LoadedTransaction[]> {
   return prisma.transaction.findMany({
     where: buildRulePrefilterWhere(userId, null, { onlyUncategorized }),
@@ -154,9 +154,14 @@ async function loadCandidates(
 
 export async function runRules(
   userId: string,
-  options: RunRulesOptions = {}
+  options: RunRulesOptions = {},
 ): Promise<RuleRunReport> {
-  const { ruleIds, dryRun = false, force = false, onlyUncategorized = false } = options;
+  const {
+    ruleIds,
+    dryRun = false,
+    force = false,
+    onlyUncategorized = false,
+  } = options;
 
   const ruleRows = await prisma.categoryRule.findMany({
     where: {
@@ -186,12 +191,10 @@ export async function runRules(
 
   // A source-category rule needs to see rows that already have a category, so
   // the narrow uncategorized prefilter is only safe when no such rule is running.
-  const hasSourceCategoryRule = rules.some(
-    (r) => r.sourceCategoryId !== null
-  );
+  const hasSourceCategoryRule = rules.some((r) => r.sourceCategoryId !== null);
   const transactions = await loadCandidates(
     userId,
-    onlyUncategorized && !hasSourceCategoryRule
+    onlyUncategorized && !hasSourceCategoryRule,
   );
 
   const byId = new Map(transactions.map((t) => [t.id, t]));
@@ -245,11 +248,11 @@ async function writeMatches(matches: PlannedMatch[]): Promise<void> {
   const created = pending.filter((m) => m.previousCategoryId === null);
   const updated = pending.filter((m) => m.previousCategoryId !== null);
 
-  if (created.length > 0) {
-    // skipDuplicates guards the transactionId unique constraint: overlapping
-    // sync invocations can plan the same row concurrently.
+  // skipDuplicates guards the transactionId unique constraint: overlapping
+  // sync invocations can plan the same row concurrently.
+  for (const batch of chunk(created)) {
     await prisma.transactionCategorization.createMany({
-      data: created.map((m) => ({
+      data: batch.map((m) => ({
         transactionId: m.transactionId,
         categoryId: m.categoryId,
         source: "RULE" as const,
@@ -276,26 +279,28 @@ async function writeMatches(matches: PlannedMatch[]): Promise<void> {
 
   for (const bucket of groups.values()) {
     const head = bucket[0];
-    await prisma.transactionCategorization.updateMany({
-      where: { transactionId: { in: bucket.map((m) => m.transactionId) } },
-      data: {
-        categoryId: head.categoryId,
-        source: "RULE",
-        status: "APPROVED",
-        categoryRuleId: head.ruleId,
-        approvedAt: now,
-        categorizedAt: now,
-        rejectedAt: null,
-        note: null,
-        previousCategoryId: head.previousCategoryId,
-        previousSource: head.previousSource,
-      },
-    });
+    for (const batch of chunk(bucket)) {
+      await prisma.transactionCategorization.updateMany({
+        where: { transactionId: { in: batch.map((m) => m.transactionId) } },
+        data: {
+          categoryId: head.categoryId,
+          source: "RULE",
+          status: "APPROVED",
+          categoryRuleId: head.ruleId,
+          approvedAt: now,
+          categorizedAt: now,
+          rejectedAt: null,
+          note: null,
+          previousCategoryId: head.previousCategoryId,
+          previousSource: head.previousSource,
+        },
+      });
+    }
   }
 }
 
 async function recordMetrics(
-  perRule: { ruleId: string; matched: string[] }[]
+  perRule: { ruleId: string; matched: string[] }[],
 ): Promise<void> {
   const now = new Date();
   await Promise.all(
@@ -307,8 +312,8 @@ async function recordMetrics(
           lastRunAt: now,
           ...(r.matched.length > 0 ? { lastMatchAt: now } : {}),
         },
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -326,7 +331,7 @@ export async function evaluateConditions(
   userId: string,
   conditions: ConditionGroup,
   sourceCategoryId: string | null,
-  limit: number
+  limit: number,
 ): Promise<EvaluateResult> {
   const rows = (await prisma.transaction.findMany({
     where: buildRulePrefilterWhere(userId, sourceCategoryId),
@@ -334,7 +339,9 @@ export async function evaluateConditions(
     orderBy: [{ valueDate: "desc" }, { id: "asc" }],
   })) as unknown as LoadedTransaction[];
 
-  const matched = rows.filter((row) => matchesNode(toPlannable(row), conditions));
+  const matched = rows.filter((row) =>
+    matchesNode(toPlannable(row), conditions),
+  );
 
   return { matched: matched.length, transactions: matched.slice(0, limit) };
 }
@@ -343,9 +350,14 @@ export async function testConditions(
   userId: string,
   conditions: ConditionGroup,
   sourceCategoryId: string | null,
-  limit: number
+  limit: number,
 ): Promise<{ matched: number; sample: RuleRunSample[] }> {
-  const result = await evaluateConditions(userId, conditions, sourceCategoryId, limit);
+  const result = await evaluateConditions(
+    userId,
+    conditions,
+    sourceCategoryId,
+    limit,
+  );
   return { matched: result.matched, sample: result.transactions.map(toSample) };
 }
 
@@ -363,7 +375,7 @@ export async function testConditions(
  */
 export async function undoRuleRun(
   userId: string,
-  ruleId: string
+  ruleId: string,
 ): Promise<{ reverted: number; deleted: number; restored: number }> {
   const rule = await prisma.categoryRule.findUnique({
     where: { id: ruleId },
@@ -389,37 +401,53 @@ export async function undoRuleRun(
   const restorableIds = new Set(
     (
       await prisma.category.findMany({
-        where: { id: { in: toRestore.map((r) => r.previousCategoryId as string) } },
+        where: {
+          id: { in: toRestore.map((r) => r.previousCategoryId as string) },
+        },
         select: { id: true },
       })
-    ).map((c) => c.id)
+    ).map((c) => c.id),
   );
 
   const orphaned = toRestore.filter(
-    (r) => !restorableIds.has(r.previousCategoryId as string)
+    (r) => !restorableIds.has(r.previousCategoryId as string),
   );
   const restorable = toRestore.filter((r) =>
-    restorableIds.has(r.previousCategoryId as string)
+    restorableIds.has(r.previousCategoryId as string),
   );
 
   const deleteIds = [...toDelete, ...orphaned].map((r) => r.id);
-  if (deleteIds.length > 0) {
+  for (const batch of chunk(deleteIds)) {
     await prisma.transactionCategorization.deleteMany({
-      where: { id: { in: deleteIds } },
+      where: { id: { in: batch } },
     });
   }
 
+  // Grouped by the state being restored, so undoing a rule that categorized
+  // hundreds of rows costs a few statements. Restoring row by row would time
+  // out on exactly the rules most worth undoing.
+  const restoreGroups = new Map<string, typeof restorable>();
   for (const row of restorable) {
-    await prisma.transactionCategorization.update({
-      where: { id: row.id },
-      data: {
-        categoryId: row.previousCategoryId as string,
-        source: row.previousSource ?? "MANUAL",
-        categoryRuleId: null,
-        previousCategoryId: null,
-        previousSource: null,
-      },
-    });
+    const key = `${row.previousCategoryId}|${row.previousSource}`;
+    const bucket = restoreGroups.get(key);
+    if (bucket) bucket.push(row);
+    else restoreGroups.set(key, [row]);
+  }
+
+  for (const bucket of restoreGroups.values()) {
+    const head = bucket[0];
+    for (const batch of chunk(bucket)) {
+      await prisma.transactionCategorization.updateMany({
+        where: { id: { in: batch.map((r) => r.id) } },
+        data: {
+          categoryId: head.previousCategoryId as string,
+          source: head.previousSource ?? "MANUAL",
+          categoryRuleId: null,
+          previousCategoryId: null,
+          previousSource: null,
+        },
+      });
+    }
   }
 
   return {
@@ -443,7 +471,11 @@ export async function deleteRuleForUser(userId: string, ruleId: string) {
 
   const { count } = await prisma.transactionCategorization.updateMany({
     where: { categoryRuleId: ruleId },
-    data: { categoryRuleId: null, previousCategoryId: null, previousSource: null },
+    data: {
+      categoryRuleId: null,
+      previousCategoryId: null,
+      previousSource: null,
+    },
   });
 
   await prisma.categoryRule.delete({ where: { id: ruleId } });
