@@ -50,10 +50,37 @@ Three tiers, mapped onto Vercel's two deployment targets:
   at the production URL in every environment: both must exactly match a redirect
   URI registered with Google OAuth / Enable Banking, so previews authenticate
   through production and are redirected back.
-- Database: production runs against the Neon primary. Preview deployments get
-  their database URL from the Neon–Vercel integration; to pin the `preview`
-  branch to a dedicated Neon branch, add branch-scoped `DATABASE_URL` /
-  `DATABASE_URL_UNPOOLED` preview vars with `gitBranch: preview`.
+### Databases (Neon) — target model, not yet wired
+
+Production runs against the Neon primary. The intended per-environment split is:
+
+| Deployment | Neon database |
+| --- | --- |
+| `main` / production | Neon primary |
+| `preview` branch | one dedicated long-lived Neon branch |
+| feature branches | an ephemeral Neon branch created per preview deployment |
+
+**Current state: not implemented.** `DATABASE_URL` is a single unscoped Vercel
+var shared by `production`, `preview` and `development`, so *every* preview
+deployment — including `estalvify-preview` — connects to the production
+database. Because `npm run build` runs `node scripts/migrate.mjs`, a preview
+build also applies pending migrations to it. Treat any migration on a feature
+branch as production-affecting until this is fixed.
+
+To finish it:
+
+1. Pin the `preview` branch: add `DATABASE_URL` and `DATABASE_URL_UNPOOLED` as
+   preview vars with `gitBranch: preview`, pointing at its dedicated Neon
+   branch. Vercel prefers a branch-scoped var over the unscoped one.
+2. Feature branches: enable per-preview-deployment branch creation in the
+   Neon–Vercel integration so each deployment gets its own ephemeral branch.
+3. Leave the unscoped `DATABASE_URL` on the production value only if step 2
+   reliably overrides it; otherwise repoint it at a shared non-production
+   branch so an unmatched preview can never reach production data.
+
+Tooling note: the Neon API (`console.neon.tech`) is **blocked by the Claude Code
+environment's network policy** — it must be added to the allowlist before an
+agent can do any of this. The Neon API key is expected as `NEON_DB_KEY`.
 - Tooling access to Vercel: a read-scoped API token is exposed as the
   `VERCEL_TOKEN` environment variable (secret — never commit or print it). Use it
   with the REST API at `https://api.vercel.com` to look up deployment URLs,

@@ -46,9 +46,17 @@ and `ENABLE_BANKING_REDIRECT_URI` intentionally stay on the production URL on
 every environment — they must match redirect URIs registered with Google and
 Enable Banking.
 
-A read-scoped Vercel API token is provided as the `VERCEL_TOKEN` environment
-variable in the Claude Code environment (it is a secret — never commit it or
-print its value). Use it against the Vercel REST API at `https://api.vercel.com`.
+A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
+Claude Code environment (it is a secret — never commit it or print its value).
+Use it against the Vercel REST API at `https://api.vercel.com`. It can read the
+project and write domains and environment variables; account-level endpoints
+(tokens, storage stores) are forbidden.
+
+A Neon API key is expected as `NEON_DB_KEY`. Note that `console.neon.tech` is
+currently **blocked by the environment's network policy** (403 on CONNECT), so
+the Neon API is unreachable until that host is allowlisted. See
+`ai-instructions/context/ARCHITECTURE.md` → "Databases (Neon)" for the pending
+per-environment database work.
 
 **After pushing commits to a branch or opening a PR, report the resulting Vercel
 preview URL to the user.** Look it up from the API instead of guessing — the
