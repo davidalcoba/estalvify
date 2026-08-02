@@ -1,6 +1,7 @@
 // Skeleton shown by Next.js while the rules page server component loads
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeaderSkeleton } from "@/components/layout/skeletons";
 
 function BuilderSkeleton() {
   return (
@@ -103,11 +104,7 @@ function SavedRulesMobileSkeleton() {
 export default function RulesLoading() {
   return (
     <div className="space-y-4">
-      {/* Page title */}
-      <div className="space-y-1">
-        <Skeleton className="h-7 w-24" />
-        <Skeleton className="h-4 w-64" />
-      </div>
+      <PageHeaderSkeleton titleWidth="w-24" />
 
       {/* New rule section */}
       <div className="space-y-8">

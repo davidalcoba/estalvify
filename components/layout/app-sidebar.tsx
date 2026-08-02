@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { NavItemIcon } from "@/components/layout/nav-progress";
 
 const navItems = [
   {
@@ -195,7 +196,9 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                         onClick={isMobile ? () => setOpenMobile(false) : undefined}
                       >
                         <Link href={item.url}>
-                          <item.icon />
+                          {/* Swaps to a spinner while this route loads, so the
+                              clicked item acknowledges the click immediately. */}
+                          <NavItemIcon icon={item.icon} />
                           <span>{item.title}</span>
                           {item.url === "/categorize" && pendingCategorizations > 0 && (
                             <Badge

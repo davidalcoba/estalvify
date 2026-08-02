@@ -3,17 +3,14 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeaderSkeleton } from "@/components/layout/skeletons";
 
 const ROW_COUNT = 8;
 
 export default function CategorizeLoading() {
   return (
     <div className="space-y-4">
-      {/* Page header */}
-      <div>
-        <Skeleton className="h-8 w-36 mb-2" />
-        <Skeleton className="h-4 w-72" />
-      </div>
+      <PageHeaderSkeleton titleWidth="w-36" />
 
       {/* Search bar */}
       <Skeleton className="h-9 w-full" />

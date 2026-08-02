@@ -28,19 +28,26 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 - Do not treat mobile as a compressed desktop only.
 - If needed, provide `DesktopView` and `MobileView` components with shared domain logic.
 
-6. Respect multi-user boundaries
+6. Keep the route skeleton in sync
+- A new route under `app/(app)` ships a sibling `loading.tsx` from the start.
+- Changing an existing page's layout means updating that route's `loading.tsx`
+  in the same change — a skeleton that no longer matches causes a layout jump.
+- Build from `components/layout/skeletons`. See `UI_RULES.md` →
+  "Navigation Feedback".
+
+7. Respect multi-user boundaries
 - Enforce authenticated user scoping on all user-owned data.
 
-7. Handle async workflows correctly
+8. Handle async workflows correctly
 - Use queue-based processing for long-running operations.
 - Surface progress/status clearly in UI.
 
-8. Update the docs (same change)
+9. Update the docs (same change)
 - If the change touches architecture, stack, UI conventions, or feature status,
   update the relevant file in `ai-instructions/context/` in the same PR.
 - Add/adjust env vars in `.env.example` when introducing new configuration.
 
-9. Validate and ship
+10. Validate and ship
 - Run `npm run typecheck && npm run lint && npm run test`
 - Add Vitest tests for any new pure logic
 - Validate key flows manually
