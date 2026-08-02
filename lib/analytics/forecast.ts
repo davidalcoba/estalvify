@@ -43,6 +43,23 @@ export function projectBalances(
   });
 }
 
+/**
+ * Running projected balance using a net that varies per month (from the user's
+ * Plan) instead of a flat average. Each bucket carries its own net; the balance
+ * accumulates them. `nets[i]` pairs with `buckets[i]` (missing → 0).
+ */
+export function projectBalancesVariable(
+  startingBalance: number,
+  buckets: MonthBucket[],
+  nets: number[]
+): ProjectedBalance[] {
+  let balance = startingBalance;
+  return buckets.map((bucket, i) => {
+    balance = round(balance + (nets[i] ?? 0));
+    return { ...bucket, balance };
+  });
+}
+
 /** Linear extrapolation of this month's spend from the month-to-date figure. */
 export function projectMonthEndSpend(
   spentSoFar: number,

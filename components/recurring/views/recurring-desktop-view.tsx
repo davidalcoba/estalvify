@@ -13,6 +13,7 @@ export function RecurringDesktopView({
   onConfirm,
   onIgnore,
   onReset,
+  onAddToPlan,
   disabled,
 }: RecurringListViewProps) {
   return (
@@ -37,6 +38,7 @@ export function RecurringDesktopView({
                   onConfirm={onConfirm}
                   onIgnore={onIgnore}
                   onReset={onReset}
+                  onAddToPlan={onAddToPlan}
                   disabled={disabled}
                 />
               ))}

@@ -65,6 +65,9 @@
     (PSD2 client), `banking/transaction-parse` (pure ID/remittance parsing),
     `banking/sync-errors` (pure 401/429 classifiers), `banking/connection-status`
     (`expireStaleConsents` — flips connections past `consentExpiresAt` to EXPIRED).
+  - Planning: `lib/plan/` — `plan-item.ts` (pure: monthly equivalents, per-month net
+    for the forecast, per-category limits) and `plan-dto.ts` (server→client view model).
+    Reuses `lib/budget/budget-progress` for the limit bars.
   - Formatting: always render money/dates via `lib/formatters`
     (`formatCurrency` / `formatDate`), never ad-hoc `toLocaleString`.
     Two **independent** regional prefs drive these (see `lib/user-prefs.ts`):

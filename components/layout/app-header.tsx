@@ -15,7 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/categorize": "Categorize",
   "/insights": "Insights",
   "/rules": "Rules",
-  "/budget": "Budget",
+  "/plan": "Plan",
   "/transactions": "Transactions",
   // More specific route first — the matcher sorts by length, but keep it explicit.
   "/accounts/setup": "Connect Bank",

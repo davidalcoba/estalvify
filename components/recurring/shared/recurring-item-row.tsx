@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, RotateCcw, X } from "lucide-react";
+import { Check, ListPlus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -11,6 +11,7 @@ export interface RecurringRowHandlers {
   onConfirm: (item: RecurringItem) => void;
   onIgnore: (item: RecurringItem) => void;
   onReset: (item: RecurringItem) => void;
+  onAddToPlan: (item: RecurringItem) => void;
   disabled?: boolean;
 }
 
@@ -24,6 +25,7 @@ export function RecurringItemRow({
   onConfirm,
   onIgnore,
   onReset,
+  onAddToPlan,
   disabled,
 }: {
   item: RecurringItem;
@@ -93,6 +95,16 @@ export function RecurringItemRow({
         {item.status === "CONFIRMED" && (
           <>
             <Badge variant="success-soft">Confirmed</Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onAddToPlan(item)}
+              disabled={disabled}
+              title="Add to Plan"
+            >
+              <ListPlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add to Plan</span>
+            </Button>
             <Button
               size="icon-sm"
               variant="ghost"

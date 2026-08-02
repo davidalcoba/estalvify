@@ -13,6 +13,7 @@ import type { RecurringItem, RecurringSummary } from "@/lib/recurring/recurring-
 import {
   setRecurringDecision,
   clearRecurringDecision,
+  addRecurringToPlan,
 } from "@/app/(app)/recurring/actions";
 
 interface RecurringViewProps {
@@ -84,10 +85,29 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
     });
   }
 
+  function handleAddToPlan(item: RecurringItem) {
+    startTransition(async () => {
+      try {
+        await addRecurringToPlan({
+          displayName: item.displayName,
+          direction: item.direction,
+          cadence: item.cadence,
+          averageAmount: item.averageAmount,
+          currency,
+          categoryId: item.categoryId,
+        });
+        router.refresh();
+      } catch {
+        // no-op
+      }
+    });
+  }
+
   const handlers = {
     onConfirm: (item: RecurringItem) => applyDecision(item, "CONFIRMED"),
     onIgnore: (item: RecurringItem) => applyDecision(item, "IGNORED"),
     onReset: handleReset,
+    onAddToPlan: handleAddToPlan,
     disabled: pending,
   };
 

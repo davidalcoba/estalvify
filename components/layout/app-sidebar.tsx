@@ -76,8 +76,8 @@ const navItems = [
     label: "Planning",
     items: [
       {
-        title: "Budget",
-        url: "/budget",
+        title: "Plan",
+        url: "/plan",
         icon: PiggyBank,
       },
       {
