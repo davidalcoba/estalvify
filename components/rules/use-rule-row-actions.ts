@@ -9,6 +9,8 @@ import type { CategoryRuleDTO } from "@/lib/rules/rule-dto";
 export function useRuleRowActions(rule: CategoryRuleDTO) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
+  // Deletion is irreversible, so the row asks before acting.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function handleExecute() {
     setResult(null);
@@ -18,9 +20,18 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
     });
   }
 
+  function requestDelete() {
+    setConfirmingDelete(true);
+  }
+
+  function cancelDelete() {
+    setConfirmingDelete(false);
+  }
+
   function handleDelete() {
     startTransition(async () => {
       await deleteRule(rule.id);
+      setConfirmingDelete(false);
     });
   }
 
@@ -30,5 +41,14 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
     });
   }
 
-  return { isPending, result, handleExecute, handleDelete, handleToggleActive };
+  return {
+    isPending,
+    result,
+    confirmingDelete,
+    handleExecute,
+    requestDelete,
+    cancelDelete,
+    handleDelete,
+    handleToggleActive,
+  };
 }

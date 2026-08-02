@@ -17,11 +17,10 @@ import {
   listRulesForUser,
   createRuleForUser,
   updateRuleForUser,
-  deleteRuleForUser,
   runRuleForUser,
   runAllRulesForUser,
 } from "@/lib/mcp/manage";
-import { testConditions, undoRuleRun } from "@/lib/rules/apply";
+import { deleteRuleForUser, testConditions, undoRuleRun } from "@/lib/rules/apply";
 import { parseConditions, MAX_CONDITION_VALUE_LENGTH } from "@/lib/rules/rule-dto";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { isValidRegex } from "@/lib/rules/rule-matcher";

@@ -79,7 +79,10 @@
     overwritten without an explicit `force`. Every run records an undo trail
     (`previousCategoryId` / `previousSource`) so `undoRuleRun` can revert it, and
     refreshes `matchCount` / `lastRunAt` / `lastMatchAt` on the rule. Rules also run
-    automatically at the end of a sync (uncategorized rows only).
+    automatically at the end of a sync (uncategorized rows only). Deleting a rule
+    (`deleteRuleForUser`, shared by the UI action and `delete_rule`) detaches the
+    categorizations it produced instead of cascading them away — they keep their
+    category but can no longer be undone, which is why the UI confirms first.
   - Planning: `lib/plan/` — `plan-item.ts` (pure: monthly equivalents, per-month net
     for the forecast, per-category limits) and `plan-dto.ts` (server→client view model).
     Reuses `lib/budget/budget-progress` for the limit bars.
@@ -122,8 +125,8 @@ stored hashed.
   metrics), `test_rule` (evaluate conditions without saving). Writes:
   `bulk_categorize` (`lib/mcp/categorize.ts`, capped), category create/edit and
   rule create/edit via `lib/mcp/manage.ts` (parameterized by userId), `run_rule`
-  (supports `dryRun` and `force`) and `undo_rule_run` via `lib/rules/apply.ts`,
-  `sync_connections` (enqueues).
+  (supports `dryRun` and `force`), `undo_rule_run` and `delete_rule` via
+  `lib/rules/apply.ts`, `sync_connections` (enqueues).
 
 ### Access control
 

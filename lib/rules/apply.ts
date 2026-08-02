@@ -410,3 +410,25 @@ export async function undoRuleRun(
     restored: restorable.length,
   };
 }
+
+/**
+ * Delete a rule. Categorizations it produced are kept but detached
+ * (categoryRuleId → null), which also means they can no longer be undone —
+ * callers who might want the transactions back should undo first.
+ */
+export async function deleteRuleForUser(userId: string, ruleId: string) {
+  const rule = await prisma.categoryRule.findUnique({
+    where: { id: ruleId },
+    select: { userId: true, name: true },
+  });
+  if (!rule || rule.userId !== userId) throw new Error("Rule not found");
+
+  const { count } = await prisma.transactionCategorization.updateMany({
+    where: { categoryRuleId: ruleId },
+    data: { categoryRuleId: null, previousCategoryId: null, previousSource: null },
+  });
+
+  await prisma.categoryRule.delete({ where: { id: ruleId } });
+
+  return { id: ruleId, name: rule.name, detachedCategorizations: count };
+}

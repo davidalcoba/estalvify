@@ -40,6 +40,8 @@
   than one rule wanted.
 - Undo (`undo_rule_run`): reverts everything a rule categorized, using the
   `previousCategoryId` / `previousSource` trail each run records.
+- Deleting a rule: detaches the categorizations it produced — the transactions keep their
+  category but lose the undo trail. Deactivating (`isActive: false`) pauses a rule instead.
 - (AI suggestion: reserved for a future flow; not implemented.)
 
 ## Planning and Reporting Terms

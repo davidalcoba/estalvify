@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/app/generated/prisma";
 import { parseConditions } from "@/lib/rules/rule-dto";
 import type { ConditionGroup, RuleCondition } from "@/lib/rules/rule-dto";
-import { evaluateConditions, runRules } from "@/lib/rules/apply";
+import { deleteRuleForUser, evaluateConditions, runRules } from "@/lib/rules/apply";
 import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
@@ -293,15 +293,8 @@ export async function toggleRuleActive(
 export async function deleteRule(ruleId: string): Promise<void> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
 
-  const rule = await prisma.categoryRule.findUnique({
-    where: { id: ruleId },
-    select: { userId: true },
-  });
-  if (!rule || rule.userId !== userId) throw new Error("Rule not found");
-
-  await prisma.categoryRule.delete({ where: { id: ruleId } });
+  await deleteRuleForUser(session.user.id, ruleId);
   revalidatePath("/rules");
 }
 

@@ -2,8 +2,8 @@
 // (the MCP layer authenticates via token, not an Auth.js session, so it can't
 // call the server actions in app/(app)/**/actions.ts directly).
 //
-// Mirrors the semantics of those actions: user-owned scoping, rule conditions
-// applied via buildRuleWhereClause, categorizations written as RULE/APPROVED.
+// Mirrors the semantics of those actions: user-owned scoping, and rule execution
+// delegated to lib/rules/apply.ts so both entry points share one engine.
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
@@ -183,28 +183,6 @@ export async function updateRuleForUser(
 
   await prisma.categoryRule.update({ where: { id: ruleId }, data });
   return { id: ruleId };
-}
-
-/**
- * Delete a rule. Categorizations it produced are kept but detached
- * (categoryRuleId → null), which also means they can no longer be undone —
- * callers who might want the transactions back should undo first.
- */
-export async function deleteRuleForUser(userId: string, ruleId: string) {
-  const rule = await prisma.categoryRule.findUnique({
-    where: { id: ruleId },
-    select: { userId: true, name: true },
-  });
-  if (!rule || rule.userId !== userId) throw new Error("Rule not found");
-
-  const { count } = await prisma.transactionCategorization.updateMany({
-    where: { categoryRuleId: ruleId },
-    data: { categoryRuleId: null, previousCategoryId: null, previousSource: null },
-  });
-
-  await prisma.categoryRule.delete({ where: { id: ruleId } });
-
-  return { id: ruleId, name: rule.name, detachedCategorizations: count };
 }
 
 /**

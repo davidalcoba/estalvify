@@ -12,6 +12,7 @@ import {
   formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
+import { RuleDeleteDialog } from "@/components/rules/rule-delete-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
 
@@ -41,7 +42,16 @@ export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
 }
 
 function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
-  const { isPending, result, handleExecute, handleDelete, handleToggleActive } = useRuleRowActions(rule);
+  const {
+    isPending,
+    result,
+    confirmingDelete,
+    handleExecute,
+    requestDelete,
+    cancelDelete,
+    handleDelete,
+    handleToggleActive,
+  } = useRuleRowActions(rule);
   const [editing, setEditing] = useState(false);
 
   return (
@@ -49,6 +59,13 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
     {editing && (
       <RuleEditDialog rule={rule} categories={categories} onClose={() => setEditing(false)} />
     )}
+    <RuleDeleteDialog
+      rule={rule}
+      open={confirmingDelete}
+      isPending={isPending}
+      onCancel={cancelDelete}
+      onConfirm={handleDelete}
+    />
     <Card className={`py-0 gap-0 ${!rule.isActive ? "opacity-60" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
@@ -150,7 +167,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
               type="button"
               variant="ghost"
               size="icon"
-              onClick={handleDelete}
+              onClick={requestDelete}
               disabled={isPending}
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
               aria-label="Delete"
