@@ -29,6 +29,68 @@
   `/v6/deployments?projectId=…&target=preview` and match `meta.githubCommitRef`
   to the branch. See `CLAUDE.md` → "Deployment & preview URLs" for the exact call.
 
+### Databases (Neon)
+
+Neon project `divine-firefly-20538122` (`neon-coquelicot-window`,
+`aws-eu-central-1`), owned by the Vercel-managed Neon org
+`org-autumn-pond-35905682`. Every deployment target gets its own Neon branch —
+no preview ever writes to production data:
+
+| Deployment          | Neon branch                        | Wired by                     |
+| ------------------- | ---------------------------------- | ---------------------------- |
+| `main` / production | `main` (primary, `br-lively-cell-alldlk0k`) | project env vars      |
+| `preview` branch    | `preview` (`br-shy-bird-albcqv1g`) | env vars with `gitBranch: preview` |
+| feature branches    | `preview/<git-branch>`, one per branch | Neon–Vercel integration  |
+
+The Neon–Vercel integration creates a `preview/<git-branch>` Neon branch the
+first time a branch is deployed and injects that branch's connection string into
+the deployment. Those injected values win over the project-level env vars, which
+is what keeps feature-branch previews isolated.
+
+**Env var layout in Vercel** (the app reads only `DATABASE_URL` at runtime —
+`lib/prisma.ts` — and `DIRECT_URL`, falling back to `DATABASE_URL`, for
+migrations — `prisma.config.ts`):
+
+| Key            | Target                     | `gitBranch` | Points at                     |
+| -------------- | -------------------------- | ----------- | ----------------------------- |
+| `DATABASE_URL` | `production`, `development` | —          | Neon `main`, pooled           |
+| `DATABASE_URL` | `preview`                  | `preview`   | Neon `preview`, pooled        |
+| `DIRECT_URL`   | `preview`                  | `preview`   | Neon `preview`, direct        |
+| `DATABASE_URL` | `preview`                  | —           | Neon `preview`, pooled — safety net |
+
+The generic `preview` `DATABASE_URL` is the safety net: it is only consulted when
+the integration does not inject a per-deployment branch, and it points at the
+shared non-production `preview` branch rather than production. Previously this
+slot held the production URL, which meant any preview that missed the injection
+would have connected to — and, since the build runs `prisma migrate deploy`,
+migrated — production.
+
+**Branch cap.** The Neon org is on the free plan, capped at **10 branches**. When
+the cap is reached the integration cannot create a branch and the deployment
+fails at provisioning with `Resource provisioning failed`, before the build runs
+— it fails closed rather than falling through to another database. Prune stale
+`preview/<git-branch>` branches once their work is merged; each is recreated from
+`main` on the next deployment of that git branch, so the only thing lost is
+throwaway preview data.
+
+There is deliberately **no** generic `preview` `DIRECT_URL`. `prisma.config.ts`
+prefers `DIRECT_URL` over `DATABASE_URL`, so a generic one would send
+feature-branch migrations to the shared `preview` branch while the app ran
+against its own ephemeral branch. `DIRECT_URL` exists only where it is scoped to
+the same branch as its `DATABASE_URL`.
+
+`scripts/migrate.mjs` logs `[migrate] target: <neon-endpoint-id> (via <var>)` at
+the top of every build. That line is how you confirm from a build log which Neon
+branch a deployment actually migrated — Prisma's own "Datasource" line has its
+host redacted by Vercel. Map the endpoint id back to a branch with
+`GET /api/v2/projects/divine-firefly-20538122/endpoints`.
+
+Tooling note: the Neon API (`console.neon.tech`) is reachable from the Claude
+Code environment, and a Neon API key is exposed as `NEON_DB_KEY` (secret — never
+commit or print it). Direct Postgres connections (port 5432) are blocked by the
+network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
+(`POST https://<host>/sql` with a `Neon-Connection-String` header).
+
 ## Route Groups
 
 - `app/(auth)/`: authentication routes and auth layout
