@@ -15,6 +15,7 @@ interface TransactionsViewProps {
   rangeStart: number;
   rangeEnd: number;
   userLocale: string;
+  userLanguage: string;
   userTimezone: string;
   pageQuery: string;
   categories: Category[];
@@ -42,6 +43,7 @@ export function TransactionsView(props: TransactionsViewProps) {
       <TransactionDetailDialog
         transaction={activeTransaction}
         locale={props.userLocale}
+        dateLocale={props.userLanguage}
         timezone={props.userTimezone}
         categories={props.categories}
         onClose={() => setActiveTransactionId(null)}

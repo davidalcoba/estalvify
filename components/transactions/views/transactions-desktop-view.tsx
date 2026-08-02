@@ -20,6 +20,7 @@ interface TransactionsDesktopViewProps {
   rangeStart: number;
   rangeEnd: number;
   userLocale: string;
+  userLanguage: string;
   userTimezone: string;
   pageQuery: string;
   onOpenDetail: (transaction: TransactionListItemDTO) => void;
@@ -33,6 +34,7 @@ export function TransactionsDesktopView({
   rangeStart,
   rangeEnd,
   userLocale,
+  userLanguage,
   userTimezone,
   pageQuery,
   onOpenDetail,
@@ -50,7 +52,7 @@ export function TransactionsDesktopView({
         {groupedTransactions.map(({ dateKey, items }) => (
           <div key={dateKey}>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-              {formatDate(dateKey + "T12:00:00", userLocale, userTimezone, {
+              {formatDate(dateKey + "T12:00:00", userLanguage, userTimezone, {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
@@ -64,7 +66,7 @@ export function TransactionsDesktopView({
                     key={tx.id}
                     tx={tx}
                     locale={userLocale}
-                    dateText={fmtDate(tx.valueDate, userLocale, userTimezone)}
+                    dateText={fmtDate(tx.valueDate, userLanguage, userTimezone)}
                     onClick={() => onOpenDetail(tx)}
                   />
                 ))}

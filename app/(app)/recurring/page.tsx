@@ -69,6 +69,7 @@ export default async function RecurringPage() {
       summary={summary}
       currency={prefs.currency}
       locale={prefs.locale}
+      dateLocale={prefs.language}
     />
   );
 }

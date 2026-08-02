@@ -15,7 +15,7 @@ export default async function SettingsPage() {
   const [user, categories] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, timezone: true, currency: true, locale: true },
+      select: { name: true, email: true, timezone: true, currency: true, locale: true, language: true },
     }),
     prisma.category.findMany({
       where: { userId, parentId: null, isActive: true },
@@ -52,7 +52,12 @@ function SettingsLayout({
   user,
   categories,
 }: {
-  user: { timezone?: string | null; currency?: string | null; locale?: string | null } | null;
+  user: {
+    timezone?: string | null;
+    currency?: string | null;
+    locale?: string | null;
+    language?: string | null;
+  } | null;
   categories: {
     id: string;
     name: string;
@@ -69,6 +74,7 @@ function SettingsLayout({
           timezone={user?.timezone ?? "Europe/London"}
           currency={user?.currency ?? "EUR"}
           locale={user?.locale ?? "es-ES"}
+          language={user?.language ?? "en-GB"}
         />
 
         <CategoryManager initialCategories={categories} />

@@ -86,7 +86,7 @@ export default async function BudgetPage({ searchParams }: PageProps) {
   });
 
   // Format the label from a UTC-anchored date, read back in UTC to avoid drift.
-  const monthLabel = formatDate(new Date(Date.UTC(year, month - 1, 1)), prefs.locale, "UTC", {
+  const monthLabel = formatDate(new Date(Date.UTC(year, month - 1, 1)), prefs.language, "UTC", {
     month: "long",
     year: "numeric",
   });

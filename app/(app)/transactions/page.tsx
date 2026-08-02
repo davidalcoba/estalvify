@@ -170,6 +170,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
       rangeStart={rangeStart}
       rangeEnd={rangeEnd}
       userLocale={prefs.locale}
+      userLanguage={prefs.language}
       userTimezone={prefs.timezone}
       pageQuery={pageQuery}
       categories={categories}

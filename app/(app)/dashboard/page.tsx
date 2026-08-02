@@ -30,7 +30,7 @@ const TREND_MONTHS = 6;
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const months = lastNMonths(year, month, TREND_MONTHS);
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
   const topCats = topCategories(spendingByCategory, categories, 6);
 
   const monthLabel = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), locale, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
   const chartData = trend.map((t) => ({
     label: monthLabel(t.year, t.month),
     income: t.income,
@@ -94,7 +94,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={`Good morning, ${firstName} 👋`}
-        description={`Here's your financial overview for ${formatDate(new Date(), locale, timezone, {
+        description={`Here's your financial overview for ${formatDate(new Date(), language, timezone, {
           month: "long",
           year: "numeric",
         })}.`}

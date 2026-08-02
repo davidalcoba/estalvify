@@ -9,6 +9,7 @@ export function RecurringDesktopView({
   sections,
   currency,
   locale,
+  dateLocale,
   onConfirm,
   onIgnore,
   onReset,
@@ -32,6 +33,7 @@ export function RecurringDesktopView({
                   item={item}
                   currency={currency}
                   locale={locale}
+                  dateLocale={dateLocale}
                   onConfirm={onConfirm}
                   onIgnore={onIgnore}
                   onReset={onReset}

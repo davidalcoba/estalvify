@@ -67,6 +67,12 @@
     (`expireStaleConsents` — flips connections past `consentExpiresAt` to EXPIRED).
   - Formatting: always render money/dates via `lib/formatters`
     (`formatCurrency` / `formatDate`), never ad-hoc `toLocaleString`.
+    Two **independent** regional prefs drive these (see `lib/user-prefs.ts`):
+    `locale` (number format — decimal/thousands separators) is passed to
+    `formatCurrency`; `language` (date language, default `en-GB`) is passed to
+    `formatDate`. Never reuse `locale` for dates — pass `language` (threaded to
+    client components as a `dateLocale`/`userLanguage` prop). Both are editable in
+    Settings ("Number format" and "Language").
 
 - `app/**/actions.ts`
   - Server actions for mutations

@@ -24,7 +24,7 @@ const UPCOMING_HORIZON_DAYS = 45;
 export default async function ForecastPage() {
   const session = await auth();
   const userId = session!.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
@@ -78,7 +78,7 @@ export default async function ForecastPage() {
   const projectedSpend = projectMonthEndSpend(current.expenses, dayOfMonth, daysInMonth);
 
   const monthShort = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), locale, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
   const chartData = [
     { label: monthShort(year, month), balance: Math.round(netWorth * 100) / 100 },
     ...projected.map((p) => ({ label: monthShort(p.year, p.month), balance: p.balance })),
@@ -166,7 +166,7 @@ export default async function ForecastPage() {
                     <li key={`${r.displayName}-${i}`} className="flex items-center gap-3 py-2 text-sm">
                       <span className="min-w-0 flex-1 truncate">{r.displayName}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatDate(r.date, locale, "UTC", { day: "numeric", month: "short" })}
+                        {formatDate(r.date, language, "UTC", { day: "numeric", month: "short" })}
                       </span>
                       <span
                         className={`w-24 shrink-0 text-right tabular-nums ${

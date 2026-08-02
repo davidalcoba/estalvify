@@ -34,7 +34,7 @@ export async function generateInsights(): Promise<InsightsResult> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
   const userId = session.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
@@ -115,7 +115,7 @@ export async function generateInsights(): Promise<InsightsResult> {
   const summary = buildFinancialSummary({
     currency,
     locale,
-    monthLabel: formatDate(new Date(Date.UTC(year, month - 1, 1)), locale, "UTC", {
+    monthLabel: formatDate(new Date(Date.UTC(year, month - 1, 1)), language, "UTC", {
       month: "long",
       year: "numeric",
     }),

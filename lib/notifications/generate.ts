@@ -133,7 +133,7 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
       prefs.currency,
       prefs.locale
     ),
-    ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale),
+    ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale, prefs.language),
   ];
 
   if (specs.length === 0) return 0;

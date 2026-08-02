@@ -15,6 +15,7 @@ import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto"
 interface TransactionDetailDialogProps {
   transaction: TransactionListItemDTO | null;
   locale: string;
+  dateLocale: string;
   timezone: string;
   categories: Category[];
   onClose: () => void;
@@ -23,6 +24,7 @@ interface TransactionDetailDialogProps {
 export function TransactionDetailDialog({
   transaction,
   locale,
+  dateLocale,
   timezone,
   categories,
   onClose,
@@ -65,7 +67,7 @@ export function TransactionDetailDialog({
 
           {transaction && (
             <div className="space-y-4 overflow-y-auto pr-2">
-              <TransactionDetailCard transaction={transaction} locale={locale} timezone={timezone} />
+              <TransactionDetailCard transaction={transaction} locale={locale} dateLocale={dateLocale} timezone={timezone} />
 
               <div className="flex items-center gap-2">
                 <CategorySelect

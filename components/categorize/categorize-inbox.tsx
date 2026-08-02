@@ -33,6 +33,7 @@ interface Props {
   pageSize: number;
   pageSizeOptions: number[];
   locale: string;
+  dateLocale: string;
   timezone: string;
 }
 
@@ -41,6 +42,7 @@ interface FocusModalProps {
   startIndex: number;
   categories: Category[];
   locale: string;
+  dateLocale: string;
   timezone: string;
   onClose: () => void;
   onCategorized: (txId: string) => void;
@@ -54,6 +56,7 @@ function FocusModal({
   startIndex,
   categories,
   locale,
+  dateLocale,
   timezone,
   onClose,
   onCategorized,
@@ -133,7 +136,7 @@ function FocusModal({
             </div>
           ) : current ? (
             <>
-              <TransactionDetailCard transaction={current} locale={locale} timezone={timezone} />
+              <TransactionDetailCard transaction={current} locale={locale} dateLocale={dateLocale} timezone={timezone} />
 
               <div className="flex items-center gap-2">
                 <CategorySelect
@@ -191,6 +194,7 @@ export function CategorizeInbox({
   pageSize,
   pageSizeOptions,
   locale,
+  dateLocale,
   timezone,
 }: Props) {
   const router = useRouter();
@@ -337,6 +341,7 @@ export function CategorizeInbox({
           startIndex={focusState.index}
           categories={categories}
           locale={locale}
+          dateLocale={dateLocale}
           timezone={timezone}
           onClose={() => setFocusState(null)}
           onCategorized={handleFocusCategorized}
@@ -354,6 +359,7 @@ export function CategorizeInbox({
             pageSize={pageSize}
             pageSizeOptions={pageSizeOptions}
             locale={locale}
+            dateLocale={dateLocale}
             timezone={timezone}
             searchInput={searchInput}
             onSearchInputChange={setSearchInput}
@@ -382,6 +388,7 @@ export function CategorizeInbox({
             pageSize={pageSize}
             pageSizeOptions={pageSizeOptions}
             locale={locale}
+            dateLocale={dateLocale}
             timezone={timezone}
             searchInput={searchInput}
             onSearchInputChange={setSearchInput}

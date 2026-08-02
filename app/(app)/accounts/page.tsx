@@ -102,7 +102,7 @@ export default async function AccountsPage({
     getUserPrefs(session!.user.id),
   ]);
 
-  const { locale, timezone } = prefs;
+  const { locale, language, timezone } = prefs;
 
   // Group connections by bankId so same-bank connections appear in one card
   type BankGroup = {
@@ -234,9 +234,9 @@ export default async function AccountsPage({
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm leading-tight">{group.bankName}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Connected {formatDate(group.firstConnectedAt, locale, timezone)}
+                        Connected {formatDate(group.firstConnectedAt, language, timezone)}
                         {group.consentExpiresAt && (
-                          <> · Expires {formatDate(group.consentExpiresAt, locale, timezone)}</>
+                          <> · Expires {formatDate(group.consentExpiresAt, language, timezone)}</>
                         )}
                       </p>
                     </div>
@@ -330,7 +330,7 @@ export default async function AccountsPage({
                                 </Badge>
                               ) : latestBalance ? (
                                 <Badge variant="success-soft">
-                                  Synced {formatDate(latestBalance.date, locale, timezone)}
+                                  Synced {formatDate(latestBalance.date, language, timezone)}
                                 </Badge>
                               ) : isSyncing ? (
                                 <Badge variant="brand-soft" className="gap-1">

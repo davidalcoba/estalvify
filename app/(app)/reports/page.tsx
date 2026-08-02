@@ -28,7 +28,7 @@ const TOP_MERCHANTS = 6;
 export default async function ReportsPage() {
   const session = await auth();
   const userId = session!.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const months = lastNMonths(year, month, TREND_MONTHS);
@@ -65,7 +65,7 @@ export default async function ReportsPage() {
     months
   );
   const monthLabel = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), locale, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
   const chartData = trend.map((t) => ({
     label: monthLabel(t.year, t.month),
     income: t.income,
@@ -90,7 +90,7 @@ export default async function ReportsPage() {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, TOP_MERCHANTS);
 
-  const thisMonthLabel = formatDate(new Date(Date.UTC(year, month - 1, 1)), locale, "UTC", {
+  const thisMonthLabel = formatDate(new Date(Date.UTC(year, month - 1, 1)), language, "UTC", {
     month: "long",
     year: "numeric",
   });

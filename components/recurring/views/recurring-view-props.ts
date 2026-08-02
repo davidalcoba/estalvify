@@ -13,4 +13,5 @@ export interface RecurringListViewProps extends RecurringRowHandlers {
   sections: RecurringSection[];
   currency: string;
   locale: string;
+  dateLocale: string;
 }

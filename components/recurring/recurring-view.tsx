@@ -20,9 +20,10 @@ interface RecurringViewProps {
   summary: RecurringSummary;
   currency: string;
   locale: string;
+  dateLocale: string;
 }
 
-export function RecurringView({ items, summary, currency, locale }: RecurringViewProps) {
+export function RecurringView({ items, summary, currency, locale, dateLocale }: RecurringViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -112,6 +113,7 @@ export function RecurringView({ items, summary, currency, locale }: RecurringVie
               sections={sections}
               currency={currency}
               locale={locale}
+              dateLocale={dateLocale}
               {...handlers}
             />
           </div>
@@ -120,6 +122,7 @@ export function RecurringView({ items, summary, currency, locale }: RecurringVie
               sections={sections}
               currency={currency}
               locale={locale}
+              dateLocale={dateLocale}
               {...handlers}
             />
           </div>

@@ -20,11 +20,17 @@ export function RecurringItemRow({
   item,
   currency,
   locale,
+  dateLocale,
   onConfirm,
   onIgnore,
   onReset,
   disabled,
-}: { item: RecurringItem; currency: string; locale: string } & RecurringRowHandlers) {
+}: {
+  item: RecurringItem;
+  currency: string;
+  locale: string;
+  dateLocale: string;
+} & RecurringRowHandlers) {
   const income = item.direction === "CREDIT";
   const ignored = item.status === "IGNORED";
 
@@ -47,7 +53,7 @@ export function RecurringItemRow({
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {cadenceLabel[item.cadence]} · next{" "}
-          {formatDate(item.nextExpected, locale, "UTC", {
+          {formatDate(item.nextExpected, dateLocale, "UTC", {
             day: "numeric",
             month: "short",
             year: "numeric",

@@ -32,6 +32,7 @@ interface CategorizeMobileViewProps {
   pageSize: number;
   pageSizeOptions?: number[];
   locale: string;
+  dateLocale: string;
   timezone: string;
   searchInput: string;
   onSearchInputChange: (value: string) => void;
@@ -78,6 +79,7 @@ export function CategorizeMobileView({
   pageSize,
   pageSizeOptions,
   locale,
+  dateLocale,
   timezone,
   searchInput,
   onSearchInputChange,
@@ -331,7 +333,7 @@ export function CategorizeMobileView({
                   <TransactionItem
                     tx={tx}
                     locale={locale}
-                    dateText={fmtDate(tx.valueDate, locale, timezone)}
+                    dateText={fmtDate(tx.valueDate, dateLocale, timezone)}
                     leading={
                       canBulkSelect ? (
                         <input
@@ -392,7 +394,7 @@ export function CategorizeMobileView({
                 <div className="grid gap-2 text-sm">
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-4 w-4 shrink-0" />
-                    {fmtDateLong(currentTx.valueDate, locale, timezone)}
+                    {fmtDateLong(currentTx.valueDate, dateLocale, timezone)}
                   </p>
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <CreditCard className="h-4 w-4 shrink-0" />

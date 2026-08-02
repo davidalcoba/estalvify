@@ -22,6 +22,7 @@ interface CategorizeDesktopViewProps {
   pageSize: number;
   pageSizeOptions: number[];
   locale: string;
+  dateLocale: string;
   timezone: string;
   searchInput: string;
   onSearchInputChange: (value: string) => void;
@@ -57,6 +58,7 @@ export function CategorizeDesktopView({
   pageSize,
   pageSizeOptions,
   locale,
+  dateLocale,
   timezone,
   searchInput,
   onSearchInputChange,
@@ -240,7 +242,7 @@ export function CategorizeDesktopView({
                       key={tx.id}
                       tx={tx}
                       locale={locale}
-                      dateText={fmtDate(tx.valueDate, locale, timezone)}
+                      dateText={fmtDate(tx.valueDate, dateLocale, timezone)}
                       onClick={() => onOpenFocus(index)}
                       className={`${
                         checked ? "bg-brand/10 hover:bg-brand/15" : "hover:bg-muted/30"

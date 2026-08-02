@@ -125,6 +125,7 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
       pageSize={pageSize}
       pageSizeOptions={pageSizeOptions}
       locale={prefs.locale}
+      dateLocale={prefs.language}
       timezone={prefs.timezone}
     />
   );

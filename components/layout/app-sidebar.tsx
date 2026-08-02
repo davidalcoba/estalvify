@@ -235,7 +235,7 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 className="w-56"
-                side="right"
+                side={isMobile ? "top" : "right"}
                 align="end"
                 sideOffset={4}
               >

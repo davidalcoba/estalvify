@@ -61,16 +61,30 @@ const LOCALES = [
   { value: "pt-BR", label: "Português (Brasil) — R$ 1.234,56" },
 ];
 
+// Language used to render dates (month/day names), independent of number format.
+const LANGUAGES = [
+  { value: "en-GB", label: "English (UK) — 2 August 2026" },
+  { value: "en-US", label: "English (US) — August 2, 2026" },
+  { value: "es-ES", label: "Español — 2 de agosto de 2026" },
+  { value: "ca-ES", label: "Català — 2 d’agost de 2026" },
+  { value: "fr-FR", label: "Français — 2 août 2026" },
+  { value: "de-DE", label: "Deutsch — 2. August 2026" },
+  { value: "it-IT", label: "Italiano — 2 agosto 2026" },
+  { value: "pt-PT", label: "Português — 2 de agosto de 2026" },
+];
+
 interface SettingsFormProps {
   timezone: string;
   currency: string;
   locale: string;
+  language: string;
 }
 
-export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) {
+export function SettingsForm({ timezone, currency, locale, language }: SettingsFormProps) {
   const [tz, setTz] = useState(timezone);
   const [curr, setCurr] = useState(currency);
   const [loc, setLoc] = useState(locale);
+  const [lang, setLang] = useState(language);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -83,7 +97,7 @@ export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) 
 
     startTransition(async () => {
       try {
-        await updatePreferences({ timezone: tz, currency: curr, locale: loc });
+        await updatePreferences({ timezone: tz, currency: curr, locale: loc, language: lang });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
@@ -127,6 +141,18 @@ export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) 
           </div>
 
           <div className="space-y-1.5">
+            <Label>Language</Label>
+            <SimpleSelect
+              value={lang}
+              onValueChange={setLang}
+              options={LANGUAGES}
+              ariaLabel="Language"
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">Language used for dates (e.g. 2 August 2026).</p>
+          </div>
+
+          <div className="space-y-1.5">
             <Label>Number format</Label>
             <SimpleSelect
               value={loc}
@@ -135,7 +161,7 @@ export function SettingsForm({ timezone, currency, locale }: SettingsFormProps) 
               ariaLabel="Number format"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">Controls decimal separators and thousands grouping.</p>
+            <p className="text-xs text-muted-foreground">Controls decimal separators and thousands grouping for amounts.</p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">

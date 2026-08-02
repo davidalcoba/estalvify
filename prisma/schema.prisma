@@ -27,7 +27,10 @@ model User {
   // User preferences
   timezone String @default("Europe/London")
   currency String @default("EUR")
+  // Number format (decimal/thousands separators) used by formatCurrency.
   locale   String @default("es-ES")
+  // Language used for date rendering (formatDate) — decoupled from number format.
+  language String @default("en-GB")
 
   accounts         Account[]
   sessions         Session[]
