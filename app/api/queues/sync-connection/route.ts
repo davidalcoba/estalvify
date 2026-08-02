@@ -18,6 +18,7 @@ import { handleCallback, send } from "@vercel/queue";
 import { prisma } from "@/lib/prisma";
 import { syncAccount, toDateString } from "@/lib/banking/sync";
 import { AUTH_ERROR_PREFIX } from "@/lib/banking/sync-errors";
+import { runRules } from "@/lib/rules/apply";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
 export const POST = handleCallback<SyncConnectionMessage>(
@@ -123,6 +124,30 @@ export const POST = handleCallback<SyncConnectionMessage>(
         .update({ where: { id: connectionId }, data: { status: "EXPIRED" } })
         .catch(() => {});
       return;
+    }
+
+    // ── Auto-categorize what just arrived ─────────────────────────────────────
+    // Rules used to run only on demand, so every sync reopened the backlog.
+    // Restricted to uncategorized rows, which is what makes this safe here:
+    // accounts finish in parallel and the queue retries messages, so several
+    // overlapping runs are expected — they converge on the same result and
+    // never touch a row that already has a category.
+    //
+    // Deliberately swallowed: a rule failure must not fail a sync that already
+    // stored its transactions, or the retry would re-run the whole fetch.
+    if (result.errors.length === 0 && result.transactionsFetched > 0) {
+      try {
+        const report = await runRules(userId, { onlyUncategorized: true });
+        console.log(
+          `[queue/sync-connection] account ${accountId}: auto-categorized ` +
+            `${report.totalMatched}/${result.transactionsFetched} new transactions`
+        );
+      } catch (err) {
+        console.error(
+          `[queue/sync-connection] account ${accountId} auto-categorize failed:`,
+          err instanceof Error ? err.message : "Unknown error"
+        );
+      }
     }
 
     // ── Check whether all accounts for this connection are now done ───────────

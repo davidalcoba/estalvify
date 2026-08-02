@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   type CategoryRuleDTO,
   FIELD_LABELS,
   OPERATOR_LABELS,
+  formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
+import { RuleConfirmDialog } from "@/components/rules/rule-confirm-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
 
@@ -52,7 +54,20 @@ export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
 }
 
 function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
-  const { isPending, result, handleExecute, handleDelete, handleToggleActive } = useRuleRowActions(rule);
+  const {
+    isPending,
+    result,
+    confirmingRevert,
+    confirmingDelete,
+    handleExecute,
+    requestRevert,
+    cancelRevert,
+    handleRevert,
+    requestDelete,
+    cancelDelete,
+    handleDelete,
+    handleToggleActive,
+  } = useRuleRowActions(rule);
   const [editing, setEditing] = useState(false);
 
   return (
@@ -60,6 +75,39 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
     {editing && (
       <RuleEditDialog rule={rule} categories={categories} onClose={() => setEditing(false)} />
     )}
+    <RuleConfirmDialog
+      open={confirmingRevert}
+      title={<>Revert &ldquo;{rule.name}&rdquo;?</>}
+      description={
+        <p>
+          Every transaction this rule categorized goes back to its previous
+          category, or becomes uncategorized. The rule itself is kept.
+        </p>
+      }
+      confirmLabel="Revert rule"
+      pendingLabel="Reverting…"
+      isPending={isPending}
+      onCancel={cancelRevert}
+      onConfirm={handleRevert}
+    />
+    <RuleConfirmDialog
+      open={confirmingDelete}
+      title={<>Delete &ldquo;{rule.name}&rdquo;?</>}
+      description={
+        <>
+          <p>
+            Transactions it categorized keep their category, but lose the link to
+            this rule — so they can no longer be reverted.
+          </p>
+          <p>To stop the rule without losing it, deactivate it instead.</p>
+        </>
+      }
+      confirmLabel="Delete rule"
+      pendingLabel="Deleting…"
+      isPending={isPending}
+      onCancel={cancelDelete}
+      onConfirm={handleDelete}
+    />
     <tr className={`hover:bg-muted/20 transition-colors ${!rule.isActive ? "opacity-60" : ""}`}>
       {/* Active toggle */}
       <td className="px-4 py-3">
@@ -84,7 +132,16 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
           {!rule.isActive && (
             <Badge variant="secondary" className="text-xs">Inactive</Badge>
           )}
+          {rule.neverMatched && (
+            <Badge variant="outline" className="text-xs text-warning border-warning">
+              Never matched
+            </Badge>
+          )}
         </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Priority {rule.priority}
+          {rule.lastRunAt && ` · ${rule.matchCount} matched`}
+        </p>
         {result && (
           <p className="text-xs text-success font-medium mt-0.5">{result}</p>
         )}
@@ -92,15 +149,20 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
 
       {/* Conditions summary */}
       <td className="px-4 py-3 hidden lg:table-cell">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs font-medium text-muted-foreground">
+            {rule.match === "OR" ? "Any" : "All"}
+          </span>
           {rule.conditions.slice(0, 2).map((c, i) => (
             <span
               key={i}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded px-2 py-0.5"
             >
               <span className="font-medium">{FIELD_LABELS[c.field]}</span>
-              <span>{OPERATOR_LABELS[c.operator]}</span>
-              <span className="font-medium truncate max-w-[80px]">&quot;{c.value}&quot;</span>
+              <span>{c.negate ? "not " : ""}{OPERATOR_LABELS[c.operator]}</span>
+              <span className="font-medium truncate max-w-[80px]">
+                &quot;{formatConditionValue(c)}&quot;
+              </span>
             </span>
           ))}
           {rule.conditions.length > 2 && (
@@ -162,7 +224,19 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
             type="button"
             variant="ghost"
             size="icon"
-            onClick={handleDelete}
+            onClick={requestRevert}
+            disabled={isPending}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label="Revert rule"
+            title="Revert rule"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={requestDelete}
             disabled={isPending}
             className="h-8 w-8 text-muted-foreground hover:text-destructive"
             aria-label="Delete rule"

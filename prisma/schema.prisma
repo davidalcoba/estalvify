@@ -281,17 +281,23 @@ model CategoryRule {
   userId     String
   categoryId String // Target category for matched transactions
 
-  name       String
-  conditions Json // Array of RuleCondition: [{field, operator, value}]
-  // Field options: "description", "remittanceInfo", "amount", "direction"
-  // Operator options: "contains", "equals", "startsWith", "endsWith", "greaterThan", "lessThan"
+  name String
+  // ConditionNode tree: {op: "AND"|"OR", children: [...]} where a leaf is
+  // {field, operator, value, negate?}. A bare array is read as an AND group
+  // (legacy shape). See lib/rules/rule-dto.ts for fields and operators.
+  conditions Json
 
   // Optional: only match transactions already in this category (re-categorization)
   sourceCategoryId String?
 
   isActive           Boolean @default(true)
-  priority           Int     @default(0) // Higher priority rules applied first
+  priority           Int     @default(0) // Lower number = evaluated first; first match wins
   applyRetroactively Boolean @default(false)
+
+  // Observability: refreshed on every run so a rule that matches nothing is visible
+  matchCount  Int       @default(0) // Matches in the most recent run, not cumulative
+  lastRunAt   DateTime?
+  lastMatchAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -315,6 +321,13 @@ model TransactionCategorization {
 
   // Which rule triggered this (if source = RULE)
   categoryRuleId String?
+
+  // Undo trail for rule runs: what this row held before a rule overwrote it.
+  // previousCategoryId has no FK on purpose — it is a historical value and a
+  // deleted category must not block the undo.
+  previousCategoryId String?
+  previousSource     CategorizationSource?
+  categorizedAt      DateTime?
 
   // User approval
   approvedAt DateTime?

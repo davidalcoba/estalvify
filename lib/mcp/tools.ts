@@ -20,15 +20,85 @@ import {
   runRuleForUser,
   runAllRulesForUser,
 } from "@/lib/mcp/manage";
+import { deleteRuleForUser, testConditions, undoRuleRun } from "@/lib/rules/apply";
+import { parseConditions, MAX_CONDITION_VALUE_LENGTH } from "@/lib/rules/rule-dto";
+import type { ConditionGroup } from "@/lib/rules/rule-dto";
+import { isValidRegex } from "@/lib/rules/rule-matcher";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
-// Rule condition shape (see lib/rules/rule-dto.ts).
+// Rule conditions (see lib/rules/rule-dto.ts). A leaf is {field, operator,
+// value, negate?}; groups nest with op AND/OR.
 const ruleConditionSchema = z.object({
-  field: z.enum(["description", "remittanceInfo"]),
-  operator: z.enum(["contains", "equals", "startsWith", "endsWith"]),
-  value: z.string(),
+  field: z
+    .enum(["any", "description", "remittanceInfo", "amount", "direction", "account"])
+    .default("any"),
+  operator: z.enum([
+    "contains",
+    "equals",
+    "startsWith",
+    "endsWith",
+    "word",
+    "matches",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "between",
+  ]),
+  value: z.union([
+    z.string().max(MAX_CONDITION_VALUE_LENGTH),
+    z.number(),
+    z.tuple([z.number(), z.number()]),
+  ]),
+  negate: z.boolean().optional(),
 });
+
+type ConditionNodeInput =
+  | z.infer<typeof ruleConditionSchema>
+  | { op: "AND" | "OR"; children: ConditionNodeInput[] };
+
+const conditionNodeSchema: z.ZodType<ConditionNodeInput> = z.lazy(() =>
+  z.union([
+    ruleConditionSchema,
+    z.object({
+      op: z.enum(["AND", "OR"]),
+      children: z.array(conditionNodeSchema).min(1),
+    }),
+  ]),
+);
+
+/** Accepts a tree, a bare group, or the legacy flat array (read as AND). */
+const conditionsSchema = z.union([
+  z.object({
+    op: z.enum(["AND", "OR"]),
+    children: z.array(conditionNodeSchema).min(1),
+  }),
+  z.array(ruleConditionSchema).min(1),
+]);
+
+/**
+ * Reject a rule whose regex would never compile, at save time rather than
+ * silently never matching at run time.
+ */
+function normalizeConditions(input: unknown): ConditionGroup {
+  const group = parseConditions(input);
+
+  const check = (node: unknown): void => {
+    if (typeof node !== "object" || node === null) return;
+    const n = node as Record<string, unknown>;
+    if (Array.isArray(n.children)) {
+      n.children.forEach(check);
+      return;
+    }
+    if (n.operator === "matches" && typeof n.value === "string" && !isValidRegex(n.value)) {
+      throw new Error(`Invalid regex in condition: ${n.value}`);
+    }
+  };
+  check(group);
+
+  return group;
+}
 
 function errorResult(err: unknown, fallback: string): CallToolResult {
   return {
@@ -63,7 +133,11 @@ export function registerTools(server: McpServer): void {
         "without a date filter you only get the most recent `limit` rows. Also " +
         "supports uncategorized-only and a description search. For large ranges, " +
         "page with `offset` (skip N rows). The result includes a `pageInfo` with " +
-        "the total matching count so you know whether to page.",
+        "the total matching count so you know whether to page.\n" +
+        "Each row returns both text fields, which matters when writing rules: " +
+        "`description` holds the merchant, `remittanceInfo` holds the SEPA operation " +
+        "type and is often null. `categorizationSource` (RULE/AI/MANUAL) tells you " +
+        "whether a category was set by hand — run_rule will not overwrite MANUAL.",
       inputSchema: {
         uncategorizedOnly: z.boolean().optional(),
         search: z.string().optional(),
@@ -131,9 +205,11 @@ export function registerTools(server: McpServer): void {
           currency: t.currency,
           direction: t.direction,
           description: t.description,
+          remittanceInfo: t.remittanceInfo,
           account: t.bankAccount?.name ?? null,
           category: t.categorization?.category?.name ?? null,
           categorizationStatus: t.categorization?.status ?? null,
+          categorizationSource: t.categorization?.source ?? null,
         })),
       });
     },
@@ -354,7 +430,11 @@ export function registerTools(server: McpServer): void {
     "list_rules",
     {
       description:
-        "List the user's categorization rules (with their conditions, target category and ids). Use the returned id with update_rule / run_rule.",
+        "List the user's categorization rules in evaluation order (lowest priority number " +
+        "first, which is the one that wins). Includes conditions, target category, ids and " +
+        "run metrics: `matchCount` is how many transactions the rule claimed in its most " +
+        "recent run, and `neverMatched` flags a rule that has run and caught nothing — " +
+        "usually a sign its conditions look at the wrong field or word.",
       inputSchema: {},
     },
     async (_args, extra) => {
@@ -368,10 +448,25 @@ export function registerTools(server: McpServer): void {
     "create_rule",
     {
       description:
-        "Create a categorization rule. conditions is an array of {field, operator, value}; field is 'description' or 'remittanceInfo', operator is contains/equals/startsWith/endsWith. All conditions must match (AND). categoryId is the target category. sourceCategoryId (optional) restricts matching to transactions already in that category. Creating a rule does NOT apply it — call run_rule to execute.",
+        "Create a categorization rule. `conditions` is a tree: {op:'AND'|'OR', children:[...]}, " +
+        "where a leaf is {field, operator, value, negate?}. A plain array is accepted and read as AND.\n" +
+        "Fields: 'any' (DEFAULT — searches description and reference together; prefer it, " +
+        "merchant names land in description while reference holds the operation type and is often " +
+        "empty), 'description', 'remittanceInfo', 'amount', 'direction', 'account'.\n" +
+        "Text operators: contains, word (whole word — use it to stop DIA matching CLAUDIA or " +
+        "ESCLAT matching ESCLATOIL), equals, startsWith, endsWith, matches (regex).\n" +
+        "Amount operators: equals, gt, gte, lt, lte, between ([min,max]). Amounts are unsigned " +
+        "magnitudes — use direction ('DEBIT'|'CREDIT') to tell money out from money in.\n" +
+        "Text comparison folds accents and case, so AMORTIZACION matches AMORTIZACIÓN. " +
+        "`negate: true` inverts a condition, which is how you exclude.\n" +
+        "priority: LOWER number is evaluated FIRST and the first matching rule wins. Convention: " +
+        "0-99 exclusions and transfers, 100-199 income, 200-299 fixed costs, 300+ variable spending. " +
+        "Put the specific rule before the generic one (fuel before groceries).\n" +
+        "sourceCategoryId (optional) restricts matching to transactions already in that category. " +
+        "Creating a rule does NOT apply it — call run_rule (start with dryRun: true).",
       inputSchema: {
         name: z.string(),
-        conditions: z.array(ruleConditionSchema).min(1),
+        conditions: conditionsSchema,
         categoryId: z.string(),
         sourceCategoryId: z.string().optional(),
         priority: z.number().int().optional(),
@@ -383,7 +478,7 @@ export function registerTools(server: McpServer): void {
         return json(
           await createRuleForUser(userId, {
             name,
-            conditions,
+            conditions: normalizeConditions(conditions),
             categoryId,
             sourceCategoryId,
             priority,
@@ -400,11 +495,13 @@ export function registerTools(server: McpServer): void {
     "update_rule",
     {
       description:
-        "Update a rule's name, conditions, target category, active state and/or priority. Only the provided fields change. Does NOT re-apply the rule — call run_rule afterwards.",
+        "Update a rule's name, conditions, target category, active state and/or priority. " +
+        "Only the provided fields change; `conditions` replaces the whole tree. " +
+        "Does NOT re-apply the rule — call run_rule afterwards.",
       inputSchema: {
         ruleId: z.string(),
         name: z.string().optional(),
-        conditions: z.array(ruleConditionSchema).optional(),
+        conditions: conditionsSchema.optional(),
         categoryId: z.string().optional(),
         isActive: z.boolean().optional(),
         priority: z.number().int().optional(),
@@ -416,7 +513,7 @@ export function registerTools(server: McpServer): void {
         return json(
           await updateRuleForUser(userId, ruleId, {
             name,
-            conditions,
+            conditions: conditions === undefined ? undefined : normalizeConditions(conditions),
             categoryId,
             isActive,
             priority,
@@ -428,28 +525,109 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  // ── run_rule ──────────────────────────────────────────────────────────────────
+  // ── delete_rule ───────────────────────────────────────────────────────────────
   server.registerTool(
-    "run_rule",
+    "delete_rule",
     {
       description:
-        "Execute a rule now: categorize all matching transactions into the rule's target category (marks them RULE/APPROVED). Returns how many were categorized. Omit ruleId to run ALL active rules in priority order.",
+        "Delete a rule permanently. Transactions it categorized KEEP their category but " +
+        "lose the link to the rule, so they can no longer be reverted — call undo_rule_run " +
+        "FIRST if you want them uncategorized again. To stop a rule without losing it, use " +
+        "update_rule with isActive: false instead.",
       inputSchema: {
-        ruleId: z.string().optional(),
+        ruleId: z.string(),
       },
     },
     async ({ ruleId }, extra) => {
       const userId = requireUserId(extra as ToolExtra);
       try {
-        if (ruleId) {
-          return json({ categorized: await runRuleForUser(userId, ruleId) });
-        }
-        const results = await runAllRulesForUser(userId);
-        return json({
-          rulesRun: results.length,
-          totalCategorized: results.reduce((s, r) => s + r.categorized, 0),
-          perRule: results,
-        });
+        return json(await deleteRuleForUser(userId, ruleId));
+      } catch (err) {
+        return errorResult(err, "delete_rule failed");
+      }
+    },
+  );
+
+  // ── test_rule ─────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "test_rule",
+    {
+      description:
+        "Evaluate rule conditions WITHOUT creating or applying anything. Returns how many " +
+        "transactions match plus a sample. Use this to iterate on conditions in one call " +
+        "instead of create → run → inspect → update. Same condition format as create_rule.",
+      inputSchema: {
+        conditions: conditionsSchema,
+        sourceCategoryId: z.string().optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+    },
+    async ({ conditions, sourceCategoryId, limit }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await testConditions(
+            userId,
+            normalizeConditions(conditions),
+            sourceCategoryId ?? null,
+            limit ?? 10,
+          ),
+        );
+      } catch (err) {
+        return errorResult(err, "test_rule failed");
+      }
+    },
+  );
+
+  // ── undo_rule_run ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "undo_rule_run",
+    {
+      description:
+        "Revert everything a rule has categorized: each affected transaction goes back to the " +
+        "category and source it had before, and rows the rule created are removed. Note this " +
+        "undoes ALL of the rule's work, not only its most recent run. Transactions whose previous " +
+        "category has since been deleted are left uncategorized.",
+      inputSchema: {
+        ruleId: z.string(),
+      },
+    },
+    async ({ ruleId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await undoRuleRun(userId, ruleId));
+      } catch (err) {
+        return errorResult(err, "undo_rule_run failed");
+      }
+    },
+  );
+
+  // ── run_rule ──────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "run_rule",
+    {
+      description:
+        "Execute rules now, categorizing matching transactions (RULE/APPROVED). Omit ruleId to " +
+        "run ALL active rules.\n" +
+        "Rules run in priority order (lower number first) and the FIRST matching rule wins — a " +
+        "transaction is claimed once per run.\n" +
+        "Manually categorized transactions are never overwritten unless force: true.\n" +
+        "ALWAYS start with dryRun: true — it writes nothing and returns per-rule match counts, a " +
+        "sample, and `conflicts` listing transactions more than one rule wanted (the winner first). " +
+        "Runs are reversible with undo_rule_run.",
+      inputSchema: {
+        ruleId: z.string().optional(),
+        dryRun: z.boolean().optional(),
+        force: z.boolean().optional(),
+      },
+    },
+    async ({ ruleId, dryRun, force }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        const report = ruleId
+          ? await runRuleForUser(userId, ruleId, { dryRun, force })
+          : await runAllRulesForUser(userId, { dryRun, force });
+        return json(report);
       } catch (err) {
         return errorResult(err, "run_rule failed");
       }

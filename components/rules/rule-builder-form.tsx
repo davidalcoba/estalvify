@@ -7,10 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CategorySelect } from "@/components/categorize/category-select";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
+import { RuleMatchSelect } from "@/components/rules/rule-match-select";
 import { RulePreviewList } from "@/components/rules/rule-preview-list";
 import {
+  type ConditionGroupOp,
   type RuleCondition,
   getDefaultOperator,
+  getDefaultValue,
+  hasConditionValue,
 } from "@/lib/rules/rule-dto";
 import {
   previewRuleTransactions,
@@ -21,7 +25,11 @@ import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto"
 const PREVIEW_LIMIT = 50;
 
 function defaultCondition(): RuleCondition {
-  return { field: "description", operator: getDefaultOperator("description"), value: "" };
+  return {
+    field: "any",
+    operator: getDefaultOperator("any"),
+    value: getDefaultValue("any"),
+  };
 }
 
 interface RuleBuilderFormProps {
@@ -31,6 +39,7 @@ interface RuleBuilderFormProps {
 
 export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
   const [conditions, setConditions] = useState<RuleCondition[]>([defaultCondition()]);
+  const [match, setMatch] = useState<ConditionGroupOp>("AND");
   const [targetCategoryId, setTargetCategoryId] = useState<string>("");
   const [ruleName, setRuleName] = useState<string>("");
 
@@ -61,17 +70,16 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
     setConditions((prev: RuleCondition[]) => [...prev, defaultCondition()]);
   }
 
-  const hasValidConditions = conditions.some((c: RuleCondition) => c.value.trim() !== "");
+  const filled = conditions.filter(hasConditionValue);
+  const hasValidConditions = filled.length > 0;
+  const conditionTree = { op: match, children: filled };
 
   function handleSearch() {
     setError(null);
     setExecuteResult(null);
     startSearch(async () => {
       try {
-        const result = await previewRuleTransactions(
-          conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
-          null
-        );
+        const result = await previewRuleTransactions(conditionTree, null);
         setPreview(result);
       } catch {
         setError("Failed to search transactions. Please try again.");
@@ -89,7 +97,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
     startExecute(async () => {
       try {
         const result = await executeRuleOnce({
-          conditions: conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
+          conditions: conditionTree,
           sourceCategoryId: null,
           categoryId: targetCategoryId,
           ruleName: ruleName.trim() || null,
@@ -100,10 +108,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
             : "No new transactions categorized.";
         setExecuteResult(msg);
         if (result.categorized > 0) {
-          const updated = await previewRuleTransactions(
-            conditions.filter((c: RuleCondition) => c.value.trim() !== ""),
-            null
-          );
+          const updated = await previewRuleTransactions(conditionTree, null);
           setPreview(updated);
         }
       } catch {
@@ -137,10 +142,14 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
 
           {/* Conditions + target category in one visual block */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Conditions{" "}
-              <span className="text-muted-foreground font-normal">(all must match)</span>
-            </label>
+            <RuleMatchSelect
+              value={match}
+              onValueChange={(op) => {
+                setMatch(op);
+                setPreview(null);
+                setExecuteResult(null);
+              }}
+            />
 
             <div className="space-y-2">
               {conditions.map((condition: RuleCondition, index: number) => (
