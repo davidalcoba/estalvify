@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bell,
   LayoutDashboard,
   Tag,
   PiggyBank,
@@ -69,6 +70,11 @@ const navItems = [
         title: "Rules",
         url: "/rules",
         icon: ListFilter,
+      },
+      {
+        title: "Notifications",
+        url: "/notifications",
+        icon: Bell,
       },
     ],
   },
