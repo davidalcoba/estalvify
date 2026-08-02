@@ -128,7 +128,6 @@ export function BudgetView({
     <div className="space-y-6">
       <PageHeader
         title="Budget"
-        description="Plan where your money goes each month, and track it against real spending."
         actions={
           // Only in the header when there are rows — the empty state hosts its
           // own CTAs, so this avoids duplicate "Add category" buttons.

@@ -92,13 +92,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={`Good morning, ${firstName} 👋`}
-        description={`Here's your financial overview for ${formatDate(new Date(), language, timezone, {
-          month: "long",
-          year: "numeric",
-        })}.`}
-      />
+      <PageHeader title={`Good morning, ${firstName} 👋`} />
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -157,7 +151,7 @@ export default async function DashboardPage() {
         <EmptyState
           icon={Wallet}
           title="Connect your first bank account"
-          description="Link your bank accounts to start tracking your finances automatically. Your data syncs every day so you always have a fresh overview."
+          description="Link a bank to start tracking. Syncs daily."
         >
           <Button asChild variant="outline">
             <Link href="/accounts">Go to Accounts →</Link>

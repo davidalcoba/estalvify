@@ -105,16 +105,13 @@ export default async function ForecastPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Forecast"
-        description="Where your money is heading, based on your recent averages and recurring payments."
-      />
+      <PageHeader title="Forecast" />
 
       {!hasData ? (
         <EmptyState
           icon={LineChart}
-          title="Not enough history to forecast yet"
-          description="Once a few months of transactions have synced, you'll see projected spending and balance here."
+          title="Not enough history yet"
+          description="A few months of transactions are needed to forecast."
         />
       ) : (
         <>

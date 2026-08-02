@@ -93,10 +93,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Recurring"
-        description="Subscriptions and regular payments detected from your bank history."
-      />
+      <PageHeader title="Recurring" />
 
       {items.length === 0 ? (
         <EmptyState

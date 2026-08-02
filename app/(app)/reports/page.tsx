@@ -97,16 +97,13 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Reports"
-        description="Insights into your spending patterns, trends and income vs expenses."
-      />
+      <PageHeader title="Reports" />
 
       {!hasData ? (
         <EmptyState
           icon={BarChart3}
-          title="No data to report yet"
-          description="Once transactions have synced and been categorized, you'll see spending breakdowns by category, monthly trends and income vs expenses here."
+          title="No data yet"
+          description="Sync and categorize transactions to see reports."
         />
       ) : (
         <>

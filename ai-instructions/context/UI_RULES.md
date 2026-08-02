@@ -48,13 +48,21 @@ Pages can compose UI, but base controls must come from `components/ui/*`.
   tokens (`--muted-foreground`, `--border`, `--popover`) so charts read in light **and**
   dark. Format values with `lib/formatters` (`formatCurrency`).
 
+## Copy: terse, SaaS-style
+
+- **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)
+  only — do not pass `description`. The screen's purpose is clear from its title and nav.
+- Keep helper text, card descriptions and empty-state copy **short** — one plain phrase,
+  not a sentence explaining the obvious. Prefer "For dates." over "The language used to
+  render dates throughout the app." Trust the UI; don't narrate it.
+
 ## Use the Shared Controls (no one-off form controls)
 
 - Selects: use `components/ui/simple-select` (flat options) or
   `components/categorize/category-select` (hierarchical categories). Never a raw
   `<select>` — Radix Select is theme-aware and consistent.
 - Placeholder/empty states: use `components/ui/empty-state`.
-- Page headers: use `components/layout/page-header` (title + subtitle + actions).
+- Page headers: use `components/layout/page-header` (title + actions; no subtitle).
 - Money/dates: format via `lib/formatters`.
 
 ## Desktop and Mobile: First-Class Views
@@ -83,7 +91,7 @@ When a desktop/mobile switcher is needed:
 For related transaction workflows (for example `transactions` and `categorize`):
 
 - Keep shared visual language aligned: date headers, amount formatting, row/card rhythm
-- Keep top-level structure aligned: title/subtitle, filter area, summary/pagination
+- Keep top-level structure aligned: title, filter area, summary/pagination
 - Diverge only where behavior is intentionally different (read-only vs classify actions)
 
 ## Future Native Readiness

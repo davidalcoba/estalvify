@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SimpleSelect } from "@/components/ui/simple-select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { updatePreferences } from "@/app/(app)/settings/actions";
 import { Check } from "lucide-react";
 
@@ -110,9 +110,6 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
     <Card>
       <CardHeader>
         <CardTitle>Regional preferences</CardTitle>
-        <CardDescription>
-          Controls how dates, times, and amounts are displayed throughout the app.
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -125,7 +122,7 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
               ariaLabel="Timezone"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">Used to display transaction booking dates correctly.</p>
+            <p className="text-xs text-muted-foreground">For transaction dates.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -137,7 +134,7 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
               ariaLabel="Default currency"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">Used for totals and summaries. Individual transactions always show in their own currency.</p>
+            <p className="text-xs text-muted-foreground">For totals; transactions keep their own currency.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -149,7 +146,7 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
               ariaLabel="Language"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">Language used for dates (e.g. 2 August 2026).</p>
+            <p className="text-xs text-muted-foreground">For dates (e.g. 2 August 2026).</p>
           </div>
 
           <div className="space-y-1.5">
@@ -161,7 +158,7 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
               ariaLabel="Number format"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">Controls decimal separators and thousands grouping for amounts.</p>
+            <p className="text-xs text-muted-foreground">Decimal and thousands separators.</p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
