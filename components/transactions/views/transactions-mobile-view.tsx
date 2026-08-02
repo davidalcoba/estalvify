@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
+import { Calendar, CreditCard, Tag, Zap } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
+import { useAction } from "@/lib/use-action";
 import {
   transactionMerchant,
   transactionOperationType,
@@ -83,27 +84,30 @@ export function TransactionsMobileView({
 }: TransactionsMobileViewProps) {
   const router = useRouter();
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useAction();
   const [ruleOpen, setRuleOpen] = useState(false);
   // Prevent ghost-tap: the tap that opens the sheet can land on the select
   // as it slides into position, opening the native picker unintentionally.
+  // The flag is raised by the tap itself; the effect only owns the timer.
   const [sheetJustOpened, setSheetJustOpened] = useState(false);
   useEffect(() => {
-    if (!activeTx) return;
-    setSheetJustOpened(true);
+    if (!sheetJustOpened) return;
     const t = setTimeout(() => setSheetJustOpened(false), 400);
     return () => clearTimeout(t);
-  }, [activeTx?.id]);
+  }, [sheetJustOpened]);
 
-  async function handleRecategorize(categoryId: string) {
+  function openTransaction(tx: TransactionListItemDTO) {
+    setActiveTx(tx);
+    setSheetJustOpened(true);
+  }
+
+  function handleRecategorize(categoryId: string) {
     if (!categoryId || !activeTx) return;
-    setSaving(true);
-    try {
-      await categorizeTransaction(activeTx.id, categoryId);
+    const txId = activeTx.id;
+    run("recategorize", async () => {
+      await categorizeTransaction(txId, categoryId);
       router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   return (
@@ -130,7 +134,7 @@ export function TransactionsMobileView({
               <Card
                 key={tx.id}
                 className="py-0 gap-0 overflow-hidden cursor-pointer active:opacity-80 transition-opacity"
-                onClick={() => setActiveTx(tx)}
+                onClick={() => openTransaction(tx)}
               >
                 <CardContent className="p-0">
                   <TransactionItem
@@ -215,10 +219,10 @@ export function TransactionsMobileView({
                     size="icon"
                     className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
-                    disabled={saving}
+                    loading={saving}
                     title="Create rule for this transaction"
                   >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                    <Zap className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
