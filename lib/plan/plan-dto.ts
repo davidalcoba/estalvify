@@ -6,6 +6,7 @@
 
 import { buildBudgetRow, type BudgetRow } from "@/lib/budget/budget-progress";
 import {
+  isActiveInMonth,
   planMonthlyEquivalent,
   plannedMonthlyByCategory,
   planTotals,
@@ -13,6 +14,7 @@ import {
   type PlanDirection,
   type PlanItemInput,
   type PlanTotals,
+  type YearMonth,
 } from "./plan-item";
 
 export interface CategoryOption {
@@ -33,6 +35,7 @@ export interface PlanItemRecord {
   cadence: PlanCadence;
   dayOfMonth: number | null;
   onDate: Date | string | null;
+  endDate: Date | string | null;
   /** Set when the item mirrors a confirmed recurring series. */
   recurringMerchantKey: string | null;
 }
@@ -50,8 +53,12 @@ export interface PlanEntryVM {
   cadence: PlanCadence;
   dayOfMonth: number | null;
   onDate: string | null;
+  /** Last month this item applies, as an ISO date; null = open-ended. */
+  endDate: string | null;
   /** Monthly equivalent (0 for ONE_OFF). */
   monthly: number;
+  /** No longer in force in the reference month — kept as a record, counts nowhere. */
+  ended: boolean;
   /** Came from confirming a detected recurring series, not typed by hand. */
   fromRecurring: boolean;
 }
@@ -79,8 +86,24 @@ function toIsoDate(value: Date | string | null): string | null {
   return value.toISOString().slice(0, 10);
 }
 
-/** Periodic items first, then one-offs by date; used within income and each group. */
+/** A stored record in the shape the pure planning helpers expect. */
+function toPlanInput(item: PlanItemRecord): PlanItemInput {
+  return {
+    direction: item.direction,
+    categoryId: item.categoryId,
+    amount: Number(item.amount.toString()),
+    cadence: item.cadence,
+    onDate: toIsoDate(item.onDate),
+    endDate: toIsoDate(item.endDate),
+  };
+}
+
+/**
+ * Ended items last, then periodic before one-offs, one-offs by date; used within
+ * income and each group.
+ */
 function sortEntries(a: PlanEntryVM, b: PlanEntryVM): number {
+  if (a.ended !== b.ended) return a.ended ? 1 : -1;
   const aOneOff = a.cadence === "ONE_OFF";
   const bOneOff = b.cadence === "ONE_OFF";
   if (aOneOff !== bOneOff) return aOneOff ? 1 : -1;
@@ -93,13 +116,16 @@ export function buildPlanData(params: {
   items: PlanItemRecord[];
   spendingByCategory: Record<string, number>;
   categories: CategoryOption[];
+  /** The month the plan is read against — items that ended before it don't count. */
+  ref: YearMonth;
 }): PlanData {
-  const { currency, items, spendingByCategory, categories } = params;
+  const { currency, items, spendingByCategory, categories, ref } = params;
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
   const entries: PlanEntryVM[] = items.map((item) => {
     const category = item.categoryId ? categoryById.get(item.categoryId) : undefined;
     const amount = Number(item.amount.toString());
+    const endDate = toIsoDate(item.endDate);
     return {
       id: item.id,
       label: item.label,
@@ -112,22 +138,19 @@ export function buildPlanData(params: {
       cadence: item.cadence,
       dayOfMonth: item.dayOfMonth,
       onDate: toIsoDate(item.onDate),
+      endDate,
       monthly: planMonthlyEquivalent(amount, item.cadence),
+      ended: !isActiveInMonth(toPlanInput(item), ref.year, ref.month),
       fromRecurring: item.recurringMerchantKey != null,
     };
   });
 
   const income = entries.filter((e) => e.direction === "CREDIT").sort(sortEntries);
 
-  // Per-category limit = steady monthly expense total (excludes one-offs).
-  const planInputs: PlanItemInput[] = items.map((i) => ({
-    direction: i.direction,
-    categoryId: i.categoryId,
-    amount: Number(i.amount.toString()),
-    cadence: i.cadence,
-    onDate: toIsoDate(i.onDate),
-  }));
-  const limitByCategory = plannedMonthlyByCategory(planInputs);
+  // Per-category limit = steady monthly expense total (excludes one-offs and
+  // items whose end date has passed).
+  const planInputs: PlanItemInput[] = items.map(toPlanInput);
+  const limitByCategory = plannedMonthlyByCategory(planInputs, ref);
 
   const expenseByCategory = new Map<string, PlanEntryVM[]>();
   for (const e of entries) {
@@ -161,6 +184,6 @@ export function buildPlanData(params: {
     currency,
     income,
     expenseGroups,
-    totals: planTotals(planInputs),
+    totals: planTotals(planInputs, ref),
   };
 }

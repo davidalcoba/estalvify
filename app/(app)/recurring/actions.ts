@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { invalidateRecurringReviewCount } from "@/lib/recurring/review-count";
 import type {
   TransactionDirection,
   RecurringStatus,
@@ -152,6 +153,7 @@ export async function setRecurringDecision(
     await removeSeriesFromPlan(userId, merchantKey);
   }
 
+  invalidateRecurringReviewCount(userId);
   revalidatePath("/recurring");
   revalidatePath("/dashboard");
   revalidatePlan();
@@ -189,6 +191,7 @@ export async function clearRecurringDecision(merchantKey: string): Promise<void>
   });
   await removeSeriesFromPlan(userId, key);
 
+  invalidateRecurringReviewCount(userId);
   revalidatePath("/recurring");
   revalidatePath("/dashboard");
   revalidatePlan();

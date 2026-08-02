@@ -110,6 +110,16 @@ change? If yes, the skeleton changes too.
 - Skeleton the *first* screen, not the empty state — assume data exists.
 - Never draw a subtitle line: `PageHeader` has no subtitle.
 
+## Sidebar Count Badges
+
+A nav item can carry a count of outstanding work (transactions left to
+categorize, recurring series left to review). Add one by putting the route in the
+`pendingByUrl` map in `components/layout/app-sidebar.tsx` and passing the number
+from the `(app)` layout — never by special-casing a URL in the render. The badge
+is `variant="brand"`, hidden at zero, and caps at `99+`. Anything the layout
+computes runs on **every** navigation, so a count that is not a cheap query
+belongs behind a cache (see `ARCHITECTURE.md` → "Cached Reads").
+
 ## Desktop and Mobile: First-Class Views
 
 This app is not desktop-only responsive.

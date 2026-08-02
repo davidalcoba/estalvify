@@ -77,6 +77,7 @@ export default async function ForecastPage() {
         cadence: true,
         dayOfMonth: true,
         onDate: true,
+        endDate: true,
         category: { select: { name: true } },
       },
     }),
@@ -110,9 +111,10 @@ export default async function ForecastPage() {
     amount: Number(p.amount.toString()),
     cadence: p.cadence,
     onDate: p.onDate ? p.onDate.toISOString().slice(0, 10) : null,
+    endDate: p.endDate ? p.endDate.toISOString().slice(0, 10) : null,
   }));
   const hasPlan = planInputs.length > 0;
-  const planNet = planTotals(planInputs).monthlyNet;
+  const planNet = planTotals(planInputs, { year, month }).monthlyNet;
 
   const horizon = forwardMonths(year, month, HORIZON_MONTHS);
   const projected = hasPlan
@@ -196,6 +198,8 @@ export default async function ForecastPage() {
         date = nextMonthlyOccurrence(p.dayOfMonth);
       }
       if (!date) return null;
+      // Nothing is due after the item's last date.
+      if (p.endDate && date > p.endDate.toISOString().slice(0, 10)) return null;
       return {
         displayName:
           p.label ??

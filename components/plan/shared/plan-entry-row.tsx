@@ -41,9 +41,17 @@ export function PlanEntryRow({
   if (entry.cadence !== "MONTHLY" && entry.cadence !== "ONE_OFF") {
     metaParts.push(`≈ ${formatCurrency(entry.monthly, currency, locale)}/mo`);
   }
+  if (entry.endDate) {
+    const until = formatDate(entry.endDate, dateLocale, "UTC", {
+      month: "short",
+      year: "numeric",
+    });
+    metaParts.push(entry.ended ? `ended ${until}` : `until ${until}`);
+  }
 
   return (
-    <div className="flex items-center gap-3 py-2">
+    // An ended item is kept as a record but counts nowhere, so it reads as inactive.
+    <div className={`flex items-center gap-3 py-2 ${entry.ended ? "opacity-60" : ""}`}>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 text-sm font-medium">
           {entry.fromRecurring && (

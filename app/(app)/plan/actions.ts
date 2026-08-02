@@ -36,6 +36,7 @@ export interface PlanItemFields {
   cadence: PlanCadence;
   dayOfMonth: number | null;
   onDate: string | null; // ISO "YYYY-MM-DD" for ONE_OFF
+  endDate: string | null; // ISO "YYYY-MM-DD"; optional last month for periodic items
 }
 
 // Validate + normalize the shared fields. Throws on invalid input; returns the
@@ -65,6 +66,15 @@ async function normalizeFields(userId: string, fields: PlanItemFields, currency:
     dayOfMonth = d;
   }
 
+  // An end date only means something for a repeating item — a one-off already
+  // has its single date.
+  let endDate: Date | null = null;
+  if (fields.endDate && cadence !== "ONE_OFF") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.endDate)) throw new Error("Invalid end date");
+    endDate = new Date(`${fields.endDate}T00:00:00.000Z`);
+    if (Number.isNaN(endDate.getTime())) throw new Error("Invalid end date");
+  }
+
   const label = fields.label?.trim() ? fields.label.trim().slice(0, 60) : null;
 
   return {
@@ -76,6 +86,7 @@ async function normalizeFields(userId: string, fields: PlanItemFields, currency:
     cadence,
     dayOfMonth,
     onDate,
+    endDate,
   };
 }
 

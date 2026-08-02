@@ -66,13 +66,17 @@
   a category (required for expenses), and a cadence. Several are allowed per category.
 - Cadence (`PlanCadence`): how often a plan item recurs — weekly, monthly, quarterly,
   yearly, or one-off (a single dated entry).
+- End date (`PlanItem.endDate`): optional last date a periodic item applies, inclusive of
+  its month (a loan's final payment, a contract's expiry). Past that month the item counts
+  nowhere — totals, limits, forecast — but stays visible in the Plan as "ended". Null =
+  open-ended; not applicable to one-offs, which already have a date.
 - Category limit: a category's steady monthly planned total (sum of its periodic items),
   tracked against real spending with the `ok/warning/over` status model.
 - Forecast: the projected balance over the next months, driven by the Plan's monthly net
   (historical-average fallback when there is no Plan yet).
 - Recurring series: an auto-detected recurring charge from bank history. Confirming it
   adds a linked Plan item (`PlanItem.recurringMerchantKey`); ignoring or undoing removes
-  it again.
+  it again. Series with no decision yet are the "to review" count badged on the sidebar.
 - Reports: summaries and trends over transactions and spending.
 - (Budget: the previous per-month, one-amount-per-category planning model, now replaced by
   the Plan; `/budget` redirects to `/plan`. The `Budget`/`BudgetItem` tables remain but are
