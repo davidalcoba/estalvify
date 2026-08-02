@@ -25,7 +25,9 @@ function tx(
     accountName: null,
     categoryId: null,
     source: null,
+    categoryRuleId: null,
     isRejected: false,
+    isApproved: false,
     ...overrides,
   };
 }
@@ -170,6 +172,66 @@ describe("manual categorization is protected", () => {
     ];
     const plan = planRun([groceries], rows);
     expect(plan.matches.map((m) => m.transactionId)).toEqual(["t1", "t2"]);
+  });
+});
+
+describe("no-op writes are skipped", () => {
+  const groceries = rule({ id: "g", categoryId: "cat-g", conditions: contains("LIDL") });
+
+  it("flags a row that already carries this exact categorization", () => {
+    // Re-running an unchanged ruleset must not rewrite anything: it would cost
+    // one UPDATE per row and would clobber the undo trail with the rule's own
+    // previous result.
+    const settled = tx({
+      id: "t1",
+      description: "LIDL",
+      categoryId: "cat-g",
+      source: "RULE",
+      categoryRuleId: "g",
+      isApproved: true,
+    });
+    const plan = planRun([groceries], [settled]);
+
+    expect(plan.matches).toHaveLength(1);
+    expect(plan.matches[0].unchanged).toBe(true);
+    expect(plan.perRule[0].matched).toEqual(["t1"]);
+    expect(plan.perRule[0].unchanged).toBe(1);
+  });
+
+  it("does not flag a row owned by a different rule", () => {
+    const other = tx({
+      id: "t1",
+      description: "LIDL",
+      categoryId: "cat-g",
+      source: "RULE",
+      categoryRuleId: "someone-else",
+      isApproved: true,
+    });
+    expect(planRun([groceries], [other]).matches[0].unchanged).toBe(false);
+  });
+
+  it("does not flag a row whose category differs", () => {
+    const moved = tx({
+      id: "t1",
+      description: "LIDL",
+      categoryId: "cat-old",
+      source: "RULE",
+      categoryRuleId: "g",
+      isApproved: true,
+    });
+    expect(planRun([groceries], [moved]).matches[0].unchanged).toBe(false);
+  });
+
+  it("does not flag a pending row", () => {
+    const pending = tx({
+      id: "t1",
+      description: "LIDL",
+      categoryId: "cat-g",
+      source: "RULE",
+      categoryRuleId: "g",
+      isApproved: false,
+    });
+    expect(planRun([groceries], [pending]).matches[0].unchanged).toBe(false);
   });
 });
 

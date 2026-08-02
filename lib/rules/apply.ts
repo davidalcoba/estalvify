@@ -13,6 +13,7 @@ import { planRun } from "./rule-plan";
 import type {
   CategorizationSourceLike,
   PlannableRule,
+  PlannedMatch,
   PlannableTransaction,
   RuleConflict,
 } from "./rule-plan";
@@ -34,6 +35,8 @@ export interface RuleRunResult {
   name: string;
   priority: number;
   matched: number;
+  /** Already carried this exact categorization, so nothing was written. */
+  unchanged: number;
   skippedManual: number;
   sample: RuleRunSample[];
 }
@@ -78,6 +81,7 @@ const transactionSelect = {
       categoryId: true,
       source: true,
       status: true,
+      categoryRuleId: true,
       category: { select: { name: true, color: true } },
     },
   },
@@ -96,6 +100,7 @@ export type LoadedTransaction = {
     categoryId: string;
     source: CategorizationSourceLike;
     status: "PENDING" | "APPROVED" | "REJECTED";
+    categoryRuleId: string | null;
     category: { name: string; color: string } | null;
   } | null;
 };
@@ -110,7 +115,9 @@ function toPlannable(tx: LoadedTransaction): PlannableTransaction {
     accountName: tx.bankAccount?.name ?? null,
     categoryId: tx.categorization?.categoryId ?? null,
     source: tx.categorization?.source ?? null,
+    categoryRuleId: tx.categorization?.categoryRuleId ?? null,
     isRejected: tx.categorization?.status === "REJECTED",
+    isApproved: tx.categorization?.status === "APPROVED",
   };
 }
 
@@ -206,6 +213,7 @@ export async function runRules(
     name: r.name,
     priority: r.priority,
     matched: r.matched.length,
+    unchanged: r.unchanged,
     skippedManual: r.skippedManual,
     sample: r.matched
       .slice(0, SAMPLE_SIZE)
@@ -223,18 +231,19 @@ export async function runRules(
   };
 }
 
-async function writeMatches(
-  matches: {
-    transactionId: string;
-    ruleId: string;
-    categoryId: string;
-    previousCategoryId: string | null;
-    previousSource: CategorizationSourceLike | null;
-  }[]
-): Promise<void> {
+async function writeMatches(matches: PlannedMatch[]): Promise<void> {
   const now = new Date();
-  const created = matches.filter((m) => m.previousCategoryId === null);
-  const updated = matches.filter((m) => m.previousCategoryId !== null);
+
+  // Rows that already say exactly this are skipped entirely. Two reasons, and
+  // the second is the important one:
+  //   - a re-run over an unchanged ruleset would otherwise issue one UPDATE per
+  //     categorized transaction, which is slow enough to time out;
+  //   - it would also overwrite previousCategoryId with the rule's OWN previous
+  //     result, so undo_rule_run would restore the intermediate state instead of
+  //     what was there before the rule ever ran.
+  const pending = matches.filter((m) => !m.unchanged);
+  const created = pending.filter((m) => m.previousCategoryId === null);
+  const updated = pending.filter((m) => m.previousCategoryId !== null);
 
   if (created.length > 0) {
     // skipDuplicates guards the transactionId unique constraint: overlapping
@@ -255,22 +264,31 @@ async function writeMatches(
     });
   }
 
-  // Each updated row carries its own previous state, so these can't be batched
-  // into a single updateMany.
+  // Rows sharing a target and a previous state can go in one statement, which
+  // keeps a big re-categorization to a handful of round-trips.
+  const groups = new Map<string, PlannedMatch[]>();
   for (const m of updated) {
-    await prisma.transactionCategorization.update({
-      where: { transactionId: m.transactionId },
+    const key = `${m.ruleId}|${m.categoryId}|${m.previousCategoryId}|${m.previousSource}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(m);
+    else groups.set(key, [m]);
+  }
+
+  for (const bucket of groups.values()) {
+    const head = bucket[0];
+    await prisma.transactionCategorization.updateMany({
+      where: { transactionId: { in: bucket.map((m) => m.transactionId) } },
       data: {
-        categoryId: m.categoryId,
+        categoryId: head.categoryId,
         source: "RULE",
         status: "APPROVED",
-        categoryRuleId: m.ruleId,
+        categoryRuleId: head.ruleId,
         approvedAt: now,
         categorizedAt: now,
         rejectedAt: null,
         note: null,
-        previousCategoryId: m.previousCategoryId,
-        previousSource: m.previousSource,
+        previousCategoryId: head.previousCategoryId,
+        previousSource: head.previousSource,
       },
     });
   }
