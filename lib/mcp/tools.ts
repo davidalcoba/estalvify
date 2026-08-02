@@ -11,8 +11,33 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { buildUncategorizedWhere } from "@/lib/categorize";
 import { bulkCategorizeForUser } from "@/lib/mcp/categorize";
+import {
+  createCategoryForUser,
+  updateCategoryForUser,
+  listRulesForUser,
+  createRuleForUser,
+  updateRuleForUser,
+  runRuleForUser,
+  runAllRulesForUser,
+} from "@/lib/mcp/manage";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
+
+// Rule condition shape (see lib/rules/rule-dto.ts).
+const ruleConditionSchema = z.object({
+  field: z.enum(["description", "remittanceInfo"]),
+  operator: z.enum(["contains", "equals", "startsWith", "endsWith"]),
+  value: z.string(),
+});
+
+function errorResult(err: unknown, fallback: string): CallToolResult {
+  return {
+    content: [
+      { type: "text", text: err instanceof Error ? err.message : fallback },
+    ],
+    isError: true,
+  };
+}
 
 // Minimal shape of the auth context we attach in verifyToken.
 type ToolExtra = { authInfo?: { extra?: { userId?: string } } };
@@ -277,6 +302,157 @@ export function registerTools(server: McpServer): void {
         ),
       );
       return json({ queued: connections.length });
+    },
+  );
+
+  // ── create_category ─────────────────────────────────────────────────────────
+  server.registerTool(
+    "create_category",
+    {
+      description:
+        "Create a new category (or a subcategory when parentId is given). Returns the created category. color is a hex string like #6366f1.",
+      inputSchema: {
+        name: z.string(),
+        color: z.string().optional(),
+        parentId: z.string().optional(),
+      },
+    },
+    async ({ name, color, parentId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await createCategoryForUser(userId, { name, color, parentId }));
+      } catch (err) {
+        return errorResult(err, "create_category failed");
+      }
+    },
+  );
+
+  // ── update_category ─────────────────────────────────────────────────────────
+  server.registerTool(
+    "update_category",
+    {
+      description:
+        "Rename and/or recolor one of the user's own categories (system default categories can't be edited).",
+      inputSchema: {
+        categoryId: z.string(),
+        name: z.string().optional(),
+        color: z.string().optional(),
+      },
+    },
+    async ({ categoryId, name, color }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await updateCategoryForUser(userId, categoryId, { name, color }));
+      } catch (err) {
+        return errorResult(err, "update_category failed");
+      }
+    },
+  );
+
+  // ── list_rules ────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "list_rules",
+    {
+      description:
+        "List the user's categorization rules (with their conditions, target category and ids). Use the returned id with update_rule / run_rule.",
+      inputSchema: {},
+    },
+    async (_args, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      return json(await listRulesForUser(userId));
+    },
+  );
+
+  // ── create_rule ───────────────────────────────────────────────────────────────
+  server.registerTool(
+    "create_rule",
+    {
+      description:
+        "Create a categorization rule. conditions is an array of {field, operator, value}; field is 'description' or 'remittanceInfo', operator is contains/equals/startsWith/endsWith. All conditions must match (AND). categoryId is the target category. sourceCategoryId (optional) restricts matching to transactions already in that category. Creating a rule does NOT apply it — call run_rule to execute.",
+      inputSchema: {
+        name: z.string(),
+        conditions: z.array(ruleConditionSchema).min(1),
+        categoryId: z.string(),
+        sourceCategoryId: z.string().optional(),
+        priority: z.number().int().optional(),
+      },
+    },
+    async ({ name, conditions, categoryId, sourceCategoryId, priority }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await createRuleForUser(userId, {
+            name,
+            conditions,
+            categoryId,
+            sourceCategoryId,
+            priority,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "create_rule failed");
+      }
+    },
+  );
+
+  // ── update_rule ───────────────────────────────────────────────────────────────
+  server.registerTool(
+    "update_rule",
+    {
+      description:
+        "Update a rule's name, conditions, target category, active state and/or priority. Only the provided fields change. Does NOT re-apply the rule — call run_rule afterwards.",
+      inputSchema: {
+        ruleId: z.string(),
+        name: z.string().optional(),
+        conditions: z.array(ruleConditionSchema).optional(),
+        categoryId: z.string().optional(),
+        isActive: z.boolean().optional(),
+        priority: z.number().int().optional(),
+      },
+    },
+    async ({ ruleId, name, conditions, categoryId, isActive, priority }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await updateRuleForUser(userId, ruleId, {
+            name,
+            conditions,
+            categoryId,
+            isActive,
+            priority,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "update_rule failed");
+      }
+    },
+  );
+
+  // ── run_rule ──────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "run_rule",
+    {
+      description:
+        "Execute a rule now: categorize all matching transactions into the rule's target category (marks them RULE/APPROVED). Returns how many were categorized. Omit ruleId to run ALL active rules in priority order.",
+      inputSchema: {
+        ruleId: z.string().optional(),
+      },
+    },
+    async ({ ruleId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        if (ruleId) {
+          return json({ categorized: await runRuleForUser(userId, ruleId) });
+        }
+        const results = await runAllRulesForUser(userId);
+        return json({
+          rulesRun: results.length,
+          totalCategorized: results.reduce((s, r) => s + r.categorized, 0),
+          perRule: results,
+        });
+      } catch (err) {
+        return errorResult(err, "run_rule failed");
+      }
     },
   );
 }
