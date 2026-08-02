@@ -9,10 +9,11 @@ import { parseConditions } from "./rule-dto";
 import type { ConditionGroup } from "./rule-dto";
 import { buildRulePrefilterWhere } from "./rule-evaluator";
 import { matchesNode } from "./rule-matcher";
-import { planRun } from "./rule-plan";
+import { chunk, planRun } from "./rule-plan";
 import type {
   CategorizationSourceLike,
   PlannableRule,
+  PlannedMatch,
   PlannableTransaction,
   RuleConflict,
 } from "./rule-plan";
@@ -34,6 +35,8 @@ export interface RuleRunResult {
   name: string;
   priority: number;
   matched: number;
+  /** Already carried this exact categorization, so nothing was written. */
+  unchanged: number;
   skippedManual: number;
   sample: RuleRunSample[];
 }
@@ -78,6 +81,7 @@ const transactionSelect = {
       categoryId: true,
       source: true,
       status: true,
+      categoryRuleId: true,
       category: { select: { name: true, color: true } },
     },
   },
@@ -96,6 +100,7 @@ export type LoadedTransaction = {
     categoryId: string;
     source: CategorizationSourceLike;
     status: "PENDING" | "APPROVED" | "REJECTED";
+    categoryRuleId: string | null;
     category: { name: string; color: string } | null;
   } | null;
 };
@@ -110,7 +115,9 @@ function toPlannable(tx: LoadedTransaction): PlannableTransaction {
     accountName: tx.bankAccount?.name ?? null,
     categoryId: tx.categorization?.categoryId ?? null,
     source: tx.categorization?.source ?? null,
+    categoryRuleId: tx.categorization?.categoryRuleId ?? null,
     isRejected: tx.categorization?.status === "REJECTED",
+    isApproved: tx.categorization?.status === "APPROVED",
   };
 }
 
@@ -132,7 +139,7 @@ function toSample(tx: LoadedTransaction): RuleRunSample {
  */
 async function loadCandidates(
   userId: string,
-  onlyUncategorized: boolean
+  onlyUncategorized: boolean,
 ): Promise<LoadedTransaction[]> {
   return prisma.transaction.findMany({
     where: buildRulePrefilterWhere(userId, null, { onlyUncategorized }),
@@ -147,9 +154,14 @@ async function loadCandidates(
 
 export async function runRules(
   userId: string,
-  options: RunRulesOptions = {}
+  options: RunRulesOptions = {},
 ): Promise<RuleRunReport> {
-  const { ruleIds, dryRun = false, force = false, onlyUncategorized = false } = options;
+  const {
+    ruleIds,
+    dryRun = false,
+    force = false,
+    onlyUncategorized = false,
+  } = options;
 
   const ruleRows = await prisma.categoryRule.findMany({
     where: {
@@ -179,12 +191,10 @@ export async function runRules(
 
   // A source-category rule needs to see rows that already have a category, so
   // the narrow uncategorized prefilter is only safe when no such rule is running.
-  const hasSourceCategoryRule = rules.some(
-    (r) => r.sourceCategoryId !== null
-  );
+  const hasSourceCategoryRule = rules.some((r) => r.sourceCategoryId !== null);
   const transactions = await loadCandidates(
     userId,
-    onlyUncategorized && !hasSourceCategoryRule
+    onlyUncategorized && !hasSourceCategoryRule,
   );
 
   const byId = new Map(transactions.map((t) => [t.id, t]));
@@ -206,6 +216,7 @@ export async function runRules(
     name: r.name,
     priority: r.priority,
     matched: r.matched.length,
+    unchanged: r.unchanged,
     skippedManual: r.skippedManual,
     sample: r.matched
       .slice(0, SAMPLE_SIZE)
@@ -223,24 +234,25 @@ export async function runRules(
   };
 }
 
-async function writeMatches(
-  matches: {
-    transactionId: string;
-    ruleId: string;
-    categoryId: string;
-    previousCategoryId: string | null;
-    previousSource: CategorizationSourceLike | null;
-  }[]
-): Promise<void> {
+async function writeMatches(matches: PlannedMatch[]): Promise<void> {
   const now = new Date();
-  const created = matches.filter((m) => m.previousCategoryId === null);
-  const updated = matches.filter((m) => m.previousCategoryId !== null);
 
-  if (created.length > 0) {
-    // skipDuplicates guards the transactionId unique constraint: overlapping
-    // sync invocations can plan the same row concurrently.
+  // Rows that already say exactly this are skipped entirely. Two reasons, and
+  // the second is the important one:
+  //   - a re-run over an unchanged ruleset would otherwise issue one UPDATE per
+  //     categorized transaction, which is slow enough to time out;
+  //   - it would also overwrite previousCategoryId with the rule's OWN previous
+  //     result, so undo_rule_run would restore the intermediate state instead of
+  //     what was there before the rule ever ran.
+  const pending = matches.filter((m) => !m.unchanged);
+  const created = pending.filter((m) => m.previousCategoryId === null);
+  const updated = pending.filter((m) => m.previousCategoryId !== null);
+
+  // skipDuplicates guards the transactionId unique constraint: overlapping
+  // sync invocations can plan the same row concurrently.
+  for (const batch of chunk(created)) {
     await prisma.transactionCategorization.createMany({
-      data: created.map((m) => ({
+      data: batch.map((m) => ({
         transactionId: m.transactionId,
         categoryId: m.categoryId,
         source: "RULE" as const,
@@ -255,29 +267,40 @@ async function writeMatches(
     });
   }
 
-  // Each updated row carries its own previous state, so these can't be batched
-  // into a single updateMany.
+  // Rows sharing a target and a previous state can go in one statement, which
+  // keeps a big re-categorization to a handful of round-trips.
+  const groups = new Map<string, PlannedMatch[]>();
   for (const m of updated) {
-    await prisma.transactionCategorization.update({
-      where: { transactionId: m.transactionId },
-      data: {
-        categoryId: m.categoryId,
-        source: "RULE",
-        status: "APPROVED",
-        categoryRuleId: m.ruleId,
-        approvedAt: now,
-        categorizedAt: now,
-        rejectedAt: null,
-        note: null,
-        previousCategoryId: m.previousCategoryId,
-        previousSource: m.previousSource,
-      },
-    });
+    const key = `${m.ruleId}|${m.categoryId}|${m.previousCategoryId}|${m.previousSource}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(m);
+    else groups.set(key, [m]);
+  }
+
+  for (const bucket of groups.values()) {
+    const head = bucket[0];
+    for (const batch of chunk(bucket)) {
+      await prisma.transactionCategorization.updateMany({
+        where: { transactionId: { in: batch.map((m) => m.transactionId) } },
+        data: {
+          categoryId: head.categoryId,
+          source: "RULE",
+          status: "APPROVED",
+          categoryRuleId: head.ruleId,
+          approvedAt: now,
+          categorizedAt: now,
+          rejectedAt: null,
+          note: null,
+          previousCategoryId: head.previousCategoryId,
+          previousSource: head.previousSource,
+        },
+      });
+    }
   }
 }
 
 async function recordMetrics(
-  perRule: { ruleId: string; matched: string[] }[]
+  perRule: { ruleId: string; matched: string[] }[],
 ): Promise<void> {
   const now = new Date();
   await Promise.all(
@@ -289,8 +312,8 @@ async function recordMetrics(
           lastRunAt: now,
           ...(r.matched.length > 0 ? { lastMatchAt: now } : {}),
         },
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -308,7 +331,7 @@ export async function evaluateConditions(
   userId: string,
   conditions: ConditionGroup,
   sourceCategoryId: string | null,
-  limit: number
+  limit: number,
 ): Promise<EvaluateResult> {
   const rows = (await prisma.transaction.findMany({
     where: buildRulePrefilterWhere(userId, sourceCategoryId),
@@ -316,7 +339,9 @@ export async function evaluateConditions(
     orderBy: [{ valueDate: "desc" }, { id: "asc" }],
   })) as unknown as LoadedTransaction[];
 
-  const matched = rows.filter((row) => matchesNode(toPlannable(row), conditions));
+  const matched = rows.filter((row) =>
+    matchesNode(toPlannable(row), conditions),
+  );
 
   return { matched: matched.length, transactions: matched.slice(0, limit) };
 }
@@ -325,9 +350,14 @@ export async function testConditions(
   userId: string,
   conditions: ConditionGroup,
   sourceCategoryId: string | null,
-  limit: number
+  limit: number,
 ): Promise<{ matched: number; sample: RuleRunSample[] }> {
-  const result = await evaluateConditions(userId, conditions, sourceCategoryId, limit);
+  const result = await evaluateConditions(
+    userId,
+    conditions,
+    sourceCategoryId,
+    limit,
+  );
   return { matched: result.matched, sample: result.transactions.map(toSample) };
 }
 
@@ -345,7 +375,7 @@ export async function testConditions(
  */
 export async function undoRuleRun(
   userId: string,
-  ruleId: string
+  ruleId: string,
 ): Promise<{ reverted: number; deleted: number; restored: number }> {
   const rule = await prisma.categoryRule.findUnique({
     where: { id: ruleId },
@@ -371,37 +401,53 @@ export async function undoRuleRun(
   const restorableIds = new Set(
     (
       await prisma.category.findMany({
-        where: { id: { in: toRestore.map((r) => r.previousCategoryId as string) } },
+        where: {
+          id: { in: toRestore.map((r) => r.previousCategoryId as string) },
+        },
         select: { id: true },
       })
-    ).map((c) => c.id)
+    ).map((c) => c.id),
   );
 
   const orphaned = toRestore.filter(
-    (r) => !restorableIds.has(r.previousCategoryId as string)
+    (r) => !restorableIds.has(r.previousCategoryId as string),
   );
   const restorable = toRestore.filter((r) =>
-    restorableIds.has(r.previousCategoryId as string)
+    restorableIds.has(r.previousCategoryId as string),
   );
 
   const deleteIds = [...toDelete, ...orphaned].map((r) => r.id);
-  if (deleteIds.length > 0) {
+  for (const batch of chunk(deleteIds)) {
     await prisma.transactionCategorization.deleteMany({
-      where: { id: { in: deleteIds } },
+      where: { id: { in: batch } },
     });
   }
 
+  // Grouped by the state being restored, so undoing a rule that categorized
+  // hundreds of rows costs a few statements. Restoring row by row would time
+  // out on exactly the rules most worth undoing.
+  const restoreGroups = new Map<string, typeof restorable>();
   for (const row of restorable) {
-    await prisma.transactionCategorization.update({
-      where: { id: row.id },
-      data: {
-        categoryId: row.previousCategoryId as string,
-        source: row.previousSource ?? "MANUAL",
-        categoryRuleId: null,
-        previousCategoryId: null,
-        previousSource: null,
-      },
-    });
+    const key = `${row.previousCategoryId}|${row.previousSource}`;
+    const bucket = restoreGroups.get(key);
+    if (bucket) bucket.push(row);
+    else restoreGroups.set(key, [row]);
+  }
+
+  for (const bucket of restoreGroups.values()) {
+    const head = bucket[0];
+    for (const batch of chunk(bucket)) {
+      await prisma.transactionCategorization.updateMany({
+        where: { id: { in: batch.map((r) => r.id) } },
+        data: {
+          categoryId: head.previousCategoryId as string,
+          source: head.previousSource ?? "MANUAL",
+          categoryRuleId: null,
+          previousCategoryId: null,
+          previousSource: null,
+        },
+      });
+    }
   }
 
   return {
@@ -425,7 +471,11 @@ export async function deleteRuleForUser(userId: string, ruleId: string) {
 
   const { count } = await prisma.transactionCategorization.updateMany({
     where: { categoryRuleId: ruleId },
-    data: { categoryRuleId: null, previousCategoryId: null, previousSource: null },
+    data: {
+      categoryRuleId: null,
+      previousCategoryId: null,
+      previousSource: null,
+    },
   });
 
   await prisma.categoryRule.delete({ where: { id: ruleId } });

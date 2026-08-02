@@ -72,14 +72,54 @@ describe("field selection", () => {
     expect(matchesCondition(t, cond({ field: "any", value: "ADEUDO" }))).toBe(true);
   });
 
-  it("`remittanceInfo` alone misses merchant names — the bug that broke the original rules", () => {
-    // parseRemittanceFields puts the operation type in remittanceInfo and the
-    // merchant in description, so a merchant rule on remittanceInfo can never hit.
-    const t = tx({ description: "SUPERMERCAT CONDIS", remittanceInfo: "PAGO CON TARJETA" });
+  // Real BBVA values: remittanceInfo carries the bank's own merchant CATEGORY for
+  // card payments, not just an operation type. Targeting it covers merchants that
+  // have never been seen before, which no list of names can do.
+  const bbvaGrocery = tx({
+    description: "PAGO CON TARJETA CONDIS TRES SENYORES BARCELONA ES",
+    remittanceInfo: "PAGO CON TARJETA EN SUPERMERCADOS",
+  });
+  const bbvaRestaurant = tx({
+    description: "PAGO CON TARJETA GELATERIA CLOUD BARCELONA ES",
+    remittanceInfo: "PAGO CON TARJETA EN RESTAURANTES Y CAFETERIAS",
+  });
+
+  it("the bank's category label is matchable on remittanceInfo", () => {
     expect(
-      matchesCondition(t, cond({ field: "remittanceInfo", value: "SUPERMERCA" }))
+      matchesCondition(bbvaGrocery, cond({ field: "remittanceInfo", value: "EN SUPERMERCADOS" }))
+    ).toBe(true);
+    expect(
+      matchesCondition(bbvaRestaurant, cond({ field: "remittanceInfo", value: "EN SUPERMERCADOS" }))
     ).toBe(false);
-    expect(matchesCondition(t, cond({ field: "any", value: "SUPERMERCA" }))).toBe(true);
+  });
+
+  it("catches a merchant the rule has never heard of", () => {
+    const unknownShop = tx({
+      description: "PAGO CON TARJETA SUPER KEISY 13 BARCELONA ES",
+      remittanceInfo: "PAGO CON TARJETA EN SUPERMERCADOS",
+    });
+    expect(
+      matchesCondition(unknownShop, cond({ field: "remittanceInfo", value: "EN SUPERMERCADOS" }))
+    ).toBe(true);
+  });
+
+  it("the two original rules were not a matching problem", () => {
+    // Both were reported as broken for looking at the wrong field. Against the
+    // real data their conditions do match — BBVA writes "RESTAURANTES" and
+    // "CAFETERIAS" into the same label, so even the AND holds. They matched
+    // nothing because nothing ever ran them.
+    expect(
+      matchesCondition(bbvaGrocery, cond({ field: "remittanceInfo", value: "SUPERMERCADO" }))
+    ).toBe(true);
+    expect(
+      matchesNode(bbvaRestaurant, {
+        op: "AND",
+        children: [
+          cond({ field: "remittanceInfo", value: "RESTAURANTE" }),
+          cond({ field: "remittanceInfo", value: "CAFETERIA" }),
+        ],
+      })
+    ).toBe(true);
   });
 
   it("tolerates a null remittanceInfo", () => {

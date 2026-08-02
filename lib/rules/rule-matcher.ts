@@ -44,8 +44,9 @@ function textForField(
       return normalizeText(tx.direction);
     case "any":
     default:
-      // Merchant names land in `description` and the operation type in
-      // `remittanceInfo`, so `any` searches both without the user having to know.
+      // The merchant is in `description` and the bank's own label — a merchant
+      // category, for BBVA card payments — is in `remittanceInfo`. Either can be
+      // the useful one, so `any` searches both without the user having to know.
       return normalizeText(`${tx.description ?? ""} ${tx.remittanceInfo ?? ""}`);
   }
 }

@@ -8,6 +8,21 @@ import type { ConditionGroup } from "./rule-dto";
 
 export type CategorizationSourceLike = "RULE" | "AI" | "MANUAL";
 
+/**
+ * Rows per write statement, used by the writer in apply.ts. Bounded so a bulk
+ * operation stays well inside Postgres' 65535 bind-parameter ceiling and inside
+ * the request timeout — writes must be a handful of statements, never one per
+ * transaction. Lives here so it stays testable without a database.
+ */
+export const WRITE_CHUNK = 500;
+
+export function chunk<T>(items: T[], size = WRITE_CHUNK): T[][] {
+  if (size < 1) throw new Error("chunk size must be at least 1");
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export interface PlannableRule {
   id: string;
   name: string;
@@ -23,8 +38,11 @@ export interface PlannableTransaction extends MatchableTransaction {
   /** Current categorization, or null when the transaction has none. */
   categoryId: string | null;
   source: CategorizationSourceLike | null;
+  /** Which rule owns the current categorization, if any. */
+  categoryRuleId: string | null;
   /** REJECTED categorizations count as uncategorized, matching the categorize inbox. */
   isRejected: boolean;
+  isApproved: boolean;
 }
 
 export interface PlannedMatch {
@@ -34,6 +52,12 @@ export interface PlannedMatch {
   /** What the row held before, so the write can record an undo trail. */
   previousCategoryId: string | null;
   previousSource: CategorizationSourceLike | null;
+  /**
+   * The row already says exactly this. Re-writing it would be a no-op that
+   * clobbers the undo trail with the rule's own previous result, so the caller
+   * skips it — a re-run of an unchanged ruleset writes nothing.
+   */
+  unchanged: boolean;
 }
 
 export interface PlannedRuleResult {
@@ -42,6 +66,8 @@ export interface PlannedRuleResult {
   priority: number;
   /** Transactions this rule claimed. */
   matched: string[];
+  /** Of those, the ones that already carried this exact categorization. */
+  unchanged: number;
   /** Matched but left alone because they were categorized manually. */
   skippedManual: number;
 }
@@ -124,6 +150,7 @@ export function planRun(
 
     const matched: string[] = [];
     let skippedManual = 0;
+    let unchangedCount = 0;
 
     for (const tx of transactions) {
       if (!matchesNode(tx, rule.conditions)) continue;
@@ -149,6 +176,15 @@ export function planRun(
         continue;
       }
 
+      // A transaction is claimed at most once per run, so its stored state here
+      // is still the pre-run state and can be compared directly.
+      const unchanged =
+        tx.categoryId === rule.categoryId &&
+        tx.source === "RULE" &&
+        tx.categoryRuleId === rule.id &&
+        tx.isApproved;
+      if (unchanged) unchangedCount++;
+
       claimed.add(tx.id);
       matched.push(tx.id);
       matches.push({
@@ -157,6 +193,7 @@ export function planRun(
         categoryId: rule.categoryId,
         previousCategoryId: currentCategory.get(tx.id) ?? null,
         previousSource: currentSource.get(tx.id) ?? null,
+        unchanged,
       });
       currentCategory.set(tx.id, rule.categoryId);
       currentSource.set(tx.id, "RULE");
@@ -167,6 +204,7 @@ export function planRun(
       name: rule.name,
       priority: rule.priority,
       matched,
+      unchanged: unchangedCount,
       skippedManual,
     });
   }
