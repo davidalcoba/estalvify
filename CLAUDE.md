@@ -46,6 +46,14 @@ status, or configuration MUST update the relevant doc (and `.env.example` for ne
 vars) **in the same change** — never leave the docs describing a state the code no
 longer matches.
 
+## Keep route skeletons in sync
+
+Every route under `app/(app)` has a `loading.tsx` skeleton. It is part of the
+page's design: **changing a page's layout MUST update that route's `loading.tsx`
+in the same change**, and a new route ships one from the start. Build them from
+`components/layout/skeletons`. See `ai-instructions/context/UI_RULES.md` →
+"Navigation Feedback".
+
 ## Context
 - `./ai-instructions/context/README.md`
 - `./ai-instructions/context/PROJECT_OVERVIEW.md`

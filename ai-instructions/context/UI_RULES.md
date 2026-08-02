@@ -67,31 +67,48 @@ Pages can compose UI, but base controls must come from `components/ui/*`.
 
 ## Navigation Feedback (every route needs a `loading.tsx`)
 
-Every page under `app/(app)` is an async server component that queries the
-database, so a nav click has a visible gap before the new route paints. Without
-feedback the app reads as frozen. Three layers cover it:
+Every page under `app/(app)` is a server component behind an authenticated,
+dynamic layout, so a nav click has a visible gap before the new route paints.
+Without feedback the app reads as frozen. Three layers cover it:
 
-- **`loading.tsx` per route — required.** Any route whose `page.tsx` awaits data
-  MUST ship a sibling `loading.tsx`. Next renders it the instant the link is
-  clicked, and prefetches it, so the main area swaps to a skeleton immediately.
-  A route with no awaits (for example `insights`, which fetches from the client)
-  does not need one — a skeleton there would only flash.
+- **`loading.tsx` per route — required.** Every route under `app/(app)` that
+  renders UI MUST ship a sibling `loading.tsx`. Next renders it the instant the
+  link is clicked, and prefetches it, so the main area swaps to a skeleton
+  immediately. This holds even for a page that awaits nothing (`insights`
+  generates from the client): the segment is still fetched over the network.
+  The only exception is a route that just `redirect()`s (`budget` → `plan`) —
+  it renders no UI, and the destination has its own skeleton.
 - **Sidebar spinner.** `components/layout/nav-progress` exports `NavItemIcon`,
   which swaps a nav item's icon for a spinner while that route loads. It is
   already wired into `AppSidebar`.
 - **Top progress bar.** `NavProgressBar` renders once in the `(app)` layout and
   shows a thin indeterminate bar for any pending instrumented link.
 
-Build skeletons from `components/layout/skeletons` (`PageHeaderSkeleton`,
-`KpiGridSkeleton`, `ChartCardSkeleton`, `ListCardSkeleton`,
-`TableCardSkeleton`) rather than hand-rolling `Skeleton` blocks. The skeleton
-must mirror the real layout — same wrappers, same grid, same card count — or
-the page jumps when it resolves. In particular, never draw a subtitle line:
-`PageHeader` has no subtitle.
-
 To instrument a `<Link>` outside the sidebar, render a component that calls
 `useLinkPending()` as a child of that link; it reports into the shared store
 that drives the top bar.
+
+### Keeping a skeleton honest
+
+A skeleton is part of the page's design, not a one-off. **Any change to a
+page's layout MUST update that route's `loading.tsx` in the same change**, and
+any new route MUST ship one from the start. A stale skeleton is worse than
+none — it promises a layout that isn't coming and the page jumps when it
+resolves.
+
+In practice, when you touch a `page.tsx` or its top-level view component, ask:
+did the header, the number of cards, the grid columns, or the row shape
+change? If yes, the skeleton changes too.
+
+- Build from `components/layout/skeletons` (`PageHeaderSkeleton`,
+  `KpiGridSkeleton`, `ChartCardSkeleton`, `ListCardSkeleton`,
+  `TableCardSkeleton`) rather than hand-rolling `Skeleton` blocks. If a page
+  needs a shape that isn't there and another page could reuse it, add it to
+  that module instead of inlining it.
+- Mirror the real layout: same outer spacing (`space-y-4` vs `space-y-6`),
+  same grid classes, same card count, same desktop/mobile split.
+- Skeleton the *first* screen, not the empty state — assume data exists.
+- Never draw a subtitle line: `PageHeader` has no subtitle.
 
 ## Desktop and Mobile: First-Class Views
 
