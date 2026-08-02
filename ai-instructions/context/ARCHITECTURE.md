@@ -22,6 +22,38 @@
   deployment; merges to `main` promote to production. Vercel-native features in
   use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
   (`/api/queues/sync-connection`).
+
+### Environments and branching
+
+Three tiers, mapped onto Vercel's two deployment targets:
+
+| Branch | Vercel target | URL |
+| --- | --- | --- |
+| `main` (Vercel production branch) | Production | `https://estalvify.vercel.app` |
+| `preview` (repo default branch) | Preview | `https://estalvify-preview.vercel.app` — fixed |
+| feature branches | Preview | `https://estalvify-git-<branch>-davids-projects-5e7f6837.vercel.app` |
+
+- Feature branches merge into `preview`; only `preview` opens a PR into `main`.
+  Enforced by the `Base branch policy` job in `.github/workflows/ci.yml`, which
+  is a required check on `main` (GitHub rulesets can restrict a PR's base branch
+  but not its head branch, so the rule has to live in CI).
+- The fixed preview URL is a **branch-assigned domain** on the Vercel project
+  (`estalvify-preview.vercel.app` → `gitBranch: preview`), not a custom
+  environment — custom environments are a paid-plan feature and this account has
+  none available. Vercel keeps the alias pointed at the newest `preview` build.
+- Env vars follow the same shape. Most are set once for
+  `production, preview, development`. Anything that must differ on the
+  integration branch is added as a **branch-scoped** preview var
+  (`target: ["preview"], gitBranch: "preview"`), which Vercel prefers over the
+  unscoped preview value. Today that is `NEXT_PUBLIC_APP_URL`.
+- `AUTH_REDIRECT_PROXY_URL` and `ENABLE_BANKING_REDIRECT_URI` deliberately point
+  at the production URL in every environment: both must exactly match a redirect
+  URI registered with Google OAuth / Enable Banking, so previews authenticate
+  through production and are redirected back.
+- Database: production runs against the Neon primary. Preview deployments get
+  their database URL from the Neon–Vercel integration; to pin the `preview`
+  branch to a dedicated Neon branch, add branch-scoped `DATABASE_URL` /
+  `DATABASE_URL_UNPOOLED` preview vars with `gitBranch: preview`.
 - Tooling access to Vercel: a read-scoped API token is exposed as the
   `VERCEL_TOKEN` environment variable (secret — never commit or print it). Use it
   with the REST API at `https://api.vercel.com` to look up deployment URLs,

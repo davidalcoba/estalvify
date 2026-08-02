@@ -52,8 +52,17 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 - Add Vitest tests for any new pure logic
 - Validate key flows manually
 - Summarize what is implemented vs pending
+- Branch off `preview` and open the PR **against `preview`**, never against
+  `main` — CI rejects any PR into `main` that does not come from `preview`.
+  See `CLAUDE.md` → "Branching model".
 - After pushing the branch / opening the PR, report the Vercel preview URL
   (see `CLAUDE.md` → "Deployment & preview URLs").
+
+11. Promote to production
+- Merging into `preview` redeploys the fixed integration URL
+  `https://estalvify-preview.vercel.app`. Verify the feature there.
+- When the batch is ready, open a `preview` → `main` PR; merging it deploys to
+  production.
 
 ## Delivery Notes Template
 

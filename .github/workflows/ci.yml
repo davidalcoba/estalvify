@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, preview]
   pull_request:
 
 # Cancel in-progress runs for the same ref when a new commit is pushed.
@@ -11,6 +11,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Enforces the branching model: feature branches merge into `preview`, and
+  # `preview` is the only branch allowed to open a pull request into `main`.
+  # GitHub rulesets cannot restrict a pull request's *head* branch, so the check
+  # lives here and is what the `main` ruleset marks as required.
+  base-branch:
+    name: Base branch policy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Only `preview` may target `main`
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "preview" ]; then
+            echo "::error::PRs into 'main' may only come from 'preview' (this one is from '$HEAD'). Retarget it at 'preview'."
+            exit 1
+          fi
+          echo "OK: '$HEAD' -> '$BASE'"
+
   verify:
     name: Typecheck · Lint · Test
     runs-on: ubuntu-latest
