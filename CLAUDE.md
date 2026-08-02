@@ -38,6 +38,21 @@ whose `meta.githubCommitSha` matches the pushed commit) and give the user
 `BUILDING`, say so and offer to re-check. Preview URLs are behind Vercel
 Authentication, so mention that a team login may be required to open them.
 
+## Databases (Neon)
+
+Each deployment target has its own Neon branch: production → Neon `main`, the
+`preview` branch → Neon `preview`, feature branches → an ephemeral
+`preview/<git-branch>` created by the Neon–Vercel integration. **Never point a
+preview at the production database.** See
+`ai-instructions/context/ARCHITECTURE.md` → "Databases (Neon)" for the branch
+map, the Vercel env var layout, and why there is no generic `DIRECT_URL`.
+
+A Neon API key is provided as `NEON_DB_KEY` (secret — never commit it or print
+its value). `console.neon.tech` is reachable; the org id
+(`org-autumn-pond-35905682`) is a required query param on most endpoints. Direct
+Postgres (port 5432) is blocked by the network policy — query a branch through
+Neon's SQL-over-HTTP endpoint instead.
+
 ## Keep these docs up to date
 
 The docs under `ai-instructions/context/` are the source of truth and MUST stay
