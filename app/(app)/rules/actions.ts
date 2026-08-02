@@ -6,7 +6,12 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/app/generated/prisma";
 import { parseConditions } from "@/lib/rules/rule-dto";
 import type { ConditionGroup, RuleCondition } from "@/lib/rules/rule-dto";
-import { deleteRuleForUser, evaluateConditions, runRules } from "@/lib/rules/apply";
+import {
+  deleteRuleForUser,
+  evaluateConditions,
+  runRules,
+  undoRuleRun,
+} from "@/lib/rules/apply";
 import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
@@ -258,6 +263,24 @@ export async function updateRule(input: {
   });
 
   revalidatePath("/rules");
+}
+
+// ─────────────────────────────────────────────
+// Revert everything a rule has categorized
+// ─────────────────────────────────────────────
+
+export async function revertRule(
+  ruleId: string
+): Promise<{ reverted: number }> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const { reverted } = await undoRuleRun(session.user.id, ruleId);
+
+  revalidatePath("/rules");
+  revalidateAfterCategorization();
+
+  return { reverted };
 }
 
 // ─────────────────────────────────────────────

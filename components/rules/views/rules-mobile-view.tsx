@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import {
   formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
-import { RuleDeleteDialog } from "@/components/rules/rule-delete-dialog";
+import { RuleConfirmDialog } from "@/components/rules/rule-confirm-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
 
@@ -45,8 +45,12 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
   const {
     isPending,
     result,
+    confirmingRevert,
     confirmingDelete,
     handleExecute,
+    requestRevert,
+    cancelRevert,
+    handleRevert,
     requestDelete,
     cancelDelete,
     handleDelete,
@@ -59,9 +63,35 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
     {editing && (
       <RuleEditDialog rule={rule} categories={categories} onClose={() => setEditing(false)} />
     )}
-    <RuleDeleteDialog
-      rule={rule}
+    <RuleConfirmDialog
+      open={confirmingRevert}
+      title={<>Revert &ldquo;{rule.name}&rdquo;?</>}
+      description={
+        <p>
+          Every transaction this rule categorized goes back to its previous
+          category, or becomes uncategorized. The rule itself is kept.
+        </p>
+      }
+      confirmLabel="Revert rule"
+      pendingLabel="Reverting…"
+      isPending={isPending}
+      onCancel={cancelRevert}
+      onConfirm={handleRevert}
+    />
+    <RuleConfirmDialog
       open={confirmingDelete}
+      title={<>Delete &ldquo;{rule.name}&rdquo;?</>}
+      description={
+        <>
+          <p>
+            Transactions it categorized keep their category, but lose the link to
+            this rule — so they can no longer be reverted.
+          </p>
+          <p>To stop the rule without losing it, deactivate it instead.</p>
+        </>
+      }
+      confirmLabel="Delete rule"
+      pendingLabel="Deleting…"
       isPending={isPending}
       onCancel={cancelDelete}
       onConfirm={handleDelete}
@@ -162,6 +192,18 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
               title="Run rule"
             >
               <Play className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={requestRevert}
+              disabled={isPending}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              aria-label="Revert rule"
+              title="Revert rule"
+            >
+              <Undo2 className="h-4 w-4" />
             </Button>
             <Button
               type="button"
