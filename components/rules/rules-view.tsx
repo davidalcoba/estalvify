@@ -20,10 +20,6 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
       <section>
         <div className="mb-4">
           <h3 className="text-base font-semibold">New rule</h3>
-          <p className="text-sm text-muted-foreground">
-            Define conditions, preview matching transactions, and execute to
-            categorize them.
-          </p>
         </div>
         <RuleBuilderForm categories={categories} locale={locale} />
       </section>
@@ -41,9 +37,6 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
               </span>
             )}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            Named rules are saved here and can be re-run at any time.
-          </p>
         </div>
 
         {/* Desktop table */}

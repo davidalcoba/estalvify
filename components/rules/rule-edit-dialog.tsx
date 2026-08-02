@@ -4,13 +4,18 @@ import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
+import { RuleMatchSelect } from "@/components/rules/rule-match-select";
 import {
   type CategoryRuleDTO,
+  type ConditionGroupOp,
   type RuleCondition,
   getDefaultOperator,
+  getDefaultValue,
+  hasConditionValue,
 } from "@/lib/rules/rule-dto";
 import { updateRule } from "@/app/(app)/rules/actions";
 
@@ -21,13 +26,21 @@ interface RuleEditDialogProps {
 }
 
 function defaultCondition(): RuleCondition {
-  return { field: "description", operator: getDefaultOperator("description"), value: "" };
+  return {
+    field: "any",
+    operator: getDefaultOperator("any"),
+    value: getDefaultValue("any"),
+  };
 }
 
 export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProps) {
   const [name, setName] = useState(rule.name);
-  const [conditions, setConditions] = useState<RuleCondition[]>(rule.conditions);
+  const [match, setMatch] = useState<ConditionGroupOp>(rule.match);
+  const [conditions, setConditions] = useState<RuleCondition[]>(
+    rule.conditionTree.children as RuleCondition[]
+  );
   const [categoryId, setCategoryId] = useState(rule.categoryId);
+  const [priority, setPriority] = useState(String(rule.priority));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -46,8 +59,9 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
         await updateRule({
           ruleId: rule.id,
           name,
-          conditions: conditions.filter((c) => c.value.trim() !== ""),
+          conditions: { op: match, children: conditions.filter(hasConditionValue) },
           categoryId,
+          priority: Number(priority) || 0,
         });
         onClose();
       } catch {
@@ -57,9 +71,10 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
   }
 
   const canSave =
+    !rule.isNested &&
     name.trim() !== "" &&
     categoryId !== "" &&
-    conditions.some((c) => c.value.trim() !== "") &&
+    conditions.some(hasConditionValue) &&
     !isPending;
 
   return (
@@ -83,34 +98,45 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
           </div>
 
           {/* Conditions */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Conditions{" "}
-              <span className="font-normal text-muted-foreground">(all must match)</span>
-            </label>
-            <div className="space-y-2">
-              {conditions.map((condition, index) => (
-                <RuleConditionRow
-                  key={index}
-                  condition={condition}
-                  index={index}
-                  onChange={handleConditionChange}
-                  onRemove={handleConditionRemove}
-                  canRemove={conditions.length > 1}
-                />
-              ))}
+          {rule.isNested ? (
+            // Nested groups can't round-trip through the one-level editor, so
+            // show them rather than silently flattening and losing the rule.
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Conditions</label>
+              <pre className="max-h-48 overflow-auto rounded-md border bg-muted/40 p-3 text-xs">
+                {JSON.stringify(rule.conditionTree, null, 2)}
+              </pre>
+              <p className="text-sm text-muted-foreground">
+                Nested groups — edit via MCP.
+              </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setConditions((prev) => [...prev, defaultCondition()])}
-              className="gap-1.5"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add condition
-            </Button>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <RuleMatchSelect value={match} onValueChange={setMatch} />
+              <div className="space-y-2">
+                {conditions.map((condition, index) => (
+                  <RuleConditionRow
+                    key={index}
+                    condition={condition}
+                    index={index}
+                    onChange={handleConditionChange}
+                    onRemove={handleConditionRemove}
+                    canRemove={conditions.length > 1}
+                  />
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setConditions((prev) => [...prev, defaultCondition()])}
+                className="gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add condition
+              </Button>
+            </div>
+          )}
 
           {/* Target category */}
           <div className="space-y-1.5">
@@ -123,6 +149,23 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
               ariaLabel="Categorize as"
               className="w-full"
             />
+          </div>
+
+          {/* Priority */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="rule-priority">
+              Priority
+            </label>
+            <Input
+              id="rule-priority"
+              type="number"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-32"
+            />
+            <p className="text-sm text-muted-foreground">
+              Lower runs first. First match wins.
+            </p>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

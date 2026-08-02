@@ -7,8 +7,9 @@
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
-import type { RuleCondition } from "@/lib/rules/rule-dto";
-import { buildRuleWhereClause } from "@/lib/rules/rule-evaluator";
+import type { ConditionGroup } from "@/lib/rules/rule-dto";
+import { runRules } from "@/lib/rules/apply";
+import type { RuleRunReport } from "@/lib/rules/apply";
 
 async function assertOwnedCategory(userId: string, categoryId: string) {
   const cat = await prisma.category.findUnique({
@@ -89,9 +90,10 @@ export async function updateCategoryForUser(
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
 export async function listRulesForUser(userId: string) {
+  // Listed in evaluation order: lower priority number runs first.
   const rules = await prisma.categoryRule.findMany({
     where: { userId },
-    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       name: true,
@@ -102,6 +104,9 @@ export async function listRulesForUser(userId: string) {
       category: { select: { name: true } },
       sourceCategoryId: true,
       sourceCategory: { select: { name: true } },
+      matchCount: true,
+      lastRunAt: true,
+      lastMatchAt: true,
     },
   });
   return rules.map((r) => ({
@@ -114,6 +119,11 @@ export async function listRulesForUser(userId: string) {
     targetCategory: r.category.name,
     sourceCategoryId: r.sourceCategoryId,
     sourceCategory: r.sourceCategory?.name ?? null,
+    matchCount: r.matchCount,
+    lastRunAt: r.lastRunAt?.toISOString() ?? null,
+    lastMatchAt: r.lastMatchAt?.toISOString() ?? null,
+    // Surfaces the rule that quietly does nothing.
+    neverMatched: r.lastRunAt !== null && r.matchCount === 0,
   }));
 }
 
@@ -121,7 +131,7 @@ export async function createRuleForUser(
   userId: string,
   input: {
     name: string;
-    conditions: RuleCondition[];
+    conditions: ConditionGroup;
     categoryId: string;
     sourceCategoryId?: string;
     priority?: number;
@@ -149,7 +159,7 @@ export async function updateRuleForUser(
   ruleId: string,
   input: {
     name?: string;
-    conditions?: RuleCondition[];
+    conditions?: ConditionGroup;
     categoryId?: string;
     isActive?: boolean;
     priority?: number;
@@ -175,105 +185,26 @@ export async function updateRuleForUser(
   return { id: ruleId };
 }
 
-/** Apply a set of conditions, categorizing all matching transactions (RULE/APPROVED). */
-async function applyRule(
-  ruleId: string | null,
-  userId: string,
-  conditions: RuleCondition[],
-  sourceCategoryId: string | null,
-  categoryId: string,
-): Promise<number> {
-  const where = buildRuleWhereClause(userId, conditions, sourceCategoryId);
-  const txs = await prisma.transaction.findMany({ where, select: { id: true } });
-  if (txs.length === 0) return 0;
-
-  const allIds = txs.map((t) => t.id);
-  const now = new Date();
-  const existing = await prisma.transactionCategorization.findMany({
-    where: { transactionId: { in: allIds } },
-    select: { transactionId: true },
-  });
-  const existingIds = new Set(existing.map((e) => e.transactionId));
-  const newIds = allIds.filter((id) => !existingIds.has(id));
-
-  await Promise.all([
-    existingIds.size > 0
-      ? prisma.transactionCategorization.updateMany({
-          where: { transactionId: { in: [...existingIds] } },
-          data: {
-            categoryId,
-            source: "RULE",
-            status: "APPROVED",
-            categoryRuleId: ruleId,
-            approvedAt: now,
-            rejectedAt: null,
-            note: null,
-          },
-        })
-      : Promise.resolve(),
-    newIds.length > 0
-      ? prisma.transactionCategorization.createMany({
-          data: newIds.map((id) => ({
-            transactionId: id,
-            categoryId,
-            source: "RULE" as const,
-            status: "APPROVED" as const,
-            categoryRuleId: ruleId,
-            approvedAt: now,
-          })),
-          skipDuplicates: true,
-        })
-      : Promise.resolve(),
-  ]);
-
-  return txs.length;
-}
-
+/**
+ * Execute one rule now. Delegates to the shared engine so MCP and the /rules
+ * server actions can't drift apart on precedence or ordering.
+ */
 export async function runRuleForUser(
   userId: string,
   ruleId: string,
-): Promise<number> {
+  options: { dryRun?: boolean; force?: boolean } = {},
+): Promise<RuleRunReport> {
   const rule = await prisma.categoryRule.findUnique({
     where: { id: ruleId },
-    select: {
-      userId: true,
-      categoryId: true,
-      conditions: true,
-      sourceCategoryId: true,
-    },
+    select: { userId: true },
   });
   if (!rule || rule.userId !== userId) throw new Error("Rule not found");
-  return applyRule(
-    ruleId,
-    userId,
-    rule.conditions as unknown as RuleCondition[],
-    rule.sourceCategoryId,
-    rule.categoryId,
-  );
+  return runRules(userId, { ruleIds: [ruleId], ...options });
 }
 
-export async function runAllRulesForUser(userId: string) {
-  const rules = await prisma.categoryRule.findMany({
-    where: { userId, isActive: true },
-    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      categoryId: true,
-      conditions: true,
-      sourceCategoryId: true,
-    },
-  });
-  const results: { ruleId: string; name: string; categorized: number }[] = [];
-  for (const r of rules) {
-    const categorized = await applyRule(
-      r.id,
-      userId,
-      r.conditions as unknown as RuleCondition[],
-      r.sourceCategoryId,
-      r.categoryId,
-    );
-    results.push({ ruleId: r.id, name: r.name, categorized });
-  }
-  return results;
+export async function runAllRulesForUser(
+  userId: string,
+  options: { dryRun?: boolean; force?: boolean } = {},
+): Promise<RuleRunReport> {
+  return runRules(userId, options);
 }

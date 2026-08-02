@@ -65,6 +65,21 @@
     (PSD2 client), `banking/transaction-parse` (pure ID/remittance parsing),
     `banking/sync-errors` (pure 401/429 classifiers), `banking/connection-status`
     (`expireStaleConsents` — flips connections past `consentExpiresAt` to EXPIRED).
+  - Rule engine: `lib/rules/` — `rule-matcher.ts` and `rule-plan.ts` are **pure**
+    (condition evaluation; run ordering, precedence and the undo trail), `apply.ts`
+    does the loading and writing, `rule-evaluator.ts` is only the SQL prefilter and
+    `rule-dto.ts` holds the types plus `normalizeText` / `parseConditions`.
+    Matching runs **in memory**, not as a Prisma `where`: accent folding, word
+    boundaries, regex and the `any` field are not expressible in SQL without the
+    Postgres `unaccent` extension, and with ~1.5k rows per user the prefilter +
+    in-memory pass is cheap. `apply.ts` is the single execution path — both the MCP
+    layer and `app/(app)/rules/actions.ts` go through it, so run semantics cannot
+    drift. Rules run in **ascending priority** (lower number first, `createdAt`
+    tie-break), **first match wins**, and a `MANUAL` categorization is never
+    overwritten without an explicit `force`. Every run records an undo trail
+    (`previousCategoryId` / `previousSource`) so `undoRuleRun` can revert it, and
+    refreshes `matchCount` / `lastRunAt` / `lastMatchAt` on the rule. Rules also run
+    automatically at the end of a sync (uncategorized rows only).
   - Planning: `lib/plan/` — `plan-item.ts` (pure: monthly equivalents, per-month net
     for the forecast, per-category limits) and `plan-dto.ts` (server→client view model).
     Reuses `lib/budget/budget-progress` for the limit bars.
@@ -101,10 +116,14 @@ stored hashed.
 - `lib/mcp/tools.ts` — tool registry. **Every tool derives `userId` from the
   token and scopes all access to it** (same multi-user rule as the rest of the
   app). Tools reuse `lib/*` logic. Reads: `list_transactions` (date-range +
-  pagination), `list_categories`, `list_accounts`, `get_budgets`, `list_rules`.
-  Writes: `bulk_categorize` (`lib/mcp/categorize.ts`, capped), category
-  create/edit and rule create/edit/run via `lib/mcp/manage.ts` (parameterized
-  by userId, reusing `buildRuleWhereClause`), `sync_connections` (enqueues).
+  pagination — returns both `description` and `remittanceInfo` plus the
+  categorization source, which is what makes a misfiring rule debuggable),
+  `list_categories`, `list_accounts`, `get_budgets`, `list_rules` (with run
+  metrics), `test_rule` (evaluate conditions without saving). Writes:
+  `bulk_categorize` (`lib/mcp/categorize.ts`, capped), category create/edit and
+  rule create/edit via `lib/mcp/manage.ts` (parameterized by userId), `run_rule`
+  (supports `dryRun` and `force`) and `undo_rule_run` via `lib/rules/apply.ts`,
+  `sync_connections` (enqueues).
 
 ### Access control
 

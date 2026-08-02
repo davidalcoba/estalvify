@@ -4,8 +4,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/app/generated/prisma";
-import type { RuleCondition } from "@/lib/rules/rule-dto";
-import { buildRuleWhereClause } from "@/lib/rules/rule-evaluator";
+import { parseConditions } from "@/lib/rules/rule-dto";
+import type { ConditionGroup, RuleCondition } from "@/lib/rules/rule-dto";
+import { evaluateConditions, runRules } from "@/lib/rules/apply";
 import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
@@ -16,31 +17,22 @@ const PREVIEW_LIMIT = 50;
 // ─────────────────────────────────────────────
 
 export async function previewRuleTransactions(
-  conditions: RuleCondition[],
+  conditions: ConditionGroup,
   sourceCategoryId: string | null
 ): Promise<{ transactions: TransactionListItemDTO[]; total: number }> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
 
-  const where = buildRuleWhereClause(userId, conditions, sourceCategoryId);
-
-  const [total, transactions] = await Promise.all([
-    prisma.transaction.count({ where }),
-    prisma.transaction.findMany({
-      where,
-      include: {
-        bankAccount: { select: { id: true, name: true } },
-        categorization: { include: { category: { select: { name: true, color: true } } } },
-      },
-      orderBy: [{ valueDate: "desc" }, { id: "asc" }],
-      take: PREVIEW_LIMIT,
-    }),
-  ]);
+  const { matched, transactions } = await evaluateConditions(
+    session.user.id,
+    conditions,
+    sourceCategoryId,
+    PREVIEW_LIMIT
+  );
 
   return {
     transactions: transactions.map(toTransactionListItemDTO),
-    total,
+    total: matched,
   };
 }
 
@@ -50,7 +42,7 @@ export async function previewRuleTransactions(
 
 export async function saveRule(input: {
   name: string;
-  conditions: RuleCondition[];
+  conditions: ConditionGroup;
   sourceCategoryId: string | null;
   categoryId: string;
   priority: number;
@@ -94,23 +86,13 @@ export async function executeRule(
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: ruleId },
-    select: {
-      userId: true,
-      categoryId: true,
-      conditions: true,
-      sourceCategoryId: true,
-    },
+    select: { userId: true },
   });
-
   if (!rule || rule.userId !== userId) throw new Error("Rule not found");
 
-  return applyRuleConditions(
-    userId,
-    ruleId,
-    rule.conditions as unknown as RuleCondition[],
-    rule.sourceCategoryId,
-    rule.categoryId
-  );
+  const report = await runRules(userId, { ruleIds: [ruleId] });
+  revalidateAfterCategorization();
+  return { categorized: report.totalMatched };
 }
 
 // ─────────────────────────────────────────────
@@ -118,7 +100,7 @@ export async function executeRule(
 // ─────────────────────────────────────────────
 
 export async function executeRuleOnce(input: {
-  conditions: RuleCondition[];
+  conditions: ConditionGroup;
   sourceCategoryId: string | null;
   categoryId: string;
   ruleName: string | null;
@@ -132,33 +114,45 @@ export async function executeRuleOnce(input: {
     await validateCategoryAccess(userId, input.sourceCategoryId);
   }
 
-  // Optionally save the rule if a name is provided
-  let savedRuleId: string | null = null;
-  if (input.ruleName?.trim()) {
-    const rule = await prisma.categoryRule.create({
-      data: {
-        userId,
-        name: input.ruleName.trim(),
-        conditions: input.conditions as unknown as Prisma.InputJsonValue,
-        sourceCategoryId: input.sourceCategoryId,
-        categoryId: input.categoryId,
-        isActive: true,
-      },
-      select: { id: true },
-    });
-    savedRuleId = rule.id;
+  // The engine only runs saved rules, so an unnamed one-off is persisted as an
+  // inactive rule, run, and then removed. That keeps a single execution path
+  // (precedence, first-match-wins, undo trail) instead of a parallel one.
+  const rule = await prisma.categoryRule.create({
+    data: {
+      userId,
+      name: input.ruleName?.trim() || "Untitled rule",
+      conditions: input.conditions as unknown as Prisma.InputJsonValue,
+      sourceCategoryId: input.sourceCategoryId,
+      categoryId: input.categoryId,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  const keep = Boolean(input.ruleName?.trim());
+  try {
+    const report = await runRules(userId, { ruleIds: [rule.id] });
+    if (!keep) {
+      // Detach the categorizations before deleting, so the rows survive and
+      // stay attributable to nothing rather than cascading away.
+      await prisma.transactionCategorization.updateMany({
+        where: { categoryRuleId: rule.id },
+        data: { categoryRuleId: null },
+      });
+      await prisma.categoryRule.delete({ where: { id: rule.id } });
+    }
     revalidatePath("/rules");
+    revalidateAfterCategorization();
+    return {
+      categorized: report.totalMatched,
+      savedRuleId: keep ? rule.id : null,
+    };
+  } catch (err) {
+    if (!keep) {
+      await prisma.categoryRule.delete({ where: { id: rule.id } }).catch(() => {});
+    }
+    throw err;
   }
-
-  const result = await applyRuleConditions(
-    userId,
-    savedRuleId,
-    input.conditions,
-    input.sourceCategoryId,
-    input.categoryId
-  );
-
-  return { categorized: result.categorized, savedRuleId };
 }
 
 // ─────────────────────────────────────────────
@@ -174,7 +168,7 @@ export async function getUserRules(): Promise<
 
   const rules = await prisma.categoryRule.findMany({
     where: { userId, isActive: true },
-    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       name: true,
@@ -205,40 +199,41 @@ export async function addConditionToRule(input: {
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: input.ruleId },
-    select: { userId: true, conditions: true, categoryId: true, sourceCategoryId: true },
+    select: { userId: true, conditions: true },
   });
   if (!rule || rule.userId !== userId) throw new Error("Rule not found");
 
-  const updatedConditions = [
-    ...(rule.conditions as unknown as RuleCondition[]),
-    input.condition,
-  ];
+  // Appending widens an OR rule and narrows an AND rule — the group's own
+  // operator decides, which is what the editor shows the user.
+  const tree = parseConditions(rule.conditions);
+  const updated: ConditionGroup = {
+    op: tree.op,
+    children: [...tree.children, input.condition],
+  };
 
   await prisma.categoryRule.update({
     where: { id: input.ruleId },
-    data: { conditions: updatedConditions as unknown as Prisma.InputJsonValue },
+    data: { conditions: updated as unknown as Prisma.InputJsonValue },
   });
 
-  revalidatePath("/rules");
+  const report = await runRules(userId, { ruleIds: [input.ruleId] });
 
-  return applyRuleConditions(
-    userId,
-    input.ruleId,
-    updatedConditions,
-    rule.sourceCategoryId,
-    rule.categoryId
-  );
+  revalidatePath("/rules");
+  revalidateAfterCategorization();
+
+  return { categorized: report.totalMatched };
 }
 
 // ─────────────────────────────────────────────
-// Update a rule (name, conditions, target category)
+// Update a rule (name, conditions, target category, priority)
 // ─────────────────────────────────────────────
 
 export async function updateRule(input: {
   ruleId: string;
   name: string;
-  conditions: RuleCondition[];
+  conditions: ConditionGroup;
   categoryId: string;
+  priority?: number;
 }): Promise<void> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
@@ -258,6 +253,7 @@ export async function updateRule(input: {
       name: input.name.trim(),
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       categoryId: input.categoryId,
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
     },
   });
 
@@ -326,66 +322,8 @@ async function validateCategoryAccess(
   }
 }
 
-async function applyRuleConditions(
-  userId: string,
-  ruleId: string | null,
-  conditions: RuleCondition[],
-  sourceCategoryId: string | null,
-  categoryId: string
-): Promise<{ categorized: number }> {
-  const where = buildRuleWhereClause(userId, conditions, sourceCategoryId);
-  const transactions = await prisma.transaction.findMany({
-    where,
-    select: { id: true },
-  });
-
-  if (transactions.length === 0) return { categorized: 0 };
-
-  const allIds = transactions.map((tx) => tx.id);
-  const now = new Date();
-
-  // Find which transactions already have a categorization row
-  const existing = await prisma.transactionCategorization.findMany({
-    where: { transactionId: { in: allIds } },
-    select: { transactionId: true },
-  });
-  const existingIds = new Set(existing.map((e) => e.transactionId));
-  const newIds = allIds.filter((id) => !existingIds.has(id));
-
-  // Two bulk writes — no interactive transaction needed
-  await Promise.all([
-    existingIds.size > 0
-      ? prisma.transactionCategorization.updateMany({
-          where: { transactionId: { in: [...existingIds] } },
-          data: {
-            categoryId,
-            source: "RULE",
-            status: "APPROVED",
-            categoryRuleId: ruleId,
-            approvedAt: now,
-            rejectedAt: null,
-            note: null,
-          },
-        })
-      : Promise.resolve(),
-    newIds.length > 0
-      ? prisma.transactionCategorization.createMany({
-          data: newIds.map((id) => ({
-            transactionId: id,
-            categoryId,
-            source: "RULE",
-            status: "APPROVED",
-            categoryRuleId: ruleId,
-            approvedAt: now,
-          })),
-          skipDuplicates: true,
-        })
-      : Promise.resolve(),
-  ]);
-
+function revalidateAfterCategorization(): void {
   revalidatePath("/categorize");
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
-
-  return { categorized: transactions.length };
 }

@@ -8,6 +8,7 @@ import {
   type CategoryRuleDTO,
   FIELD_LABELS,
   OPERATOR_LABELS,
+  formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
 import type { Category } from "@/components/categorize/category-options";
@@ -84,7 +85,16 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
           {!rule.isActive && (
             <Badge variant="secondary" className="text-xs">Inactive</Badge>
           )}
+          {rule.neverMatched && (
+            <Badge variant="outline" className="text-xs text-warning border-warning">
+              Never matched
+            </Badge>
+          )}
         </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Priority {rule.priority}
+          {rule.lastRunAt && ` · ${rule.matchCount} matched`}
+        </p>
         {result && (
           <p className="text-xs text-success font-medium mt-0.5">{result}</p>
         )}
@@ -92,15 +102,20 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
 
       {/* Conditions summary */}
       <td className="px-4 py-3 hidden lg:table-cell">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs font-medium text-muted-foreground">
+            {rule.match === "OR" ? "Any" : "All"}
+          </span>
           {rule.conditions.slice(0, 2).map((c, i) => (
             <span
               key={i}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded px-2 py-0.5"
             >
               <span className="font-medium">{FIELD_LABELS[c.field]}</span>
-              <span>{OPERATOR_LABELS[c.operator]}</span>
-              <span className="font-medium truncate max-w-[80px]">&quot;{c.value}&quot;</span>
+              <span>{c.negate ? "not " : ""}{OPERATOR_LABELS[c.operator]}</span>
+              <span className="font-medium truncate max-w-[80px]">
+                &quot;{formatConditionValue(c)}&quot;
+              </span>
             </span>
           ))}
           {rule.conditions.length > 2 && (

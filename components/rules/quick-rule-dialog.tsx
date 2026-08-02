@@ -9,7 +9,13 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
-import { type RuleCondition, getDefaultOperator } from "@/lib/rules/rule-dto";
+import {
+  type RuleCondition,
+  type RuleConditionField,
+  getDefaultOperator,
+  getDefaultValue,
+  hasConditionValue,
+} from "@/lib/rules/rule-dto";
 import { executeRuleOnce, addConditionToRule, getUserRules } from "@/app/(app)/rules/actions";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
@@ -29,12 +35,34 @@ interface QuickRuleDialogProps {
 
 type DialogMode = "new" | "existing";
 
-function getValueForField(tx: TransactionListItemDTO, field: "description" | "remittanceInfo"): string {
-  return field === "description" ? (tx.description ?? "") : (tx.remittanceInfo ?? "");
+/** Prefill from the transaction so the common case is one click. */
+function getValueForField(
+  tx: TransactionListItemDTO,
+  field: RuleConditionField
+): RuleCondition["value"] {
+  switch (field) {
+    case "any":
+    case "description":
+      return tx.description ?? "";
+    case "remittanceInfo":
+      return tx.remittanceInfo ?? "";
+    case "amount":
+      return Math.abs(tx.amount);
+    case "direction":
+      return tx.direction;
+    case "account":
+      return tx.bankAccount.name;
+    default:
+      return getDefaultValue(field);
+  }
 }
 
 function buildInitialCondition(tx: TransactionListItemDTO): RuleCondition {
-  return { field: "description", operator: getDefaultOperator("description"), value: tx.description ?? "" };
+  return {
+    field: "any",
+    operator: getDefaultOperator("any"),
+    value: tx.description ?? "",
+  };
 }
 
 export function QuickRuleDialog({
@@ -75,7 +103,7 @@ export function QuickRuleDialog({
   }
 
   function handleSave() {
-    if (!condition.value.trim()) return;
+    if (!hasConditionValue(condition)) return;
     setError(null);
     setResult(null);
 
@@ -99,7 +127,7 @@ export function QuickRuleDialog({
       startTransition(async () => {
         try {
           const res = await executeRuleOnce({
-            conditions: [condition],
+            conditions: { op: "AND", children: [condition] },
             sourceCategoryId: null,
             categoryId: targetCategoryId,
             ruleName: ruleName.trim() || null,
@@ -118,7 +146,7 @@ export function QuickRuleDialog({
   }
 
   const canSave =
-    condition.value.trim() !== "" &&
+    hasConditionValue(condition) &&
     !isPending &&
     (dialogMode === "new" ? !!targetCategoryId : !!selectedRuleId);
 

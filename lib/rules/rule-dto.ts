@@ -1,23 +1,155 @@
 // Types and DTOs for transaction categorization rules
 
-export type RuleConditionField = "description" | "remittanceInfo";
+// ─────────────────────────────────────────────
+// Condition model
+// ─────────────────────────────────────────────
+
+/**
+ * `any` matches against description + remittanceInfo together. It is the default:
+ * a user rule shouldn't have to know which ISO 20022 field the text landed in
+ * (see `parseRemittanceFields` — merchant names end up in `description`, while
+ * `remittanceInfo` holds the operation type and is often null).
+ */
+export type RuleConditionField =
+  | "any"
+  | "description"
+  | "remittanceInfo"
+  | "amount"
+  | "direction"
+  | "account";
 
 export type RuleConditionOperator =
   | "contains"
   | "equals"
   | "startsWith"
-  | "endsWith";
+  | "endsWith"
+  | "word" // whole-word match — wraps the escaped value in \b…\b
+  | "matches" // raw regex, validated when the rule is saved
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "between";
+
+export type RuleConditionValue = string | number | [number, number];
 
 export interface RuleCondition {
   field: RuleConditionField;
   operator: RuleConditionOperator;
-  value: string;
+  value: RuleConditionValue;
+  negate?: boolean;
 }
+
+export type ConditionGroupOp = "AND" | "OR";
+
+export interface ConditionGroup {
+  op: ConditionGroupOp;
+  children: ConditionNode[];
+}
+
+export type ConditionNode = ConditionGroup | RuleCondition;
+
+export function isConditionGroup(node: ConditionNode): node is ConditionGroup {
+  return "op" in node && Array.isArray((node as ConditionGroup).children);
+}
+
+// ─────────────────────────────────────────────
+// Text normalization
+// ─────────────────────────────────────────────
+
+/**
+ * Fold accents, upper-case and collapse whitespace. Applied to BOTH sides of
+ * every text comparison so `AMORTIZACION` matches `AMORTIZACIÓN` and Catalan
+ * spellings like `AIGÜES` are reachable without typing the diacritics.
+ */
+export function normalizeText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ─────────────────────────────────────────────
+// Parsing stored conditions
+// ─────────────────────────────────────────────
+
+/** Guard against pathological user-authored patterns reaching the regex engine. */
+export const MAX_CONDITION_VALUE_LENGTH = 200;
+
+const TEXT_OPERATOR_SET = new Set<RuleConditionOperator>([
+  "contains",
+  "equals",
+  "startsWith",
+  "endsWith",
+  "word",
+  "matches",
+]);
+
+const NUMERIC_OPERATOR_SET = new Set<RuleConditionOperator>([
+  "equals",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "between",
+]);
+
+function isRuleConditionLike(value: unknown): value is RuleCondition {
+  if (typeof value !== "object" || value === null) return false;
+  const c = value as Record<string, unknown>;
+  return typeof c.field === "string" && typeof c.operator === "string";
+}
+
+/**
+ * Read the `conditions` JSON column into a condition tree.
+ *
+ * Rules created before the tree model stored a flat array joined with AND, so a
+ * bare array is read as `{ op: "AND", children }`. This keeps existing rows
+ * working without a data migration.
+ */
+export function parseConditions(raw: unknown): ConditionGroup {
+  if (Array.isArray(raw)) {
+    return { op: "AND", children: raw.filter(isRuleConditionLike) };
+  }
+  if (typeof raw === "object" && raw !== null && "op" in raw) {
+    const group = raw as ConditionGroup;
+    const op: ConditionGroupOp = group.op === "OR" ? "OR" : "AND";
+    return { op, children: Array.isArray(group.children) ? group.children : [] };
+  }
+  if (isRuleConditionLike(raw)) {
+    return { op: "AND", children: [raw] };
+  }
+  return { op: "AND", children: [] };
+}
+
+/** Every leaf condition in the tree, depth-first. Used for compact UI summaries. */
+export function flattenConditions(node: ConditionNode): RuleCondition[] {
+  if (!isConditionGroup(node)) return [node];
+  return node.children.flatMap(flattenConditions);
+}
+
+/** True when the tree has a nested group — i.e. the one-level editor can't represent it. */
+export function isNestedTree(group: ConditionGroup): boolean {
+  return group.children.some(isConditionGroup);
+}
+
+// ─────────────────────────────────────────────
+// DTO
+// ─────────────────────────────────────────────
 
 export interface CategoryRuleDTO {
   id: string;
   name: string;
+  /** Flattened leaf conditions — for compact rendering in the rule list. */
   conditions: RuleCondition[];
+  /** Full tree, for the editor. */
+  conditionTree: ConditionGroup;
+  /** How the top-level conditions combine. */
+  match: ConditionGroupOp;
+  /** True when the tree is nested, so the one-level editor renders read-only. */
+  isNested: boolean;
   sourceCategoryId: string | null;
   sourceCategoryName: string | null;
   sourceCategoryColor: string | null;
@@ -26,37 +158,115 @@ export interface CategoryRuleDTO {
   categoryColor: string;
   isActive: boolean;
   priority: number;
+  matchCount: number;
+  lastRunAt: string | null;
+  lastMatchAt: string | null;
+  /** Has run and caught nothing — usually the wrong field or a too-narrow word. */
+  neverMatched: boolean;
   createdAt: string;
 }
 
 // Labels for UI rendering
 
 export const FIELD_LABELS: Record<RuleConditionField, string> = {
+  any: "Any text",
   description: "Description",
   remittanceInfo: "Reference",
+  amount: "Amount",
+  direction: "Direction",
+  account: "Account",
 };
 
 export const OPERATOR_LABELS: Record<RuleConditionOperator, string> = {
   contains: "contains",
-  equals: "equals",
+  equals: "is",
   startsWith: "starts with",
   endsWith: "ends with",
+  word: "has the word",
+  matches: "matches regex",
+  gt: "greater than",
+  gte: "at least",
+  lt: "less than",
+  lte: "at most",
+  between: "between",
 };
 
 export const TEXT_OPERATORS: RuleConditionOperator[] = [
   "contains",
+  "word",
   "equals",
   "startsWith",
   "endsWith",
+  "matches",
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function getOperatorsForField(_field: RuleConditionField): RuleConditionOperator[] {
+export const NUMERIC_OPERATORS: RuleConditionOperator[] = [
+  "equals",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "between",
+];
+
+export const DIRECTION_OPERATORS: RuleConditionOperator[] = ["equals"];
+
+export function getOperatorsForField(
+  field: RuleConditionField
+): RuleConditionOperator[] {
+  if (field === "amount") return NUMERIC_OPERATORS;
+  if (field === "direction") return DIRECTION_OPERATORS;
   return TEXT_OPERATORS;
 }
 
-export function getDefaultOperator(_field: RuleConditionField): RuleConditionOperator {
+export function getDefaultOperator(
+  field: RuleConditionField
+): RuleConditionOperator {
+  if (field === "amount") return "between";
+  if (field === "direction") return "equals";
   return "contains";
+}
+
+/** A value that fits the field, used when the editor switches field type. */
+export function getDefaultValue(field: RuleConditionField): RuleConditionValue {
+  if (field === "amount") return [0, 0];
+  if (field === "direction") return "DEBIT";
+  return "";
+}
+
+/**
+ * Render a condition value for display. A range must be formatted explicitly —
+ * React would otherwise concatenate the tuple into "5060".
+ */
+export function formatConditionValue(condition: RuleCondition): string {
+  const { value } = condition;
+  if (Array.isArray(value)) return `${value[0]} – ${value[1]}`;
+  if (condition.field === "direction") {
+    return value === "CREDIT" ? "money in" : "money out";
+  }
+  return String(value);
+}
+
+/**
+ * True when a condition carries a usable value. Blank rows are dropped before
+ * saving so a half-filled editor row never becomes a rule that matches nothing.
+ */
+export function hasConditionValue(condition: RuleCondition): boolean {
+  const { value } = condition;
+  if (Array.isArray(value)) {
+    return value.length === 2 && value.every((v) => Number.isFinite(Number(v)));
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  return value.trim() !== "";
+}
+
+export function isOperatorValidForField(
+  field: RuleConditionField,
+  operator: RuleConditionOperator
+): boolean {
+  if (field === "amount") return NUMERIC_OPERATOR_SET.has(operator);
+  if (field === "direction") return operator === "equals";
+  return TEXT_OPERATOR_SET.has(operator);
 }
 
 export function toCategoryRuleDTO(rule: {
@@ -67,14 +277,21 @@ export function toCategoryRuleDTO(rule: {
   categoryId: string;
   isActive: boolean;
   priority: number;
+  matchCount: number;
+  lastRunAt: Date | null;
+  lastMatchAt: Date | null;
   createdAt: Date;
   category: { name: string; color: string };
   sourceCategory: { name: string; color: string } | null;
 }): CategoryRuleDTO {
+  const tree = parseConditions(rule.conditions);
   return {
     id: rule.id,
     name: rule.name,
-    conditions: rule.conditions as RuleCondition[],
+    conditions: flattenConditions(tree),
+    conditionTree: tree,
+    match: tree.op,
+    isNested: isNestedTree(tree),
     sourceCategoryId: rule.sourceCategoryId,
     sourceCategoryName: rule.sourceCategory?.name ?? null,
     sourceCategoryColor: rule.sourceCategory?.color ?? null,
@@ -83,6 +300,10 @@ export function toCategoryRuleDTO(rule: {
     categoryColor: rule.category.color,
     isActive: rule.isActive,
     priority: rule.priority,
+    matchCount: rule.matchCount,
+    lastRunAt: rule.lastRunAt?.toISOString() ?? null,
+    lastMatchAt: rule.lastMatchAt?.toISOString() ?? null,
+    neverMatched: rule.lastRunAt !== null && rule.matchCount === 0,
     createdAt: rule.createdAt.toISOString(),
   };
 }

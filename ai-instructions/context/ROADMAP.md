@@ -13,6 +13,19 @@
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
 
+> **Post-roadmap — Motor de reglas v2.** Las condiciones pasan de un array plano AND a un
+> **árbol `{op, children}`** con OR y `negate`, campos nuevos (`any` por defecto, `amount`,
+> `direction`, `account`) y operadores `word` (límite de palabra) y `matches` (regex). El
+> matching se evalúa **en memoria** (`lib/rules/rule-matcher.ts`, puro) sobre un prefiltro SQL
+> estrecho, con **normalización de acentos** en ambos lados. La ejecución es determinista:
+> prioridad **ascendente** (número menor primero), first-match-wins, y la categorización
+> `MANUAL` **nunca** se sobreescribe sin `force`. Hay **dry run** (con `conflicts`), **undo**
+> (`undo_rule_run`, vía `previousCategoryId`/`previousSource`), métricas por regla
+> (`matchCount`/`lastRunAt`/`lastMatchAt`) y **auto-run al final del sync** sobre lo no
+> categorizado. `lib/rules/apply.ts` es el único camino de ejecución, compartido por MCP y las
+> Server Actions. Tools MCP nuevas: `test_rule`, `undo_rule_run`; `run_rule` acepta
+> `dryRun`/`force` y `list_transactions` ya devuelve `remittanceInfo`.
+
 > **Post-roadmap — Plan (planificador manual de flujo de caja).** El antiguo *Budget*
 > (un importe por categoría y mes) se ha sustituido por **Plan** (`/plan`): el usuario
 > declara a mano ingresos y gastos previstos, **varios por categoría** y con **cadencias**
@@ -33,7 +46,7 @@ recurrentes, etc.).
 | Sync de transacciones (cron diario + colas) | ✅ Estable | `app/api/cron/sync`, `app/api/queues/sync-connection`, `lib/queue.ts` |
 | Transacciones (solo lectura, vienen del banco) | ✅ Estable | `app/(app)/transactions/`, `lib/transactions/transaction-dto.ts` |
 | Categorización manual | ✅ Estable | `app/(app)/categorize/`, `lib/categorize.ts` |
-| Motor de reglas (auto-categorización) | ✅ Estable | `app/(app)/rules/`, `lib/rules/*` |
+| Motor de reglas (auto-categorización) | ✅ Estable (v2) | Árbol AND/OR, campos `any`/importe/dirección, `word`/regex, normalización de acentos, dry run, undo y auto-run en el sync: `app/(app)/rules/`, `lib/rules/*` |
 | Categorías (usuario + sistema, jerárquicas) | ✅ Estable | `components/settings/category-manager.tsx`, `app/(app)/settings/actions.ts` |
 | Cuentas y balances | ✅ Estable | `app/(app)/accounts/`, modelos `BankAccount` / `AccountBalance` |
 | Ajustes / preferencias (zona, moneda, locale) | ✅ Estable | `app/(app)/settings/`, `lib/user-prefs.ts` |

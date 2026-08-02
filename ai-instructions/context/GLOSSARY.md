@@ -20,6 +20,26 @@
 
 - Manual categorization: user assigns category directly.
 - Rule-based categorization: category assignment by user-defined rules.
+- Condition tree (`ConditionNode`): a rule's conditions — `{op: "AND"|"OR", children}` where
+  a leaf is `{field, operator, value, negate?}`. A bare array is read as an AND group
+  (the pre-v2 shape).
+- `any` (field): matches description and remittance info together, and is the default. Use it
+  unless you specifically mean one field — merchant names land in `description` while
+  `remittanceInfo` holds the SEPA operation type and is often null.
+- `word` (operator): whole-word match. Stops `DIA` matching `CLAUDIA` and `ESCLAT` matching
+  `ESCLATOIL`. `matches` is the raw-regex escape hatch.
+- Normalization: text comparison folds accents and case on both sides, so `AMORTIZACION`
+  matches `AMORTIZACIÓN`.
+- Priority: lower number is evaluated first; ties break on `createdAt`. Convention: 0-99
+  exclusions and transfers, 100-199 income, 200-299 fixed costs, 300+ variable spending.
+- First match wins: within a run, the first rule to match a transaction claims it; later
+  rules skip it.
+- Precedence: MANUAL > RULE > AI > uncategorized. A run never overwrites a manual
+  categorization unless explicitly forced.
+- Dry run: evaluate and report without writing, including `conflicts` — transactions more
+  than one rule wanted.
+- Undo (`undo_rule_run`): reverts everything a rule categorized, using the
+  `previousCategoryId` / `previousSource` trail each run records.
 - (AI suggestion: reserved for a future flow; not implemented.)
 
 ## Planning and Reporting Terms
