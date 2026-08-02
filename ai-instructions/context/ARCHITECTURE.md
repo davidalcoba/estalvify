@@ -10,7 +10,9 @@
 - `prisma/`: schema and migrations
 - `scripts/`: operational scripts
 - Tests live next to code as `lib/**/*.test.ts` (Vitest, config in `vitest.config.ts`);
-  CI is `.github/workflows/ci.yml`.
+  CI is `.github/workflows/ci.yml`. The other workflow,
+  `.github/workflows/prune-neon-branch.yml`, is infrastructure housekeeping —
+  see "Databases (Neon)" → branch cap.
 
 ## Deployment Context
 
@@ -36,11 +38,12 @@ Neon project `divine-firefly-20538122` (`neon-coquelicot-window`,
 `org-autumn-pond-35905682`. Every deployment target gets its own Neon branch —
 no preview ever writes to production data:
 
-| Deployment          | Neon branch                        | Wired by                     |
-| ------------------- | ---------------------------------- | ---------------------------- |
-| `main` / production | `main` (primary, `br-lively-cell-alldlk0k`) | project env vars      |
-| `preview` branch    | `preview` (`br-shy-bird-albcqv1g`) | env vars with `gitBranch: preview` |
-| feature branches    | `preview/<git-branch>`, one per branch | Neon–Vercel integration  |
+| Deployment           | Neon branch                                 | Wired by                           |
+| -------------------- | ------------------------------------------- | ---------------------------------- |
+| `main` / production  | `main` (primary, `br-lively-cell-alldlk0k`) | project env vars                   |
+| `preview` branch     | `preview` (`br-shy-bird-albcqv1g`)          | env vars with `gitBranch: preview` |
+| feature branches     | `preview/<git-branch>`, one per branch      | Neon–Vercel integration            |
+| local dev            | `development` (`br-cool-poetry-aln1zge6`)   | project env vars (`development`)   |
 
 The Neon–Vercel integration creates a `preview/<git-branch>` Neon branch the
 first time a branch is deployed and injects that branch's connection string into
@@ -51,12 +54,19 @@ is what keeps feature-branch previews isolated.
 `lib/prisma.ts` — and `DIRECT_URL`, falling back to `DATABASE_URL`, for
 migrations — `prisma.config.ts`):
 
-| Key            | Target                     | `gitBranch` | Points at                     |
-| -------------- | -------------------------- | ----------- | ----------------------------- |
-| `DATABASE_URL` | `production`, `development` | —          | Neon `main`, pooled           |
-| `DATABASE_URL` | `preview`                  | `preview`   | Neon `preview`, pooled        |
-| `DIRECT_URL`   | `preview`                  | `preview`   | Neon `preview`, direct        |
-| `DATABASE_URL` | `preview`                  | —           | Neon `preview`, pooled — safety net |
+| Key            | Target        | `gitBranch` | Points at                           |
+| -------------- | ------------- | ----------- | ----------------------------------- |
+| `DATABASE_URL` | `production`  | —           | Neon `main`, pooled                 |
+| `DIRECT_URL`   | `production`  | —           | Neon `main`, direct                 |
+| `DATABASE_URL` | `preview`     | `preview`   | Neon `preview`, pooled              |
+| `DIRECT_URL`   | `preview`     | `preview`   | Neon `preview`, direct              |
+| `DATABASE_URL` | `preview`     | —           | Neon `preview`, pooled — safety net |
+| `DATABASE_URL` | `development` | —           | Neon `development`, pooled          |
+| `DIRECT_URL`   | `development` | —           | Neon `development`, direct          |
+
+Every target is paired: a `DIRECT_URL` always names the same Neon branch as the
+`DATABASE_URL` next to it, so the database a build migrates is the one the app
+then reads.
 
 The generic `preview` `DATABASE_URL` is the safety net: it is only consulted when
 the integration does not inject a per-deployment branch, and it points at the
@@ -65,19 +75,44 @@ slot held the production URL, which meant any preview that missed the injection
 would have connected to — and, since the build runs `prisma migrate deploy`,
 migrated — production.
 
-**Branch cap.** The Neon org is on the free plan, capped at **10 branches**. When
-the cap is reached the integration cannot create a branch and the deployment
-fails at provisioning with `Resource provisioning failed`, before the build runs
-— it fails closed rather than falling through to another database. Prune stale
-`preview/<git-branch>` branches once their work is merged; each is recreated from
-`main` on the next deployment of that git branch, so the only thing lost is
-throwaway preview data.
+`development` is what `vercel env pull` writes into a local `.env`. It has its
+own Neon branch precisely so that pulling env vars, or running `prisma migrate
+dev` against them, cannot reach production — and so that a local schema
+experiment does not rewrite the history of the shared `preview` branch either.
 
 There is deliberately **no** generic `preview` `DIRECT_URL`. `prisma.config.ts`
 prefers `DIRECT_URL` over `DATABASE_URL`, so a generic one would send
 feature-branch migrations to the shared `preview` branch while the app ran
 against its own ephemeral branch. `DIRECT_URL` exists only where it is scoped to
 the same branch as its `DATABASE_URL`.
+
+**The integration's own `DATABASE_*` vars are `production`-only.** The
+Neon–Vercel integration also writes ~15 variables holding production credentials
+in every shape (`DATABASE_URL_UNPOOLED`, `DATABASE_POSTGRES_URL`,
+`DATABASE_PGHOST`, …). No code reads them, but they used to be exposed to
+`preview` and `development` too, so the first person to reach for one from a
+preview would have got production. Their target is now `production` alone. The
+integration may re-add the other targets when it next runs — re-check after any
+integration event with
+`GET /v10/projects/{id}/env` and look for a `DATABASE_*` key whose target is
+wider than `["production"]`.
+
+**Branch cap.** The Neon org is on the free plan, capped at **10 branches**
+(`GET /api/v2/projects/{id}` → `project.owner.branches_limit`). When the cap is
+reached the integration cannot create a branch and the deployment fails at
+provisioning with `Resource provisioning failed`, before the build runs — it
+fails closed rather than falling through to another database. Three slots are
+permanent (`main`, `preview`, `development`); the rest absorb concurrent feature
+branches.
+
+`.github/workflows/prune-neon-branch.yml` reclaims a slot automatically: on
+`pull_request: closed` it deletes the Neon branch named `preview/<head-ref>`. It
+needs a `NEON_API_KEY` repository secret and, when that is missing, logs and
+exits 0 rather than reddening every closed PR. Deleting is safe — the
+integration recreates the branch from `main` on the next deployment of that git
+branch, so the only thing lost is throwaway preview data. Neon exposes no
+delete-on-git-branch-delete setting through its API, which is why this is a
+workflow and not a checkbox.
 
 `scripts/migrate.mjs` logs `[migrate] target: <neon-endpoint-id> (via <var>)` at
 the top of every build. That line is how you confirm from a build log which Neon
