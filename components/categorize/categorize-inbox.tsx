@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 } from "@/app/(app)/categorize/actions";
 import { useCategorizeSearch } from "@/components/categorize/search-context";
 import { matchesTransactionSearch } from "@/lib/categorize";
+import { useAction } from "@/lib/use-action";
 
 interface Props {
   transactions: TransactionListItemDTO[];
@@ -64,7 +66,7 @@ function FocusModal({
 }: FocusModalProps) {
   const [queue, setQueue] = useState<TransactionListItemDTO[]>(snapshot);
   const [index, setIndex] = useState(Math.min(startIndex, Math.max(0, snapshot.length - 1)));
-  const [savingCount, setSavingCount] = useState(0);
+  const { run, pending: saving } = useAction();
   const [ruleOpen, setRuleOpen] = useState(false);
 
   const current = queue[index] ?? null;
@@ -84,19 +86,20 @@ function FocusModal({
     setIndex(newIndex);
     onCategorized(txId);
 
-    setSavingCount((count) => count + 1);
-    void categorizeTransaction(txId, categoryId)
-      .catch(() => {
+    // Deliberately not awaited: the queue has already advanced, so the user
+    // keeps classifying while this one saves in the background.
+    run(txId, async () => {
+      try {
+        await categorizeTransaction(txId, categoryId);
+      } catch {
         onReverted(txId);
         setQueue((prev) => {
           const next = [...prev];
           next.splice(Math.min(index, next.length), 0, currentTx);
           return next;
         });
-      })
-      .finally(() => {
-        setSavingCount((count) => Math.max(0, count - 1));
-      });
+      }
+    });
   }
 
   return (
@@ -119,6 +122,16 @@ function FocusModal({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden">
         <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
+
+        {/* Saves run in the background while the queue advances — this is the
+            only sign they are still in flight. */}
+        {saving && (
+          <Loader2
+            className="absolute top-4 right-11 size-4 animate-spin text-muted-foreground"
+            role="status"
+            aria-label="Saving"
+          />
+        )}
 
         <div className="space-y-4 overflow-y-auto pr-2">
           {done ? (
@@ -198,14 +211,15 @@ export function CategorizeInbox({
   timezone,
 }: Props) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const { run, busy } = useAction();
 
   const { searchInput, setSearchInput } = useCategorizeSearch();
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [bulkQueryCategoryId, setBulkQueryCategoryId] = useState("");
-  const [isBulking, setIsBulking] = useState(false);
   const [categorizedIds, setCategorizedIds] = useState<Set<string>>(new Set());
+  // Only one bulk bar is ever on screen, so a single flag drives both.
+  const isBulking = busy("bulk-selected") || busy("bulk-query");
   const [focusState, setFocusState] = useState<{ snapshot: TransactionListItemDTO[]; index: number } | null>(null);
 
   const available = useMemo(
@@ -242,49 +256,49 @@ export function CategorizeInbox({
     setCheckedIds(new Set(filtered.map((tx) => tx.id)));
   }
 
-  async function handleBulkApply() {
+  function handleBulkApply() {
     if (!bulkCategoryId || checkedVisible.length === 0) return;
 
     const ids = checkedVisible.map((tx) => tx.id);
-    setIsBulking(true);
+    const categoryId = bulkCategoryId;
     setCategorizedIds((prev) => new Set([...prev, ...ids]));
     setCheckedIds(new Set());
     setBulkCategoryId("");
 
-    try {
-      await bulkCategorizeByIds(ids, bulkCategoryId);
-    } catch {
-      setCategorizedIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      });
-    } finally {
-      setIsBulking(false);
-    }
+    run("bulk-selected", async () => {
+      try {
+        await bulkCategorizeByIds(ids, categoryId);
+      } catch {
+        setCategorizedIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
+    });
   }
 
-  async function handleBulkByQuery() {
+  function handleBulkByQuery() {
     const query = searchInput.trim();
     if (!bulkQueryCategoryId || query.length < 3) return;
 
-    setIsBulking(true);
+    const categoryId = bulkQueryCategoryId;
     const visibleIds = filtered.map((tx) => tx.id);
     setCategorizedIds((prev) => new Set([...prev, ...visibleIds]));
     setBulkQueryCategoryId("");
 
-    try {
-      await bulkCategorize(query, bulkQueryCategoryId);
-      startTransition(() => router.refresh());
-    } catch {
-      setCategorizedIds((prev) => {
-        const next = new Set(prev);
-        visibleIds.forEach((id) => next.delete(id));
-        return next;
-      });
-    } finally {
-      setIsBulking(false);
-    }
+    run("bulk-query", async () => {
+      try {
+        await bulkCategorize(query, categoryId);
+        router.refresh();
+      } catch {
+        setCategorizedIds((prev) => {
+          const next = new Set(prev);
+          visibleIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
+    });
   }
 
   function handleCategorize(txId: string, categoryId: string) {
@@ -292,7 +306,7 @@ export function CategorizeInbox({
 
     setCategorizedIds((prev) => new Set([...prev, txId]));
 
-    startTransition(async () => {
+    run(txId, async () => {
       try {
         await categorizeTransaction(txId, categoryId);
       } catch {
@@ -323,7 +337,9 @@ export function CategorizeInbox({
 
   function handlePageSizeChange(newSize: number) {
     const sp = new URLSearchParams({ size: String(newSize) });
-    startTransition(() => {
+    // A navigation, not a write — but it stalls the page just the same, so it
+    // goes through the same runner and moves the top bar.
+    run("page-size", () => {
       router.push(`/categorize?${sp.toString()}`);
     });
   }

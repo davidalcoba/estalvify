@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Sparkles, Info, AlertTriangle, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { generateInsights, type InsightsResult } from "@/app/(app)/insights/actions";
+import { useAction } from "@/lib/use-action";
 import type { RecommendationSeverity } from "@/lib/ai";
 
 const severityIcon = {
@@ -22,11 +23,11 @@ const severityColor: Record<RecommendationSeverity, string> = {
 };
 
 export function InsightsView() {
-  const [pending, startTransition] = useTransition();
+  const { run, pending } = useAction();
   const [result, setResult] = useState<InsightsResult | null>(null);
 
   function onGenerate() {
-    startTransition(async () => {
+    run("generate", async () => {
       try {
         setResult(await generateInsights());
       } catch {
@@ -43,9 +44,9 @@ export function InsightsView() {
           and forecast. Only anonymized totals and category names are sent — never your raw
           transactions.
         </p>
-        <Button onClick={onGenerate} disabled={pending}>
+        <Button onClick={onGenerate} loading={pending}>
           <Sparkles className="mr-2 h-4 w-4" />
-          {pending ? "Analyzing…" : result?.status === "ok" ? "Regenerate" : "Generate insights"}
+          {result?.status === "ok" ? "Regenerate" : "Generate insights"}
         </Button>
       </div>
 

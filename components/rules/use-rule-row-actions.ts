@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   executeRule,
   deleteRule,
   revertRule,
   toggleRuleActive,
 } from "@/app/(app)/rules/actions";
+import { useAction } from "@/lib/use-action";
 import type { CategoryRuleDTO } from "@/lib/rules/rule-dto";
 
 // Shared run/revert/delete/toggle logic for a saved-rule row, used by both the
 // desktop and mobile rule views (previously copy-pasted in each).
 export function useRuleRowActions(rule: CategoryRuleDTO) {
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending, busy } = useAction();
   const [result, setResult] = useState<string | null>(null);
   // Both actions are hard to take back, so the row asks before acting.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -20,7 +21,7 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
 
   function handleExecute() {
     setResult(null);
-    startTransition(async () => {
+    run("execute", async () => {
       const { categorized } = await executeRule(rule.id);
       setResult(categorized > 0 ? `${categorized} categorized` : "No matches");
     });
@@ -36,7 +37,7 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
 
   function handleRevert() {
     setResult(null);
-    startTransition(async () => {
+    run("revert", async () => {
       const { reverted } = await revertRule(rule.id);
       setResult(reverted > 0 ? `${reverted} reverted` : "Nothing to revert");
       setConfirmingRevert(false);
@@ -52,20 +53,22 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
   }
 
   function handleDelete() {
-    startTransition(async () => {
+    run("delete", async () => {
       await deleteRule(rule.id);
       setConfirmingDelete(false);
     });
   }
 
   function handleToggleActive() {
-    startTransition(async () => {
+    run("toggle", async () => {
       await toggleRuleActive(rule.id, !rule.isActive);
     });
   }
 
   return {
     isPending,
+    /** Which of this row's actions is currently writing. */
+    busy,
     result,
     confirmingRevert,
     confirmingDelete,

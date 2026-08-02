@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionDetailCard } from "@/components/transactions/shared/transaction-detail-card";
@@ -10,6 +10,7 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
+import { useAction } from "@/lib/use-action";
 import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
 interface TransactionDetailDialogProps {
@@ -30,18 +31,15 @@ export function TransactionDetailDialog({
   onClose,
 }: TransactionDetailDialogProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useAction();
   const [ruleOpen, setRuleOpen] = useState(false);
 
-  async function handleRecategorize(categoryId: string) {
+  function handleRecategorize(categoryId: string) {
     if (!categoryId || !transaction) return;
-    setSaving(true);
-    try {
+    run("recategorize", async () => {
       await categorizeTransaction(transaction.id, categoryId);
       router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   return (
@@ -85,10 +83,10 @@ export function TransactionDetailDialog({
                   size="icon"
                   className="h-10 w-10 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                   onClick={() => setRuleOpen(true)}
-                  disabled={saving}
+                  loading={saving}
                   title="Create rule for this transaction"
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  <Zap className="h-4 w-4" />
                 </Button>
               </div>
             </div>

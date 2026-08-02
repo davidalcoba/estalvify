@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { deleteAccount } from "@/app/(app)/accounts/actions";
+import { useAction } from "@/lib/use-action";
 import { useHydrated } from "@/lib/use-hydrated";
 
 interface DeleteAccountButtonProps {
@@ -25,7 +26,7 @@ export function DeleteAccountButton({ accountId, accountName }: DeleteAccountBut
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -33,7 +34,7 @@ export function DeleteAccountButton({ accountId, accountName }: DeleteAccountBut
   }
 
   function handleDelete() {
-    startTransition(async () => {
+    run("delete", async () => {
       await deleteAccount(accountId);
       setOpen(false);
     });
@@ -82,8 +83,13 @@ export function DeleteAccountButton({ accountId, accountName }: DeleteAccountBut
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={isPending || !confirmed}>
-            {isPending ? "Deleting…" : "Delete account"}
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={!confirmed}
+            loading={isPending}
+          >
+            Delete account
           </Button>
         </DialogFooter>
       </DialogContent>

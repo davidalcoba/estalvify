@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { updatePreferences } from "@/app/(app)/settings/actions";
+import { useAction } from "@/lib/use-action";
 import { Check } from "lucide-react";
 
 const TIMEZONES = [
@@ -87,7 +88,7 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
   const [lang, setLang] = useState(language);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -95,7 +96,7 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
     setError(null);
     setSaved(false);
 
-    startTransition(async () => {
+    run("save", async () => {
       try {
         await updatePreferences({ timezone: tz, currency: curr, locale: loc, language: lang });
         setSaved(true);
@@ -162,14 +163,11 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : "Save preferences"}
+            <Button type="submit" loading={isPending}>
+              Save preferences
             </Button>
             {saved && (
-              <span className="flex items-center gap-1 text-sm text-success">
-                <Check className="h-4 w-4" />
-                Saved
-              </span>
+              <Check className="h-4 w-4 text-success" role="img" aria-label="Saved" />
             )}
             {error && <span className="text-sm text-destructive">{error}</span>}
           </div>

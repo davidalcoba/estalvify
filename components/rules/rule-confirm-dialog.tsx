@@ -17,8 +17,10 @@ interface RuleConfirmDialogProps {
   title: ReactNode;
   description: ReactNode;
   confirmLabel: string;
-  pendingLabel: string;
+  /** True while any of the row's actions runs — keeps Cancel from racing it. */
   isPending: boolean;
+  /** True while this dialog's own action runs; spins the confirm button. */
+  isConfirming?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -35,8 +37,8 @@ export function RuleConfirmDialog({
   title,
   description,
   confirmLabel,
-  pendingLabel,
   isPending,
+  isConfirming,
   onCancel,
   onConfirm,
 }: RuleConfirmDialogProps) {
@@ -56,8 +58,13 @@ export function RuleConfirmDialog({
           <Button variant="outline" onClick={onCancel} disabled={isPending}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
-            {isPending ? pendingLabel : confirmLabel}
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={isPending}
+            loading={isConfirming}
+          >
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

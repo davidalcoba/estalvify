@@ -20,6 +20,7 @@ export function PlanCategoryCard({
   onAdd,
   onEdit,
   onDelete,
+  isDeleting,
   disabled,
 }: {
   group: PlanCategoryGroupVM;
@@ -29,6 +30,8 @@ export function PlanCategoryCard({
   onAdd: (categoryId: string) => void;
   onEdit: (entry: PlanEntryVM) => void;
   onDelete: (entry: PlanEntryVM) => void;
+  /** True while that entry's delete is being written. */
+  isDeleting?: (entry: PlanEntryVM) => boolean;
   disabled?: boolean;
 }) {
   const { row } = group;
@@ -78,6 +81,7 @@ export function PlanCategoryCard({
               dateLocale={dateLocale}
               onEdit={onEdit}
               onDelete={onDelete}
+              deleting={isDeleting?.(entry)}
               disabled={disabled}
             />
           ))}

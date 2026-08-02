@@ -16,6 +16,7 @@ export function PlanEntryRow({
   dateLocale,
   onEdit,
   onDelete,
+  deleting,
   disabled,
 }: {
   entry: PlanEntryVM;
@@ -24,6 +25,8 @@ export function PlanEntryRow({
   dateLocale: string;
   onEdit: (entry: PlanEntryVM) => void;
   onDelete: (entry: PlanEntryVM) => void;
+  /** True while this row's delete is being written. */
+  deleting?: boolean;
   disabled?: boolean;
 }) {
   const income = entry.direction === "CREDIT";
@@ -72,6 +75,7 @@ export function PlanEntryRow({
           className="text-muted-foreground hover:text-destructive"
           onClick={() => onDelete(entry)}
           disabled={disabled}
+          loading={deleting}
           aria-label={`Delete ${primary}`}
         >
           <Trash2 className="size-3.5" />

@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Loader2 } from "lucide-react"
 import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -43,21 +44,43 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    /**
+     * Shows a spinner in place of the button's own icon and blocks further
+     * clicks. The label is left alone — the spinner is the whole message, so
+     * no call site needs a "Saving…" string.
+     */
+    loading?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
+  // Slot renders the caller's own element and takes exactly one child, so the
+  // spinner can only be injected when this really is a <button>.
+  const spinning = loading && !asChild
 
   return (
     <Comp
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        // Hide the resting icon rather than the whole label, so the button
+        // keeps its width while it works.
+        spinning && "[&>svg:not(.button-spinner)]:hidden"
+      )}
       {...props}
-    />
+      aria-busy={spinning || undefined}
+      disabled={asChild ? disabled : disabled || loading}
+    >
+      {spinning && <Loader2 className="button-spinner animate-spin" />}
+      {children}
+    </Comp>
   )
 }
 

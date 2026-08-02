@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
   deleteCategory,
   createSubcategory,
 } from "@/app/(app)/settings/actions";
+import { useAction } from "@/lib/use-action";
 
 const PRESET_COLORS = [
   "#6366f1",
@@ -69,7 +70,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [formName, setFormName] = useState("");
   const [formColor, setFormColor] = useState(PRESET_COLORS[0]);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending, busy } = useAction();
   const [error, setError] = useState<string | null>(null);
 
   const isCategory =
@@ -99,7 +100,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
     }
     setError(null);
 
-    startTransition(async () => {
+    run("save", async () => {
       try {
         if (editMode?.type === "add-category") {
           await createCategory({ name, color: formColor });
@@ -125,7 +126,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   function handleDeleteConfirmed() {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
-    startTransition(async () => {
+    run("delete", async () => {
       await deleteCategory(id);
       setDeleteTarget(null);
       router.refresh();
@@ -315,8 +316,8 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
             <Button variant="ghost" onClick={() => setEditMode(null)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+            <Button onClick={handleSubmit} disabled={isPending} loading={busy("save")}>
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -363,8 +364,9 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
               variant="destructive"
               onClick={handleDeleteConfirmed}
               disabled={isPending}
+              loading={busy("delete")}
             >
-              {isPending ? "Deleting…" : "Delete"}
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

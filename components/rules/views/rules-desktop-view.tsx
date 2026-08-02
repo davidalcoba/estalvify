@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -56,6 +56,7 @@ export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
 function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
   const {
     isPending,
+    busy,
     result,
     confirmingRevert,
     confirmingDelete,
@@ -85,8 +86,8 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
         </p>
       }
       confirmLabel="Revert rule"
-      pendingLabel="Reverting…"
       isPending={isPending}
+      isConfirming={busy("revert")}
       onCancel={cancelRevert}
       onConfirm={handleRevert}
     />
@@ -103,8 +104,8 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
         </>
       }
       confirmLabel="Delete rule"
-      pendingLabel="Deleting…"
       isPending={isPending}
+      isConfirming={busy("delete")}
       onCancel={cancelDelete}
       onConfirm={handleDelete}
     />
@@ -116,8 +117,11 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
           disabled={isPending}
           className="text-muted-foreground hover:text-foreground transition-colors"
           aria-label={rule.isActive ? "Deactivate rule" : "Activate rule"}
+          aria-busy={busy("toggle") || undefined}
         >
-          {rule.isActive ? (
+          {busy("toggle") ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : rule.isActive ? (
             <CheckCircle2 className="h-4 w-4 text-success" />
           ) : (
             <Circle className="h-4 w-4" />
@@ -214,6 +218,7 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
             size="icon"
             onClick={handleExecute}
             disabled={isPending || !rule.isActive}
+            loading={busy("execute")}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
             aria-label="Run rule"
             title="Run rule"

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { finalizeSetup, cancelSetup } from "@/app/(app)/accounts/setup/actions";
+import { useAction } from "@/lib/use-action";
 import { Building2 } from "lucide-react";
 
 interface AccountOption {
@@ -24,7 +25,7 @@ export function AccountSelectionForm({
     () => new Set(accounts.map((a) => a.uid))
   );
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending, busy } = useAction();
 
   function toggle(uid: string) {
     setSelected((prev) => {
@@ -41,11 +42,11 @@ export function AccountSelectionForm({
       return;
     }
     setError(null);
-    startTransition(() => finalizeSetup(connectionId, Array.from(selected)));
+    run("import", () => finalizeSetup(connectionId, Array.from(selected)));
   }
 
   function handleCancel() {
-    startTransition(() => cancelSetup(connectionId));
+    run("cancel", () => cancelSetup(connectionId));
   }
 
   return (
@@ -102,10 +103,19 @@ export function AccountSelectionForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex items-center gap-3 pt-2">
-        <Button onClick={handleImport} disabled={isPending || selected.size === 0}>
-          {isPending ? "Importing…" : `Import ${selected.size} account${selected.size !== 1 ? "s" : ""}`}
+        <Button
+          onClick={handleImport}
+          disabled={isPending || selected.size === 0}
+          loading={busy("import")}
+        >
+          {`Import ${selected.size} account${selected.size !== 1 ? "s" : ""}`}
         </Button>
-        <Button variant="ghost" onClick={handleCancel} disabled={isPending}>
+        <Button
+          variant="ghost"
+          onClick={handleCancel}
+          disabled={isPending}
+          loading={busy("cancel")}
+        >
           Cancel
         </Button>
       </div>

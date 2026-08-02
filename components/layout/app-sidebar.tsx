@@ -15,6 +15,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Loader2,
   Sparkles,
   X,
   ListFilter,
@@ -46,6 +47,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NavItemIcon } from "@/components/layout/nav-progress";
+import { useAction } from "@/lib/use-action";
 
 const navItems = [
   {
@@ -134,6 +136,7 @@ interface AppSidebarProps {
 export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
+  const { run, pending: signingOut } = useAction();
 
   const initials = user.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -255,8 +258,15 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onSignOut} className="text-destructive focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
+                <DropdownMenuItem
+                  onClick={() => run("sign-out", onSignOut)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  {signingOut ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="mr-2 h-4 w-4" />
+                  )}
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>

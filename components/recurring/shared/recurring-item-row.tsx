@@ -7,11 +7,15 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import type { RecurringItem } from "@/lib/recurring/recurring-dto";
 import { cadenceLabel } from "./labels";
 
+export type RecurringRowAction = "confirm" | "ignore" | "reset" | "addToPlan";
+
 export interface RecurringRowHandlers {
   onConfirm: (item: RecurringItem) => void;
   onIgnore: (item: RecurringItem) => void;
   onReset: (item: RecurringItem) => void;
   onAddToPlan: (item: RecurringItem) => void;
+  /** True while that item's action is being written. */
+  busy: (item: RecurringItem, action: RecurringRowAction) => boolean;
   disabled?: boolean;
 }
 
@@ -26,6 +30,7 @@ export function RecurringItemRow({
   onIgnore,
   onReset,
   onAddToPlan,
+  busy,
   disabled,
 }: {
   item: RecurringItem;
@@ -75,7 +80,12 @@ export function RecurringItemRow({
       <div className="flex shrink-0 items-center gap-1">
         {item.status === "SUGGESTED" && (
           <>
-            <Button size="sm" onClick={() => onConfirm(item)} disabled={disabled}>
+            <Button
+              size="sm"
+              onClick={() => onConfirm(item)}
+              disabled={disabled}
+              loading={busy(item, "confirm")}
+            >
               <Check className="h-4 w-4" />
               <span className="hidden sm:inline">Confirm</span>
             </Button>
@@ -84,6 +94,7 @@ export function RecurringItemRow({
               variant="ghost"
               onClick={() => onIgnore(item)}
               disabled={disabled}
+              loading={busy(item, "ignore")}
               aria-label="Ignore"
               title="Ignore"
             >
@@ -100,6 +111,7 @@ export function RecurringItemRow({
               variant="ghost"
               onClick={() => onAddToPlan(item)}
               disabled={disabled}
+              loading={busy(item, "addToPlan")}
               title="Add to Plan"
             >
               <ListPlus className="h-4 w-4" />
@@ -110,6 +122,7 @@ export function RecurringItemRow({
               variant="ghost"
               onClick={() => onReset(item)}
               disabled={disabled}
+              loading={busy(item, "reset")}
               aria-label="Undo confirmation"
               title="Undo"
             >
@@ -124,6 +137,7 @@ export function RecurringItemRow({
             variant="ghost"
             onClick={() => onReset(item)}
             disabled={disabled}
+            loading={busy(item, "reset")}
           >
             <RotateCcw className="h-4 w-4" />
             <span className="hidden sm:inline">Restore</span>

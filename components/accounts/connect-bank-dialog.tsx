@@ -3,7 +3,7 @@
 // Dialog for connecting a new bank account via Enable Banking OAuth2
 // User searches for their bank, clicks Connect, gets redirected to bank auth page
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Plus, Search, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAction } from "@/lib/use-action";
 import { useHydrated } from "@/lib/use-hydrated";
 
 // Spanish banks available via Enable Banking
@@ -39,7 +40,7 @@ export function ConnectBankDialog() {
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
   const [connectingBank, setConnectingBank] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +52,7 @@ export function ConnectBankDialog() {
     setConnectingBank(bank.aspspName);
     setError(null);
 
-    startTransition(async () => {
+    run(`connect:${bank.aspspName}`, async () => {
       try {
         const response = await fetch("/api/banking/connect", {
           method: "POST",

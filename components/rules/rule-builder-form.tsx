@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Plus, Search, Play, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   previewRuleTransactions,
   executeRuleOnce,
 } from "@/app/(app)/rules/actions";
+import { useAction } from "@/lib/use-action";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
 const PREVIEW_LIMIT = 50;
@@ -51,8 +52,9 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
   const [executeResult, setExecuteResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [isSearching, startSearch] = useTransition();
-  const [isExecuting, startExecute] = useTransition();
+  const { run, pending: isPending, busy } = useAction();
+  const isSearching = busy("search");
+  const isExecuting = busy("execute");
 
   function handleConditionChange(index: number, condition: RuleCondition) {
     setConditions((prev: RuleCondition[]) => prev.map((c: RuleCondition, i: number) => (i === index ? condition : c)));
@@ -77,7 +79,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
   function handleSearch() {
     setError(null);
     setExecuteResult(null);
-    startSearch(async () => {
+    run("search", async () => {
       try {
         const result = await previewRuleTransactions(conditionTree, null);
         setPreview(result);
@@ -94,7 +96,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
     }
     setError(null);
     setExecuteResult(null);
-    startExecute(async () => {
+    run("execute", async () => {
       try {
         const result = await executeRuleOnce({
           conditions: conditionTree,
@@ -116,8 +118,6 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
       }
     });
   }
-
-  const isPending = isSearching || isExecuting;
 
   return (
     <div className="space-y-6">
@@ -201,13 +201,10 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               variant="outline"
               onClick={handleSearch}
               disabled={isPending || !hasValidConditions}
+              loading={isSearching}
               className="gap-2"
             >
-              {isSearching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
+              <Search className="h-4 w-4" />
               Search transactions
             </Button>
 
@@ -215,13 +212,10 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               type="button"
               onClick={handleExecute}
               disabled={isPending || !hasValidConditions || !targetCategoryId}
+              loading={isExecuting}
               className="gap-2"
             >
-              {isExecuting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
+              <Play className="h-4 w-4" />
               Execute
             </Button>
           </div>
@@ -230,9 +224,8 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
 
       {/* Preview */}
       {isSearching && (
-        <div className="rounded-xl border p-6 text-center">
+        <div className="rounded-xl border p-6 text-center" role="status" aria-label="Searching">
           <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-          <p className="text-sm text-muted-foreground mt-2">Searching transactions...</p>
         </div>
       )}
 

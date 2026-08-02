@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
-import { Pencil, Check, X } from "lucide-react";
+import { useState, useRef } from "react";
+import { Pencil, Check, Loader2, X } from "lucide-react";
 import { renameAccount } from "@/app/(app)/accounts/actions";
+import { useAction } from "@/lib/use-action";
 
 interface AccountNameEditorProps {
   accountId: string;
@@ -13,7 +14,7 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(initialName);
   const [saved, setSaved] = useState(initialName);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
   const inputRef = useRef<HTMLInputElement>(null);
 
   function startEditing() {
@@ -31,7 +32,7 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
       cancel();
       return;
     }
-    startTransition(async () => {
+    run("rename", async () => {
       await renameAccount(accountId, value.trim());
       setSaved(value.trim());
       setEditing(false);
@@ -55,8 +56,18 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
           className="text-sm font-medium bg-background border border-input rounded px-1.5 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-ring"
           autoFocus
         />
-        <button onClick={save} disabled={isPending} className="text-success hover:text-success/80">
-          <Check className="h-3.5 w-3.5" />
+        <button
+          onClick={save}
+          disabled={isPending}
+          aria-busy={isPending || undefined}
+          aria-label="Save name"
+          className="text-success hover:text-success/80 disabled:opacity-50"
+        >
+          {isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
         </button>
         <button onClick={cancel} disabled={isPending} className="text-muted-foreground hover:text-foreground">
           <X className="h-3.5 w-3.5" />

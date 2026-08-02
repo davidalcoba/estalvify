@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { disconnectBankGroup } from "@/app/(app)/accounts/actions";
+import { useAction } from "@/lib/use-action";
 import { useHydrated } from "@/lib/use-hydrated";
 
 interface DisconnectBankButtonProps {
@@ -25,7 +26,7 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -33,7 +34,7 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
   }
 
   function handleDisconnect() {
-    startTransition(async () => {
+    run("disconnect", async () => {
       await disconnectBankGroup(connectionIds);
       setOpen(false);
     });
@@ -77,8 +78,13 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleDisconnect} disabled={isPending || !confirmed}>
-            {isPending ? "Disconnecting…" : "Disconnect"}
+          <Button
+            variant="destructive"
+            onClick={handleDisconnect}
+            disabled={!confirmed}
+            loading={isPending}
+          >
+            Disconnect
           </Button>
         </DialogFooter>
       </DialogContent>

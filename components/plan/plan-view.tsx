@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Target, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency } from "@/lib/formatters";
+import { useAction } from "@/lib/use-action";
 import type { CategoryOption, PlanData, PlanEntryVM } from "@/lib/plan/plan-dto";
 import type { PlanItemFields } from "@/app/(app)/plan/actions";
 import { createPlanItem, updatePlanItem, deletePlanItem } from "@/app/(app)/plan/actions";
@@ -25,7 +26,7 @@ interface PlanViewProps {
 
 export function PlanView({ data, categories, locale, currency, dateLocale }: PlanViewProps) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const { run, pending, busy } = useAction();
   const [target, setTarget] = useState<PlanDialogTarget | null>(null);
 
   const isEmpty = data.income.length === 0 && data.expenseGroups.length === 0;
@@ -42,7 +43,7 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
   }
 
   function handleSubmit(fields: PlanItemFields) {
-    startTransition(async () => {
+    run("save", async () => {
       try {
         if (target?.mode === "edit" && target.item) {
           await updatePlanItem(target.item.id, { ...fields, currency });
@@ -58,7 +59,7 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
   }
 
   function handleDelete(entry: PlanEntryVM) {
-    startTransition(async () => {
+    run(`delete:${entry.id}`, async () => {
       try {
         await deletePlanItem(entry.id);
         router.refresh();
@@ -153,6 +154,7 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
                       dateLocale={dateLocale}
                       onEdit={openEdit}
                       onDelete={handleDelete}
+                      deleting={busy(`delete:${entry.id}`)}
                       disabled={pending}
                     />
                   ))}
@@ -191,6 +193,7 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
                     onAdd={openAddExpense}
                     onEdit={openEdit}
                     onDelete={handleDelete}
+                    isDeleting={(entry) => busy(`delete:${entry.id}`)}
                     disabled={pending}
                   />
                 ))}
@@ -207,7 +210,7 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
         categories={categories}
         onClose={() => setTarget(null)}
         onSubmit={handleSubmit}
-        pending={pending}
+        pending={busy("save")}
       />
     </div>
   );

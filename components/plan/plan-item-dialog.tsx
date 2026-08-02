@@ -205,8 +205,8 @@ function PlanForm({
         <Button variant="outline" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={!canSave || pending}>
-          {pending ? "Saving…" : "Save"}
+        <Button onClick={handleSave} disabled={!canSave} loading={pending}>
+          Save
         </Button>
       </DialogFooter>
     </>

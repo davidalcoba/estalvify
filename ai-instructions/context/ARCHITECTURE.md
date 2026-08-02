@@ -46,8 +46,11 @@
   - Base visual primitives used across the app
   - Single source for buttons, cards, dialogs, inputs, badges, selects, etc.
   - Shared building blocks added here: `empty-state` (placeholder states),
-    `simple-select` (flat Radix select wrapper), plus `layout/page-header`
-    (title/subtitle/actions) and `categorize/category-select` (hierarchical picker).
+    `simple-select` (flat Radix select wrapper), `submit-button` (spins with
+    `useFormStatus`), plus `layout/page-header` (title/subtitle/actions) and
+    `categorize/category-select` (hierarchical picker).
+  - `button` takes `loading`: swaps its icon for a spinner and disables it, so
+    no call site writes a "Saving…" label.
   - Theming: `.dark` OKLCH tokens live in `app/globals.css`; runtime toggle via
     `components/layout/theme-provider` (`next-themes`). Never hardcode colors.
 
@@ -61,6 +64,9 @@
 - `lib/*`
   - Non-visual domain logic
   - Integration logic (banking sync, categorization internals, queue helpers)
+  - Interaction feedback: `pending-activity` (shared in-flight counter feeding
+    `layout/top-progress-bar`) and `use-action` (the hook every server-action
+    call goes through). See `UI_RULES.md` → "Action Feedback".
   - Banking helpers: `banking/sync` (sync engine), `banking/enable-banking`
     (PSD2 client), `banking/transaction-parse` (pure ID/remittance parsing),
     `banking/sync-errors` (pure 401/429 classifiers), `banking/connection-status`

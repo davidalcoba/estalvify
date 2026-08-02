@@ -35,19 +35,25 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 - Build from `components/layout/skeletons`. See `UI_RULES.md` →
   "Navigation Feedback".
 
-7. Respect multi-user boundaries
+7. Give every write visual feedback
+- Call server actions through `useAction` (`lib/use-action`), never a bare
+  `useTransition` — that is what drives the shared top progress bar.
+- The control that was clicked gets `loading` (`Button`) or a swapped-in
+  spinner. No "Saving…" text. See `UI_RULES.md` → "Action Feedback".
+
+8. Respect multi-user boundaries
 - Enforce authenticated user scoping on all user-owned data.
 
-8. Handle async workflows correctly
+9. Handle async workflows correctly
 - Use queue-based processing for long-running operations.
 - Surface progress/status clearly in UI.
 
-9. Update the docs (same change)
+10. Update the docs (same change)
 - If the change touches architecture, stack, UI conventions, or feature status,
   update the relevant file in `ai-instructions/context/` in the same PR.
 - Add/adjust env vars in `.env.example` when introducing new configuration.
 
-10. Validate and ship
+11. Validate and ship
 - Run `npm run typecheck && npm run lint && npm run test`
 - Add Vitest tests for any new pure logic
 - Validate key flows manually

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, CreditCard, Inbox, Loader2, Tag, CheckCircle, Zap } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, CreditCard, Inbox, Tag, CheckCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SimpleSelect } from "@/components/ui/simple-select";
@@ -190,10 +190,11 @@ export function CategorizeMobileView({
           <Button
             size="sm"
             onClick={onBulkByQuery}
-            disabled={!bulkQueryCategoryId || isBulking}
+            disabled={!bulkQueryCategoryId}
+            loading={isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+            Apply to all
           </Button>
         </div>
       )}
@@ -214,10 +215,11 @@ export function CategorizeMobileView({
           <Button
             size="sm"
             onClick={onBulkApply}
-            disabled={!bulkCategoryId || isBulking}
+            disabled={!bulkCategoryId}
+            loading={isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+            Apply
           </Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="h-8 text-muted-foreground">
             Clear

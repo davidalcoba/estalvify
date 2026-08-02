@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { useState } from "react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
   hasConditionValue,
 } from "@/lib/rules/rule-dto";
 import { updateRule } from "@/app/(app)/rules/actions";
+import { useAction } from "@/lib/use-action";
 
 interface RuleEditDialogProps {
   rule: CategoryRuleDTO;
@@ -42,7 +43,7 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
   const [categoryId, setCategoryId] = useState(rule.categoryId);
   const [priority, setPriority] = useState(String(rule.priority));
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
 
   function handleConditionChange(index: number, updated: RuleCondition) {
     setConditions((prev) => prev.map((c, i) => (i === index ? updated : c)));
@@ -54,7 +55,7 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
 
   function handleSave() {
     setError(null);
-    startTransition(async () => {
+    run("save", async () => {
       try {
         await updateRule({
           ruleId: rule.id,
@@ -180,8 +181,7 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>
-            <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave}>
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave} loading={isPending}>
               Save
             </Button>
           </div>

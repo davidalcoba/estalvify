@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAction } from "@/lib/use-action";
 
 interface ReconnectBankButtonProps {
   connectionId: string;
@@ -15,11 +16,11 @@ interface ReconnectBankButtonProps {
 
 export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, label = "Reconnect", secondary = false }: ReconnectBankButtonProps) {
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
 
   function handleReconnect() {
     setError(null);
-    startTransition(async () => {
+    run("reconnect", async () => {
       try {
         const response = await fetch("/api/banking/connect", {
           method: "POST",
@@ -47,13 +48,12 @@ export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, lab
         variant="ghost"
         size="sm"
         onClick={handleReconnect}
-        disabled={isPending}
+        loading={isPending}
         className={secondary
           ? "gap-1.5 h-7 text-xs text-muted-foreground hover:text-foreground"
           : "gap-1.5 h-7 text-xs border border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"}
       >
-        {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-        {!isPending && !secondary && <RefreshCw className="h-3 w-3" />}
+        {!secondary && <RefreshCw className="h-3 w-3" />}
         {label}
       </Button>
       {error && <p className="text-xs text-destructive">{error}</p>}

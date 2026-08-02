@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Repeat } from "lucide-react";
+import { useAction } from "@/lib/use-action";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RecurringSummaryCard } from "@/components/recurring/shared/recurring-summary";
 import { RecurringDesktopView } from "@/components/recurring/views/recurring-desktop-view";
 import { RecurringMobileView } from "@/components/recurring/views/recurring-mobile-view";
+import type { RecurringRowAction } from "@/components/recurring/shared/recurring-item-row";
 import type { RecurringSection } from "@/components/recurring/views/recurring-view-props";
 import type { RecurringItem, RecurringSummary } from "@/lib/recurring/recurring-dto";
 import {
@@ -15,6 +17,12 @@ import {
   clearRecurringDecision,
   addRecurringToPlan,
 } from "@/app/(app)/recurring/actions";
+
+// One key per (series, action) pair, so the button that was clicked is the one
+// that spins — the rest of the list only greys out.
+function rowKey(item: RecurringItem, action: RecurringRowAction) {
+  return `${item.merchantKey}:${action}`;
+}
 
 interface RecurringViewProps {
   items: RecurringItem[];
@@ -26,7 +34,7 @@ interface RecurringViewProps {
 
 export function RecurringView({ items, summary, currency, locale, dateLocale }: RecurringViewProps) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const { run, pending, busy } = useAction();
 
   const sections = useMemo<RecurringSection[]>(() => {
     const suggested = items.filter((i) => i.status === "SUGGESTED");
@@ -53,7 +61,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
   }, [items]);
 
   function applyDecision(item: RecurringItem, status: "CONFIRMED" | "IGNORED") {
-    startTransition(async () => {
+    run(rowKey(item, status === "CONFIRMED" ? "confirm" : "ignore"), async () => {
       try {
         await setRecurringDecision({
           merchantKey: item.merchantKey,
@@ -75,7 +83,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
   }
 
   function handleReset(item: RecurringItem) {
-    startTransition(async () => {
+    run(rowKey(item, "reset"), async () => {
       try {
         await clearRecurringDecision(item.merchantKey);
         router.refresh();
@@ -86,7 +94,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
   }
 
   function handleAddToPlan(item: RecurringItem) {
-    startTransition(async () => {
+    run(rowKey(item, "addToPlan"), async () => {
       try {
         await addRecurringToPlan({
           displayName: item.displayName,
@@ -108,6 +116,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
     onIgnore: (item: RecurringItem) => applyDecision(item, "IGNORED"),
     onReset: handleReset,
     onAddToPlan: handleAddToPlan,
+    busy: (item: RecurringItem, action: RecurringRowAction) => busy(rowKey(item, action)),
     disabled: pending,
   };
 

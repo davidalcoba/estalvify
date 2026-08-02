@@ -1,6 +1,6 @@
 "use client";
 
-import { Inbox, Loader2, Tag, CheckCircle } from "lucide-react";
+import { Inbox, Tag, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
@@ -113,10 +113,11 @@ export function CategorizeDesktopView({
           <Button
             size="sm"
             onClick={onBulkByQuery}
-            disabled={!bulkQueryCategoryId || isBulking}
+            disabled={!bulkQueryCategoryId}
+            loading={isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 shrink-0"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+            Apply to all
           </Button>
         </div>
       )}
@@ -137,10 +138,11 @@ export function CategorizeDesktopView({
           <Button
             size="sm"
             onClick={onBulkApply}
-            disabled={!bulkCategoryId || isBulking}
+            disabled={!bulkCategoryId}
+            loading={isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 shrink-0"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+            Apply
           </Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="shrink-0 text-muted-foreground">
             Clear

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
-import { Zap, Loader2, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Zap, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog as Primitive } from "radix-ui";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import {
   hasConditionValue,
 } from "@/lib/rules/rule-dto";
 import { executeRuleOnce, addConditionToRule, getUserRules } from "@/app/(app)/rules/actions";
+import { useAction } from "@/lib/use-action";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
 interface QuickRuleDialogProps {
@@ -81,7 +82,7 @@ export function QuickRuleDialog({
   const [ruleName, setRuleName] = useState("");
   const [result, setResult] = useState<{ msg: string; categorized: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { run, pending: isPending } = useAction();
 
   const [existingRules, setExistingRules] = useState<{ id: string; name: string; categoryName: string }[]>([]);
   const [selectedRuleId, setSelectedRuleId] = useState("");
@@ -109,7 +110,7 @@ export function QuickRuleDialog({
 
     if (dialogMode === "existing") {
       if (!selectedRuleId) return;
-      startTransition(async () => {
+      run("add-condition", async () => {
         try {
           const res = await addConditionToRule({ ruleId: selectedRuleId, condition });
           const msg =
@@ -124,7 +125,7 @@ export function QuickRuleDialog({
       });
     } else {
       if (!targetCategoryId) return;
-      startTransition(async () => {
+      run("apply", async () => {
         try {
           const res = await executeRuleOnce({
             conditions: { op: "AND", children: [condition] },
@@ -266,8 +267,8 @@ export function QuickRuleDialog({
           <Button variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
             Cancel
           </Button>
-          <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave}>
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+          <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave} loading={isPending}>
+            <Zap className="h-4 w-4" />
             {dialogMode === "existing" ? "Add condition" : "Apply rule"}
           </Button>
         </div>

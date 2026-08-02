@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle } from "lucide-react";
+import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +44,7 @@ export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
 function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
   const {
     isPending,
+    busy,
     result,
     confirmingRevert,
     confirmingDelete,
@@ -73,8 +74,8 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
         </p>
       }
       confirmLabel="Revert rule"
-      pendingLabel="Reverting…"
       isPending={isPending}
+      isConfirming={busy("revert")}
       onCancel={cancelRevert}
       onConfirm={handleRevert}
     />
@@ -91,8 +92,8 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
         </>
       }
       confirmLabel="Delete rule"
-      pendingLabel="Deleting…"
       isPending={isPending}
+      isConfirming={busy("delete")}
       onCancel={cancelDelete}
       onConfirm={handleDelete}
     />
@@ -104,8 +105,11 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
             disabled={isPending}
             className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
             aria-label={rule.isActive ? "Deactivate" : "Activate"}
+            aria-busy={busy("toggle") || undefined}
           >
-            {rule.isActive ? (
+            {busy("toggle") ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : rule.isActive ? (
               <CheckCircle2 className="h-5 w-5 text-success" />
             ) : (
               <Circle className="h-5 w-5" />
@@ -187,6 +191,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
               size="icon"
               onClick={handleExecute}
               disabled={isPending || !rule.isActive}
+              loading={busy("execute")}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               aria-label="Run"
               title="Run rule"

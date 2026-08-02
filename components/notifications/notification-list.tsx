@@ -1,8 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { relativeTime, type NotificationDTO } from "@/lib/notifications/notification-dto";
@@ -11,6 +10,7 @@ import {
   markAllNotificationsRead,
   refreshMyNotifications,
 } from "@/app/(app)/notifications/actions";
+import { useAction } from "@/lib/use-action";
 import { severityIcon, severityColor } from "./severity";
 
 interface NotificationListProps {
@@ -29,10 +29,10 @@ export function NotificationList({
   hasMore,
 }: NotificationListProps) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const { run: runAction, pending, busy } = useAction();
 
-  function run(action: () => Promise<void>) {
-    startTransition(async () => {
+  function run(key: string, action: () => Promise<void>) {
+    runAction(key, async () => {
       try {
         await action();
         router.refresh();
@@ -74,19 +74,21 @@ export function NotificationList({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => run(refreshMyNotifications)}
+            onClick={() => run("refresh", refreshMyNotifications)}
             disabled={pending}
+            loading={busy("refresh")}
             className="gap-1.5"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
+            <RefreshCw className="h-3.5 w-3.5" />
             Check now
           </Button>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => run(markAllNotificationsRead)}
+              onClick={() => run("mark-all", markAllNotificationsRead)}
               disabled={pending}
+              loading={busy("mark-all")}
               className="gap-1.5"
             >
               <CheckCheck className="h-3.5 w-3.5" />
@@ -115,8 +117,9 @@ export function NotificationList({
                 key={n.id}
                 // Same gesture as the bell: reading one marks it, nothing is
                 // marked just by opening the page.
-                onClick={() => !n.read && run(() => markNotificationRead(n.id))}
+                onClick={() => !n.read && run(n.id, () => markNotificationRead(n.id))}
                 disabled={pending || n.read}
+                aria-busy={busy(n.id) || undefined}
                 className={`flex w-full items-start gap-3 p-4 text-left transition-colors ${
                   n.read ? "" : "bg-accent/40 hover:bg-accent"
                 } disabled:cursor-default`}
@@ -125,11 +128,16 @@ export function NotificationList({
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-sm font-medium">{n.title}</span>
-                    {!n.read && (
-                      <span
-                        className="size-2 shrink-0 rounded-full bg-brand"
-                        aria-label="Unread"
-                      />
+                    {/* The unread dot doubles as the row's progress indicator. */}
+                    {busy(n.id) ? (
+                      <Loader2 className="size-3 shrink-0 animate-spin text-brand" />
+                    ) : (
+                      !n.read && (
+                        <span
+                          className="size-2 shrink-0 rounded-full bg-brand"
+                          aria-label="Unread"
+                        />
+                      )
                     )}
                   </span>
                   <span className="mt-1 block text-sm text-muted-foreground">{n.body}</span>
