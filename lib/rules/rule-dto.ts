@@ -6,9 +6,17 @@
 
 /**
  * `any` matches against description + remittanceInfo together. It is the default:
- * a user rule shouldn't have to know which ISO 20022 field the text landed in
- * (see `parseRemittanceFields` — merchant names end up in `description`, while
- * `remittanceInfo` holds the operation type and is often null).
+ * a user rule shouldn't have to know which of the two fields the text landed in.
+ *
+ * Both carry signal, and which one is useful depends on the transaction
+ * (see `parseRemittanceFields` for how they are split):
+ * - `description` holds the merchant — "PAGO CON TARJETA CONDIS TRES SENYORES…"
+ * - `remittanceInfo` holds the bank's own label. For BBVA card payments that is a
+ *   merchant *category* — "PAGO CON TARJETA EN SUPERMERCADOS", "…EN RESTAURANTES
+ *   Y CAFETERIAS" — which is often a better rule target than the merchant name,
+ *   because it covers merchants you have never seen before. For other operations
+ *   it is coarse ("ADEUDO A SU CARGO", "TRANSFERENCIAS", "BIZUM") and the
+ *   merchant has to come from `description`.
  */
 export type RuleConditionField =
   | "any"

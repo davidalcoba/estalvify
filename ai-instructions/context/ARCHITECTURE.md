@@ -65,6 +65,11 @@
     (PSD2 client), `banking/transaction-parse` (pure ID/remittance parsing),
     `banking/sync-errors` (pure 401/429 classifiers), `banking/connection-status`
     (`expireStaleConsents` — flips connections past `consentExpiresAt` to EXPIRED).
+  - Writing rules: `description` holds the merchant, `remittanceInfo` the bank's own
+    label. For BBVA card payments that label is a merchant **category** ("PAGO CON
+    TARJETA EN SUPERMERCADOS"), which is usually the better rule target — it covers
+    merchants never seen before. For other operations it is coarse ("ADEUDO A SU
+    CARGO", "TRANSFERENCIAS", "BIZUM") and the merchant must come from `description`.
   - Rule engine: `lib/rules/` — `rule-matcher.ts` and `rule-plan.ts` are **pure**
     (condition evaluation; run ordering, precedence and the undo trail), `apply.ts`
     does the loading and writing, `rule-evaluator.ts` is only the SQL prefilter and

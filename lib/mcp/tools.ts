@@ -135,9 +135,11 @@ export function registerTools(server: McpServer): void {
         "page with `offset` (skip N rows). The result includes a `pageInfo` with " +
         "the total matching count so you know whether to page.\n" +
         "Each row returns both text fields, which matters when writing rules: " +
-        "`description` holds the merchant, `remittanceInfo` holds the SEPA operation " +
-        "type and is often null. `categorizationSource` (RULE/AI/MANUAL) tells you " +
-        "whether a category was set by hand — run_rule will not overwrite MANUAL.",
+        "`description` holds the merchant, while `remittanceInfo` holds the bank's own " +
+        "label — for BBVA card payments a merchant category such as \"PAGO CON TARJETA EN " +
+        "SUPERMERCADOS\", which is usually the better thing to write a rule against. " +
+        "`categorizationSource` (RULE/AI/MANUAL) tells you whether a category was set by " +
+        "hand — run_rule will not overwrite MANUAL.",
       inputSchema: {
         uncategorizedOnly: z.boolean().optional(),
         search: z.string().optional(),
@@ -450,9 +452,17 @@ export function registerTools(server: McpServer): void {
       description:
         "Create a categorization rule. `conditions` is a tree: {op:'AND'|'OR', children:[...]}, " +
         "where a leaf is {field, operator, value, negate?}. A plain array is accepted and read as AND.\n" +
-        "Fields: 'any' (DEFAULT — searches description and reference together; prefer it, " +
-        "merchant names land in description while reference holds the operation type and is often " +
-        "empty), 'description', 'remittanceInfo', 'amount', 'direction', 'account'.\n" +
+        "Fields: 'any' (DEFAULT — searches description and remittanceInfo together), " +
+        "'description', 'remittanceInfo', 'amount', 'direction', 'account'.\n" +
+        "Which text field to target matters. `description` is the merchant " +
+        "(\"PAGO CON TARJETA CONDIS TRES SENYORES BARCELONA ES\"). `remittanceInfo` is the " +
+        "bank's own label, and for BBVA card payments that is a merchant CATEGORY " +
+        "(\"PAGO CON TARJETA EN SUPERMERCADOS\", \"...EN RESTAURANTES Y CAFETERIAS\", " +
+        "\"...EN MEDICINA,FARMACIA Y SANIDAD\"). Targeting that category gives far broader " +
+        "coverage than listing merchants, and keeps working for merchants never seen before — " +
+        "prefer it for card spending. For non-card operations remittanceInfo is coarse " +
+        "(\"ADEUDO A SU CARGO\", \"TRANSFERENCIAS\", \"BIZUM\"), so match the merchant in " +
+        "description instead. Call list_transactions first and look at both fields.\n" +
         "Text operators: contains, word (whole word — use it to stop DIA matching CLAUDIA or " +
         "ESCLAT matching ESCLATOIL), equals, startsWith, endsWith, matches (regex).\n" +
         "Amount operators: equals, gt, gte, lt, lte, between ([min,max]). Amounts are unsigned " +
