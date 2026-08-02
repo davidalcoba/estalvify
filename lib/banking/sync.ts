@@ -9,6 +9,7 @@ import {
   isRateLimitError,
   RATE_LIMIT_PREFIX,
   AUTH_ERROR_PREFIX,
+  UNSUPPORTED_PREFIX,
 } from "./sync-errors";
 import type { BankAccount } from "@/app/generated/prisma";
 
@@ -41,6 +42,8 @@ export async function syncAccount(
   let transactionsFetched = 0;
   let transactionsSkipped = 0;
   let balancesFetched = 0;
+  // Recorded on the account but kept out of `errors` — see UNSUPPORTED_PREFIX.
+  let unsupportedNote: string | null = null;
 
   // ── Balances ────────────────────────────────────────────────────────────────
   try {
@@ -167,10 +170,14 @@ export async function syncAccount(
       const is404 = msg.includes("404");
 
       if (is404) {
-        // Account type does not support transaction history via PSD2 — not an error.
+        // Account type does not support transaction history via PSD2 — not an
+        // error, so it must not fail or retry the sync. But swallowing it
+        // entirely left `lastSyncAt` fresh and `lastSyncError` null, making an
+        // account that can never return transactions look perfectly healthy.
         console.warn(
           `[sync] Account ${account.externalAccountId} has no transaction endpoint (404) — skipping transactions`
         );
+        unsupportedNote = `${UNSUPPORTED_PREFIX}this account provides no transaction history`;
       } else {
         console.error(`[sync] Account ${account.externalAccountId} transactions error:`, msg);
         const rateLimit = isRateLimitError(msg);
@@ -185,7 +192,10 @@ export async function syncAccount(
   // so the queue retries the invocation and lastSyncAt eventually gets written.
   if (errors.length === 0) {
     await prisma.bankAccount
-      .update({ where: { id: account.id }, data: { lastSyncAt: new Date(), lastSyncError: null } });
+      .update({
+        where: { id: account.id },
+        data: { lastSyncAt: new Date(), lastSyncError: unsupportedNote },
+      });
   } else {
     await prisma.bankAccount
       .update({ where: { id: account.id }, data: { lastSyncError: errors.join(" | ") } })

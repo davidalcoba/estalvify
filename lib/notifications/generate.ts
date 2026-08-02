@@ -21,6 +21,8 @@ import {
   budgetNotifications,
   upcomingRecurringNotifications,
   lowBalanceNotifications,
+  consentExpiringNotifications,
+  staleTransactionNotifications,
   type NotificationSpec,
 } from "./generators";
 
@@ -52,7 +54,16 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
   const fullMonths = lastNMonths(prevMonth.year, prevMonth.month, 6);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
-  const [planItems, spendingRows, categories, recurring, accounts, trendTx] = await Promise.all([
+  const [
+    planItems,
+    spendingRows,
+    categories,
+    recurring,
+    accounts,
+    trendTx,
+    connections,
+    lastTxByAccount,
+  ] = await Promise.all([
     prisma.planItem.findMany({
       where: { userId, active: true },
       select: {
@@ -83,11 +94,25 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
     }),
     prisma.bankAccount.findMany({
       where: { userId, isActive: true },
-      select: { balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } } },
+      select: {
+        id: true,
+        name: true,
+        balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } },
+      },
     }),
     prisma.transaction.findMany({
       where: { userId, valueDate: { gte: trendStart } },
       select: { amount: true, direction: true, valueDate: true },
+    }),
+    prisma.bankConnection.findMany({
+      // Every status: a lapsed consent is exactly the case worth reporting.
+      where: { userId },
+      select: { id: true, bankName: true, consentExpiresAt: true, status: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ["bankAccountId"],
+      where: { userId },
+      _max: { valueDate: true },
     }),
   ]);
 
@@ -176,6 +201,31 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
       prefs.locale
     ),
     ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale, prefs.language),
+    ...consentExpiringNotifications(
+      connections
+        .filter((c) => c.status !== "REVOKED")
+        .map((c) => ({
+          connectionId: c.id,
+          bankName: c.bankName,
+          consentExpiresAt: c.consentExpiresAt
+            ? c.consentExpiresAt.toISOString().slice(0, 10)
+            : null,
+        })),
+      today,
+      prefs.language
+    ),
+    ...staleTransactionNotifications(
+      accounts.map((a) => ({
+        accountId: a.id,
+        accountName: a.name,
+        lastTransactionDate:
+          lastTxByAccount
+            .find((g) => g.bankAccountId === a.id)
+            ?._max.valueDate?.toISOString()
+            .slice(0, 10) ?? null,
+      })),
+      today
+    ),
   ];
 
   if (specs.length === 0) return 0;

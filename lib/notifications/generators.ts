@@ -98,6 +98,120 @@ export function upcomingRecurringNotifications(
   return specs;
 }
 
+export interface ConsentInput {
+  connectionId: string;
+  bankName: string;
+  consentExpiresAt: string | null; // YYYY-MM-DD
+}
+
+/**
+ * Steps at which a bank consent expiry is announced, in days remaining.
+ * PSD2 consents are granted for a fixed 90 days, so every connection WILL hit
+ * this — the point is to be told before the data stops, not weeks after.
+ *
+ * Kept ASCENDING: the step is the tightest one that still covers the remaining
+ * days, so 6 days left reports as the 7-day warning, not the 14-day one.
+ */
+export const CONSENT_WARNING_DAYS = [3, 7, 14] as const;
+
+const CONSENT_STEP_SEVERITY: Record<number, NotificationSeverity> = {
+  3: "ALERT",
+  7: "WARNING",
+  14: "INFO",
+};
+
+/**
+ * Warn before a bank consent lapses. Fires once per step per consent: the key
+ * embeds the step, and a reconnect moves `consentExpiresAt`, which starts a
+ * fresh series rather than re-alerting for the old one.
+ */
+export function consentExpiringNotifications(
+  connections: ConsentInput[],
+  today: string,
+  language: string
+): NotificationSpec[] {
+  const specs: NotificationSpec[] = [];
+  for (const conn of connections) {
+    if (!conn.consentExpiresAt) continue;
+    const daysLeft = daysBetween(today, conn.consentExpiresAt);
+    // Already lapsed is not this alert's job — staleTransactionNotifications
+    // covers that, and /accounts shows a Reconnect button.
+    if (daysLeft < 0) continue;
+
+    const step = CONSENT_WARNING_DAYS.find((d) => daysLeft <= d);
+    if (step === undefined) continue;
+
+    const when =
+      daysLeft === 0 ? "today" : daysLeft === 1 ? "tomorrow" : `in ${daysLeft} days`;
+    const expiryLabel = formatDate(
+      new Date(`${conn.consentExpiresAt}T00:00:00Z`),
+      language,
+      "UTC"
+    );
+
+    specs.push({
+      type: "CONSENT_EXPIRING",
+      severity: CONSENT_STEP_SEVERITY[step] ?? "WARNING",
+      title: `${conn.bankName} access expires ${when}`,
+      body: `Your bank consent runs out on ${expiryLabel}. Reconnect from Accounts to keep transactions flowing — once it lapses, syncing stops silently.`,
+      dedupeKey: `consent-expiring:${conn.connectionId}:${step}`,
+      metadata: { connectionId: conn.connectionId, daysLeft: String(daysLeft) },
+    });
+  }
+  return specs;
+}
+
+export interface StaleAccountInput {
+  accountId: string;
+  accountName: string;
+  lastTransactionDate: string | null; // YYYY-MM-DD
+}
+
+/** ISO-ish year-week, used to re-alert weekly instead of daily while stale. */
+export function isoYearWeek(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * Catch-all for a sync that stopped without anyone noticing.
+ *
+ * Deliberately measured on the newest transaction, not `BankAccount.lastSyncAt`:
+ * lastSyncAt is exactly the field that lies when the transactions endpoint 404s
+ * or the window is stuck, since both paths still mark the sync successful.
+ *
+ * The key re-alerts weekly. A fixed key would fire once ever (the upsert does
+ * `update: {}`), and a daily key would have produced 56 notifications during the
+ * outage this was written for.
+ */
+export function staleTransactionNotifications(
+  accounts: StaleAccountInput[],
+  today: string,
+  thresholdDays = 3
+): NotificationSpec[] {
+  const specs: NotificationSpec[] = [];
+  for (const account of accounts) {
+    // An account that has never had a transaction has nothing to go stale.
+    if (!account.lastTransactionDate) continue;
+    const days = daysBetween(account.lastTransactionDate, today);
+    if (days < thresholdDays) continue;
+
+    specs.push({
+      type: "NO_TRANSACTIONS",
+      severity: days >= thresholdDays * 3 ? "ALERT" : "WARNING",
+      title: `No new transactions in ${account.accountName}`,
+      body: `The most recent transaction is ${days} days old (${account.lastTransactionDate}). Check the connection on Accounts — it may need reconnecting.`,
+      dedupeKey: `no-transactions:${account.accountId}:${isoYearWeek(today)}`,
+      metadata: { accountId: account.accountId, staleDays: String(days) },
+    });
+  }
+  return specs;
+}
+
 // Alert when the projected balance is set to fall below a threshold (default 0)
 // within the forecast horizon. One alert for the earliest breaching month.
 export function lowBalanceNotifications(

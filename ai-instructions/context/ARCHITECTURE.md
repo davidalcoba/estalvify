@@ -70,6 +70,15 @@
     TARJETA EN SUPERMERCADOS"), which is usually the better rule target — it covers
     merchants never seen before. For other operations it is coarse ("ADEUDO A SU
     CARGO", "TRANSFERENCIAS", "BIZUM") and the merchant must come from `description`.
+  - Sync health: a PSD2 consent lasts a fixed 90 days
+    (`banking/enable-banking.ts`), and once it lapses every sync producer filters
+    on `status: "ACTIVE"` and skips the connection **silently** — an outage can run
+    for weeks unnoticed. Two notifications guard this: `CONSENT_EXPIRING` warns at
+    14/7/3 days before expiry (the one that actually prevents a gap) and
+    `NO_TRANSACTIONS` catches the other failure modes, measured on the newest
+    transaction rather than `BankAccount.lastSyncAt` — that field stays fresh even
+    when the transactions endpoint 404s. Reconnecting enqueues a sync immediately
+    instead of waiting for the nightly cron.
   - Rule engine: `lib/rules/` — `rule-matcher.ts` and `rule-plan.ts` are **pure**
     (condition evaluation; run ordering, precedence and the undo trail), `apply.ts`
     does the loading and writing, `rule-evaluator.ts` is only the SQL prefilter and

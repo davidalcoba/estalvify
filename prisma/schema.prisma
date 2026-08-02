@@ -529,6 +529,8 @@ enum NotificationType {
   BUDGET_NEAR
   RECURRING_UPCOMING
   LOW_BALANCE_PROJECTED
+  CONSENT_EXPIRING // PSD2 consent about to lapse — warn before syncing stops
+  NO_TRANSACTIONS // Nothing new for days; the sync may have died quietly
 }
 
 enum NotificationSeverity {

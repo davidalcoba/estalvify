@@ -10,7 +10,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { send } from "@vercel/queue";
 import { exchangeCodeForSession } from "@/lib/banking/enable-banking";
+import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -100,6 +102,27 @@ export async function GET(request: NextRequest) {
         } catch (err) {
           console.warn(`[callback] Could not update UID for IBAN suffix ···${ibanSuffix}:`, err);
         }
+      }
+
+      // Pull straight away. Without this the user reconnects, sees a healthy
+      // connection, and still waits until the 01:00 UTC cron for their data —
+      // after an outage that is exactly the wrong moment to make them wait.
+      // Non-fatal: the connection is already restored, and the cron is the
+      // fallback.
+      try {
+        await prisma.bankConnection.update({
+          where: { id: reconnectConnectionId },
+          data: { status: "SYNCING" },
+        });
+        await send<SyncConnectionMessage>(TOPICS.syncConnection, {
+          connectionId: reconnectConnectionId,
+          userId: bankConnection.userId,
+        });
+      } catch (err) {
+        console.error("[callback] Failed to enqueue sync after reconnect:", err);
+        await prisma.bankConnection
+          .update({ where: { id: reconnectConnectionId }, data: { status: "ACTIVE" } })
+          .catch(() => {});
       }
 
       return NextResponse.redirect(`${appUrl}/accounts?reconnected=true`);

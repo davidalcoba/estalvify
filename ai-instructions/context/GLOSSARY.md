@@ -66,6 +66,18 @@
   the Plan; `/budget` redirects to `/plan`. The `Budget`/`BudgetItem` tables remain but are
   unused by the app; `lib/budget/budget-progress` is reused for limit math.)
 
+## Sync Health Terms
+
+- Consent expiry: PSD2 access is granted for a fixed 90 days. On lapse the connection becomes
+  `EXPIRED` and every sync producer skips it silently, so the data simply stops.
+- `CONSENT_EXPIRING`: preventive notification at 14 / 7 / 3 days before the consent lapses,
+  escalating INFO → WARNING → ALERT. One per step per consent; reconnecting starts a fresh series.
+- `NO_TRANSACTIONS`: safety net for outages that are not an expiry (dead cron, stuck date window,
+  a 404 from the transactions endpoint). Measured on the newest transaction, never on
+  `lastSyncAt`, which stays fresh in those failure modes. Re-alerts weekly while stale.
+- `UNSUPPORTED:` prefix on `BankAccount.lastSyncError`: the account has no transactions endpoint.
+  Not a failure and never retried, but recorded so it can't pass for a healthy account.
+
 ## Operational Terms
 
 - Queue: async processing mechanism for background tasks.
