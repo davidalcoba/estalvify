@@ -91,8 +91,11 @@ stored hashed.
   (`McpOAuthClient`, `McpAuthCode`, `McpRefreshToken`).
 - `lib/mcp/tools.ts` — tool registry. **Every tool derives `userId` from the
   token and scopes all access to it** (same multi-user rule as the rest of the
-  app). Tools reuse `lib/*` logic; bulk categorization goes through
-  `lib/mcp/categorize.ts` (capped), sync enqueues via the queue.
+  app). Tools reuse `lib/*` logic. Reads: `list_transactions` (date-range +
+  pagination), `list_categories`, `list_accounts`, `get_budgets`, `list_rules`.
+  Writes: `bulk_categorize` (`lib/mcp/categorize.ts`, capped), category
+  create/edit and rule create/edit/run via `lib/mcp/manage.ts` (parameterized
+  by userId, reusing `buildRuleWhereClause`), `sync_connections` (enqueues).
 
 ### Access control
 
