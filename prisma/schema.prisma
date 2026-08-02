@@ -251,7 +251,10 @@ model Category {
   description     String?
   color           String  @default("#6366f1") // Hex color for UI
   icon            String? // Icon name (Lucide icon key)
-  isNonComputable Boolean @default(false) // e.g. transfers, savings movements
+  // What this category means for money totals. Drives every sum in the app:
+  // spending counts EXPENSE only, and the income/expense trend ignores TRANSFER
+  // so a movement between your own accounts stops inflating both sides.
+  kind            CategoryKind @default(EXPENSE)
   isSystem        Boolean @default(false) // Predefined, cannot be deleted
   isActive        Boolean @default(true)
   sortOrder       Int     @default(0)
@@ -273,6 +276,12 @@ model Category {
   recurringSeries       RecurringSeries[]
 
   @@map("categories")
+}
+
+enum CategoryKind {
+  EXPENSE // Money genuinely spent
+  INCOME // Money genuinely earned
+  TRANSFER // Moves between your own accounts — never counted as either
 }
 
 // User-defined rules for automatic categorization

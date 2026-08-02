@@ -13,6 +13,16 @@
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
 
+> **Post-roadmap — `Category.kind` y notificaciones.** Todo importe se deriva ahora de
+> `kind` (`EXPENSE`/`INCOME`/`TRANSFER`), no de listas de nombres: el gasto cuenta solo
+> EXPENSE y la gráfica de tendencias descarta TRANSFER, que antes hacía que un traspaso entre
+> cuentas propias sumara **a la vez** como ingreso y como gasto. Sustituye a `isNonComputable`,
+> que estaba en el esquema y no lo leía nadie. `update_category` acepta `parentId` y `kind`,
+> con validación de ciclos y del límite de dos niveles (`lib/categories/hierarchy.ts`, puro).
+> Y `/notifications` da el histórico completo con paginación y filtro de no leídas — la
+> campana solo guarda las 20 últimas y una notificación nunca se repite, así que lo que se
+> salía de ahí era irrecuperable.
+
 > **Post-roadmap — Salud del sync.** Un consentimiento PSD2 dura **90 días fijos**; al caducar
 > los cuatro productores de sync filtran por `status: "ACTIVE"` y se saltan la conexión **en
 > silencio**. Una caída real duró 8 semanas sin que nada avisara. Ahora hay aviso **preventivo**

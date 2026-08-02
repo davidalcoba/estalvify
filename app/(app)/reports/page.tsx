@@ -11,7 +11,11 @@ import {
   buildMonthlySpendingWhere,
   aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
-import { lastNMonths, monthlyIncomeExpenses, topCategories } from "@/lib/analytics/trends";
+import {
+  lastNMonths,
+  monthlyIncomeExpenses,
+  topCategories,
+} from "@/lib/analytics/trends";
 import { merchantDisplayName } from "@/lib/recurring/detect";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -38,18 +42,31 @@ export default async function ReportsPage() {
   const [trendTx, spendRows, categories, monthDebits] = await Promise.all([
     prisma.transaction.findMany({
       where: { userId, valueDate: { gte: rangeStart } },
-      select: { amount: true, direction: true, valueDate: true },
+      select: {
+        amount: true,
+        direction: true,
+        valueDate: true,
+        // Category kind so transfers can be excluded from income/expense totals.
+        categorization: { select: { category: { select: { kind: true } } } },
+      },
     }),
     prisma.transaction.findMany({
       where: buildMonthlySpendingWhere(userId, year, month),
-      select: { amount: true, categorization: { select: { categoryId: true } } },
+      select: {
+        amount: true,
+        categorization: { select: { categoryId: true } },
+      },
     }),
     prisma.category.findMany({
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
       select: { id: true, name: true, color: true },
     }),
     prisma.transaction.findMany({
-      where: { userId, direction: "DEBIT", valueDate: { gte: monthStart, lt: monthEnd } },
+      where: {
+        userId,
+        direction: "DEBIT",
+        valueDate: { gte: monthStart, lt: monthEnd },
+      },
       select: { amount: true, description: true, remittanceInfo: true },
     }),
   ]);
@@ -61,11 +78,14 @@ export default async function ReportsPage() {
       amount: Number(t.amount.toString()),
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
+      categoryKind: t.categorization?.category?.kind ?? null,
     })),
-    months
+    months,
   );
   const monthLabel = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", {
+      month: "short",
+    });
   const chartData = trend.map((t) => ({
     label: monthLabel(t.year, t.month),
     income: t.income,
@@ -82,18 +102,27 @@ export default async function ReportsPage() {
   // Top merchants this month (all debits, categorized or not).
   const merchantTotals = new Map<string, number>();
   for (const tx of monthDebits) {
-    const name = merchantDisplayName(tx.description, tx.remittanceInfo) || "Unknown";
-    merchantTotals.set(name, (merchantTotals.get(name) ?? 0) + Math.abs(Number(tx.amount.toString())));
+    const name =
+      merchantDisplayName(tx.description, tx.remittanceInfo) || "Unknown";
+    merchantTotals.set(
+      name,
+      (merchantTotals.get(name) ?? 0) + Math.abs(Number(tx.amount.toString())),
+    );
   }
   const topMerchants = [...merchantTotals.entries()]
     .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, TOP_MERCHANTS);
 
-  const thisMonthLabel = formatDate(new Date(Date.UTC(year, month - 1, 1)), language, "UTC", {
-    month: "long",
-    year: "numeric",
-  });
+  const thisMonthLabel = formatDate(
+    new Date(Date.UTC(year, month - 1, 1)),
+    language,
+    "UTC",
+    {
+      month: "long",
+      year: "numeric",
+    },
+  );
 
   return (
     <div className="space-y-6">
@@ -109,10 +138,17 @@ export default async function ReportsPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Income vs expenses · last 12 months</CardTitle>
+              <CardTitle className="text-base">
+                Income vs expenses · last 12 months
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <IncomeExpensesChart data={chartData} currency={currency} locale={locale} height={300} />
+              <IncomeExpensesChart
+                data={chartData}
+                currency={currency}
+                locale={locale}
+                height={300}
+              />
             </CardContent>
           </Card>
 
@@ -120,12 +156,17 @@ export default async function ReportsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Spending by category · <span className="capitalize">{thisMonthLabel}</span>
+                  Spending by category ·{" "}
+                  <span className="capitalize">{thisMonthLabel}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {slices.length > 0 ? (
-                  <CategoryBreakdownChart data={slices} currency={currency} locale={locale} />
+                  <CategoryBreakdownChart
+                    data={slices}
+                    currency={currency}
+                    locale={locale}
+                  />
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No categorized spending this month yet.
@@ -136,14 +177,21 @@ export default async function ReportsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Top merchants · this month</CardTitle>
+                <CardTitle className="text-base">
+                  Top merchants · this month
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {topMerchants.length > 0 ? (
                   <ul className="divide-y">
                     {topMerchants.map((m) => (
-                      <li key={m.name} className="flex items-center gap-3 py-2 text-sm">
-                        <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                      <li
+                        key={m.name}
+                        className="flex items-center gap-3 py-2 text-sm"
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {m.name}
+                        </span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">
                           {formatCurrency(m.amount, currency, locale)}
                         </span>
@@ -151,7 +199,9 @@ export default async function ReportsPage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No spending this month yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No spending this month yet.
+                  </p>
                 )}
               </CardContent>
             </Card>

@@ -70,6 +70,16 @@
     TARJETA EN SUPERMERCADOS"), which is usually the better rule target — it covers
     merchants never seen before. For other operations it is coarse ("ADEUDO A SU
     CARGO", "TRANSFERENCIAS", "BIZUM") and the merchant must come from `description`.
+  - Money totals: `Category.kind` (`EXPENSE` / `INCOME` / `TRANSFER`) is the single
+    property every sum derives from — never a hardcoded list of names or ids.
+    `buildMonthlySpendingWhere` counts EXPENSE only; `monthlyIncomeExpenses` skips
+    TRANSFER so a movement between the user's own accounts stops inflating income
+    and expenses at once. An uncategorized row still counts by `direction`:
+    dropping it would understate every month. Replaced the dead `isNonComputable`
+    boolean, which nothing read.
+  - Category tree: `lib/categories/hierarchy.ts` (pure) guards re-parenting —
+    cycles, self-parenting, and the two-level limit the pickers assume. Nesting is
+    a UI constraint, not a schema one; the schema allows any depth.
   - Sync health: a PSD2 consent lasts a fixed 90 days
     (`banking/enable-banking.ts`), and once it lapses every sync producer filters
     on `status: "ACTIVE"` and skips the connection **silently** — an outage can run

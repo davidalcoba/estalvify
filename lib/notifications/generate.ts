@@ -9,8 +9,16 @@ import {
   buildMonthlySpendingWhere,
   aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
-import { lastNMonths, forwardMonths, monthlyIncomeExpenses } from "@/lib/analytics/trends";
-import { averageMonthly, projectBalances, projectBalancesVariable } from "@/lib/analytics/forecast";
+import {
+  lastNMonths,
+  forwardMonths,
+  monthlyIncomeExpenses,
+} from "@/lib/analytics/trends";
+import {
+  averageMonthly,
+  projectBalances,
+  projectBalancesVariable,
+} from "@/lib/analytics/forecast";
 import { buildBudgetData } from "@/lib/budget/budget-dto";
 import {
   plannedForMonth,
@@ -45,12 +53,15 @@ function todayInTimezone(timezone: string, now: Date = new Date()): string {
  * data, upserting by (userId, dedupeKey) so re-runs never duplicate and never
  * clobber an already-read notification. Returns the number of specs processed.
  */
-export async function generateNotificationsForUser(userId: string): Promise<number> {
+export async function generateNotificationsForUser(
+  userId: string,
+): Promise<number> {
   const prefs = await getUserPrefs(userId);
   const { year, month } = currentYearMonth(prefs.timezone);
 
   // Forecast baseline: the 6 full months ending last month.
-  const prevMonth = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+  const prevMonth =
+    month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const fullMonths = lastNMonths(prevMonth.year, prevMonth.month, 6);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
@@ -76,7 +87,10 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
     }),
     prisma.transaction.findMany({
       where: buildMonthlySpendingWhere(userId, year, month),
-      select: { amount: true, categorization: { select: { categoryId: true } } },
+      select: {
+        amount: true,
+        categorization: { select: { categoryId: true } },
+      },
     }),
     prisma.category.findMany({
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
@@ -97,17 +111,32 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
       select: {
         id: true,
         name: true,
-        balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } },
+        balances: {
+          orderBy: { date: "desc" },
+          take: 1,
+          select: { balance: true },
+        },
       },
     }),
     prisma.transaction.findMany({
       where: { userId, valueDate: { gte: trendStart } },
-      select: { amount: true, direction: true, valueDate: true },
+      select: {
+        amount: true,
+        direction: true,
+        valueDate: true,
+        // Category kind so transfers can be excluded from income/expense totals.
+        categorization: { select: { category: { select: { kind: true } } } },
+      },
     }),
     prisma.bankConnection.findMany({
       // Every status: a lapsed consent is exactly the case worth reporting.
       where: { userId },
-      select: { id: true, bankName: true, consentExpiresAt: true, status: true },
+      select: {
+        id: true,
+        bankName: true,
+        consentExpiresAt: true,
+        status: true,
+      },
     }),
     prisma.transaction.groupBy({
       by: ["bankAccountId"],
@@ -157,16 +186,18 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
   // Project the balance forward and alert if it dips below zero. Plan-driven when
   // there is a Plan; otherwise the historical average.
   const netWorth = accounts.reduce(
-    (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
-    0
+    (sum, a) =>
+      sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
+    0,
   );
   const trend = monthlyIncomeExpenses(
     trendTx.map((t) => ({
       amount: Number(t.amount.toString()),
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
+      categoryKind: t.categorization?.category?.kind ?? null,
     })),
-    fullMonths
+    fullMonths,
   );
   const avg = averageMonthly(trend);
   const horizon = forwardMonths(year, month, FORECAST_MONTHS);
@@ -178,14 +209,23 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
           horizon.map(
             (b) =>
               Math.round(
-                planInputs.reduce((sum, item) => sum + plannedForMonth(item, b.year, b.month), 0) * 100
-              ) / 100
-          )
+                planInputs.reduce(
+                  (sum, item) => sum + plannedForMonth(item, b.year, b.month),
+                  0,
+                ) * 100,
+              ) / 100,
+          ),
         )
       : projectBalances(netWorth, avg.net, horizon);
 
   const specs: NotificationSpec[] = [
-    ...budgetNotifications(year, month, budgetData.rows, prefs.currency, prefs.locale),
+    ...budgetNotifications(
+      year,
+      month,
+      budgetData.rows,
+      prefs.currency,
+      prefs.locale,
+    ),
     ...upcomingRecurringNotifications(
       recurring.map((r) => ({
         merchantKey: r.merchantKey,
@@ -198,9 +238,15 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
       })),
       today,
       prefs.currency,
-      prefs.locale
+      prefs.locale,
     ),
-    ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale, prefs.language),
+    ...lowBalanceNotifications(
+      projected,
+      0,
+      prefs.currency,
+      prefs.locale,
+      prefs.language,
+    ),
     ...consentExpiringNotifications(
       connections
         .filter((c) => c.status !== "REVOKED")
@@ -212,7 +258,7 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
             : null,
         })),
       today,
-      prefs.language
+      prefs.language,
     ),
     ...staleTransactionNotifications(
       accounts.map((a) => ({
@@ -224,7 +270,7 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
             ?._max.valueDate?.toISOString()
             .slice(0, 10) ?? null,
       })),
-      today
+      today,
     ),
   ];
 
@@ -241,12 +287,14 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
           title: spec.title,
           body: spec.body,
           dedupeKey: spec.dedupeKey,
-          ...(spec.metadata ? { metadata: spec.metadata as Prisma.InputJsonValue } : {}),
+          ...(spec.metadata
+            ? { metadata: spec.metadata as Prisma.InputJsonValue }
+            : {}),
         },
         // Never clobber readAt or re-alert — a matching dedupeKey is a no-op.
         update: {},
-      })
-    )
+      }),
+    ),
   );
 
   return specs.length;

@@ -222,7 +222,10 @@ export function registerTools(server: McpServer): void {
     "list_categories",
     {
       description:
-        "List the categories available to the user (their own plus system defaults). Use the returned id with bulk_categorize.",
+        "List the categories available to the user (their own plus system defaults). Use the " +
+        "returned id with bulk_categorize. `kind` says how the category counts: EXPENSE feeds " +
+        "spending totals, INCOME feeds income, TRANSFER is excluded from both (money moving " +
+        "between the user's own accounts).",
       inputSchema: {},
     },
     async (_args, extra) => {
@@ -230,7 +233,14 @@ export function registerTools(server: McpServer): void {
       const cats = await prisma.category.findMany({
         where: { OR: [{ userId }, { userId: null }], isActive: true },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, color: true, icon: true, parentId: true },
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          icon: true,
+          parentId: true,
+          kind: true,
+        },
       });
       return json(cats);
     },
@@ -388,17 +398,21 @@ export function registerTools(server: McpServer): void {
     "create_category",
     {
       description:
-        "Create a new category (or a subcategory when parentId is given). Returns the created category. color is a hex string like #6366f1.",
+        "Create a new category (or a subcategory when parentId is given). color is a hex " +
+        "string like #6366f1. `kind` defaults to EXPENSE — set INCOME for earnings and " +
+        "TRANSFER for movements between the user's own accounts, which are excluded from " +
+        "both spending and income totals. Nesting is limited to two levels.",
       inputSchema: {
         name: z.string(),
         color: z.string().optional(),
         parentId: z.string().optional(),
+        kind: z.enum(["EXPENSE", "INCOME", "TRANSFER"]).optional(),
       },
     },
-    async ({ name, color, parentId }, extra) => {
+    async ({ name, color, parentId, kind }, extra) => {
       const userId = requireUserId(extra as ToolExtra);
       try {
-        return json(await createCategoryForUser(userId, { name, color, parentId }));
+        return json(await createCategoryForUser(userId, { name, color, parentId, kind }));
       } catch (err) {
         return errorResult(err, "create_category failed");
       }
@@ -410,17 +424,28 @@ export function registerTools(server: McpServer): void {
     "update_category",
     {
       description:
-        "Rename and/or recolor one of the user's own categories (system default categories can't be edited).",
+        "Rename, recolor, re-parent or re-classify one of the user's own categories (system " +
+        "defaults can't be edited). Only the provided fields change.\n" +
+        "`parentId` moves the category: pass an id to nest it under a top-level category, or " +
+        "null to promote it to the top level. Rejected if it would create a cycle, if the " +
+        "category has subcategories of its own, or if the target is itself a subcategory — " +
+        "nesting is limited to two levels.\n" +
+        "`kind` controls how it counts: EXPENSE in spending totals, INCOME in income, TRANSFER " +
+        "in neither.",
       inputSchema: {
         categoryId: z.string(),
         name: z.string().optional(),
         color: z.string().optional(),
+        kind: z.enum(["EXPENSE", "INCOME", "TRANSFER"]).optional(),
+        parentId: z.string().nullable().optional(),
       },
     },
-    async ({ categoryId, name, color }, extra) => {
+    async ({ categoryId, name, color, kind, parentId }, extra) => {
       const userId = requireUserId(extra as ToolExtra);
       try {
-        return json(await updateCategoryForUser(userId, categoryId, { name, color }));
+        return json(
+          await updateCategoryForUser(userId, categoryId, { name, color, kind, parentId }),
+        );
       } catch (err) {
         return errorResult(err, "update_category failed");
       }
@@ -469,9 +494,15 @@ export function registerTools(server: McpServer): void {
         "magnitudes — use direction ('DEBIT'|'CREDIT') to tell money out from money in.\n" +
         "Text comparison folds accents and case, so AMORTIZACION matches AMORTIZACIÓN. " +
         "`negate: true` inverts a condition, which is how you exclude.\n" +
-        "priority: LOWER number is evaluated FIRST and the first matching rule wins. Convention: " +
+        "priority: LOWER number is evaluated FIRST and the first matching rule wins. Bands: " +
         "0-99 exclusions and transfers, 100-199 income, 200-299 fixed costs, 300+ variable spending. " +
         "Put the specific rule before the generic one (fuel before groceries).\n" +
+        "Within variable spending there is a further convention: rules matching a MERCHANT via " +
+        "`description` go BELOW 300, rules matching the bank's category label via " +
+        "`remittanceInfo` go 300 and above. The bank label is high-coverage but wrong for some " +
+        "merchants — ON STAGE MONTJUIC (concert tickets) arrives as \"EN HOGAR, MUEBLES\", " +
+        "MULTIOPTICAS as \"EN DISCOS, LIBROS, FOTOS Y PC'S\" — so a per-merchant rule has to be " +
+        "able to beat it.\n" +
         "sourceCategoryId (optional) restricts matching to transactions already in that category. " +
         "Creating a rule does NOT apply it — call run_rule (start with dryRun: true).",
       inputSchema: {

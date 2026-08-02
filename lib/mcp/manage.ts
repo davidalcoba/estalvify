@@ -7,6 +7,8 @@
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
+import type { CategoryKind } from "@/app/generated/prisma";
+import { wouldCreateCycle, hasChildren } from "@/lib/categories/hierarchy";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { runRules } from "@/lib/rules/apply";
 import type { RuleRunReport } from "@/lib/rules/apply";
@@ -26,7 +28,7 @@ async function assertOwnedCategory(userId: string, categoryId: string) {
 
 export async function createCategoryForUser(
   userId: string,
-  input: { name: string; color?: string; parentId?: string },
+  input: { name: string; color?: string; parentId?: string; kind?: CategoryKind },
 ) {
   const name = input.name.trim();
   if (!name) throw new Error("Name is required");
@@ -54,16 +56,23 @@ export async function createCategoryForUser(
       name,
       color: input.color ?? "#6366f1",
       parentId: input.parentId ?? null,
+      kind: input.kind ?? "EXPENSE",
       sortOrder: (last?.sortOrder ?? -1) + 1,
     },
-    select: { id: true, name: true, color: true, parentId: true },
+    select: { id: true, name: true, color: true, parentId: true, kind: true },
   });
 }
 
 export async function updateCategoryForUser(
   userId: string,
   categoryId: string,
-  input: { name?: string; color?: string },
+  input: {
+    name?: string;
+    color?: string;
+    kind?: CategoryKind;
+    /** `null` promotes the category to the top level. Omit to leave it where it is. */
+    parentId?: string | null;
+  },
 ) {
   const cat = await prisma.category.findUnique({
     where: { id: categoryId },
@@ -79,12 +88,82 @@ export async function updateCategoryForUser(
     data.name = n;
   }
   if (input.color !== undefined) data.color = input.color;
+  if (input.kind !== undefined) data.kind = input.kind;
+
+  if (input.parentId !== undefined) {
+    await applyMove(userId, categoryId, input.parentId, data);
+  }
 
   return prisma.category.update({
     where: { id: categoryId },
     data,
-    select: { id: true, name: true, color: true },
+    select: { id: true, name: true, color: true, parentId: true, kind: true },
   });
+}
+
+/**
+ * Validate a re-parent and fold it into the update payload.
+ *
+ * The schema allows unlimited nesting and nothing used to check any of this,
+ * because until now a category could only be parented at creation — where a
+ * cycle is impossible. A move can produce one.
+ */
+async function applyMove(
+  userId: string,
+  categoryId: string,
+  newParentId: string | null,
+  data: Prisma.CategoryUpdateInput,
+): Promise<void> {
+  if (newParentId === categoryId) {
+    throw new Error("A category cannot be its own parent");
+  }
+
+  const all = await prisma.category.findMany({
+    where: { OR: [{ userId }, { userId: null }] },
+    select: { id: true, parentId: true },
+  });
+  const parentOf = new Map(all.map((c) => [c.id, c.parentId]));
+
+  if (wouldCreateCycle(categoryId, newParentId, parentOf)) {
+    throw new Error("A category cannot be moved under one of its own subcategories");
+  }
+
+  // Two levels is a hard limit in practice: category-select and the settings
+  // manager only render parents and their children, so a third level would be
+  // invisible in the UI while still counting in the data.
+  if (newParentId !== null && hasChildren(categoryId, parentOf)) {
+    throw new Error(
+      "Move or delete this category's subcategories first — nesting is limited to two levels",
+    );
+  }
+
+  if (newParentId === null) {
+    data.parent = { disconnect: true };
+  } else {
+    const parent = await prisma.category.findUnique({
+      where: { id: newParentId },
+      select: { userId: true, parentId: true },
+    });
+    // Same strict ownership as createCategoryForUser: a subcategory's parent
+    // must be the user's own, not a shared system category.
+    if (!parent || parent.userId !== userId) {
+      throw new Error("Parent category not found");
+    }
+    if (parent.parentId !== null) {
+      throw new Error("Cannot nest under a subcategory — nesting is limited to two levels");
+    }
+    data.parent = { connect: { id: newParentId } };
+  }
+
+  // sortOrder is scoped to the parent, so a move needs the same max+1 the
+  // creation path computes — otherwise the category inherits a position that
+  // means nothing in its new siblings' ordering.
+  const last = await prisma.category.findFirst({
+    where: { userId, parentId: newParentId, isActive: true, NOT: { id: categoryId } },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+  data.sortOrder = (last?.sortOrder ?? -1) + 1;
 }
 
 // ── Rules ─────────────────────────────────────────────────────────────────────

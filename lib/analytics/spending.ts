@@ -20,9 +20,13 @@ export function monthRange(year: number, month: number): { start: Date; end: Dat
 }
 
 /**
- * Prisma `where` selecting a user's real spending for a month: approved-category
- * DEBIT (money-out) transactions dated within the month. Income (CREDIT) and
- * pending/rejected categorizations are excluded so budgets track actual expenses.
+ * Prisma `where` selecting a user's real spending for a month: DEBIT (money-out)
+ * transactions dated within the month whose approved category is an EXPENSE.
+ *
+ * The `kind` filter is what keeps a transfer between your own accounts out of
+ * the totals. Filtering on `direction` alone counted the outgoing leg of every
+ * savings transfer as spending — one 15.000 € move was landing in the month's
+ * expenses and in the top-categories chart.
  */
 export function buildMonthlySpendingWhere(
   userId: string,
@@ -34,7 +38,7 @@ export function buildMonthlySpendingWhere(
     userId,
     direction: "DEBIT",
     valueDate: { gte: start, lt: end },
-    categorization: { is: { status: "APPROVED" } },
+    categorization: { is: { status: "APPROVED", category: { is: { kind: "EXPENSE" } } } },
   };
 }
 

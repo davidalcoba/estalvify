@@ -25,7 +25,9 @@ export default async function RulesPage() {
         category: { select: { name: true, color: true } },
         sourceCategory: { select: { name: true, color: true } },
       },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      // Evaluation order: lower priority number runs first and wins. Listing
+      // them backwards made the UI contradict the rule it is about to explain.
+      orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
     }),
     getUserPrefs(userId),
   ]);
