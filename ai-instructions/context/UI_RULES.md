@@ -65,6 +65,34 @@ Pages can compose UI, but base controls must come from `components/ui/*`.
 - Page headers: use `components/layout/page-header` (title + actions; no subtitle).
 - Money/dates: format via `lib/formatters`.
 
+## Navigation Feedback (every route needs a `loading.tsx`)
+
+Every page under `app/(app)` is an async server component that queries the
+database, so a nav click has a visible gap before the new route paints. Without
+feedback the app reads as frozen. Three layers cover it:
+
+- **`loading.tsx` per route — required.** Any route whose `page.tsx` awaits data
+  MUST ship a sibling `loading.tsx`. Next renders it the instant the link is
+  clicked, and prefetches it, so the main area swaps to a skeleton immediately.
+  A route with no awaits (for example `insights`, which fetches from the client)
+  does not need one — a skeleton there would only flash.
+- **Sidebar spinner.** `components/layout/nav-progress` exports `NavItemIcon`,
+  which swaps a nav item's icon for a spinner while that route loads. It is
+  already wired into `AppSidebar`.
+- **Top progress bar.** `NavProgressBar` renders once in the `(app)` layout and
+  shows a thin indeterminate bar for any pending instrumented link.
+
+Build skeletons from `components/layout/skeletons` (`PageHeaderSkeleton`,
+`KpiGridSkeleton`, `ChartCardSkeleton`, `ListCardSkeleton`,
+`TableCardSkeleton`) rather than hand-rolling `Skeleton` blocks. The skeleton
+must mirror the real layout — same wrappers, same grid, same card count — or
+the page jumps when it resolves. In particular, never draw a subtitle line:
+`PageHeader` has no subtitle.
+
+To instrument a `<Link>` outside the sidebar, render a component that calls
+`useLinkPending()` as a child of that link; it reports into the shared store
+that drives the top bar.
+
 ## Desktop and Mobile: First-Class Views
 
 This app is not desktop-only responsive.

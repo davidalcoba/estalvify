@@ -3,6 +3,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeaderSkeleton } from "@/components/layout/skeletons";
 
 function TransactionRowSkeleton() {
   return (
@@ -35,11 +36,7 @@ function DateGroupSkeleton({ rows = 4 }: { rows?: number }) {
 export default function TransactionsLoading() {
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <Skeleton className="h-8 w-36 mb-2" />
-        <Skeleton className="h-4 w-80" />
-      </div>
+      <PageHeaderSkeleton titleWidth="w-40" />
 
       {/* Filters panel — date inputs + search (no presets) */}
       <div className="space-y-3 rounded-xl border bg-card p-4">

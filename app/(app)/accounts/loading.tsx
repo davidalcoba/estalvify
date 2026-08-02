@@ -3,6 +3,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PageHeaderSkeleton } from "@/components/layout/skeletons";
 
 function BankAccountRowSkeleton() {
   return (
@@ -51,14 +52,7 @@ function BankCardSkeleton({ rows = 2 }: { rows?: number }) {
 export default function AccountsLoading() {
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Skeleton className="h-8 w-36 mb-2" />
-          <Skeleton className="h-4 w-72" />
-        </div>
-        <Skeleton className="h-9 w-32" />
-      </div>
+      <PageHeaderSkeleton titleWidth="w-40" actionsWidth="w-32" />
 
       {/* PSD2 security info card */}
       <Card className="bg-brand/5 border-brand/20">
