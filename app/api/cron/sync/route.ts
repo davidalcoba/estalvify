@@ -50,10 +50,21 @@ export async function GET(request: NextRequest) {
   const queued = results.filter((r) => r.status === "fulfilled").length;
   const failed = results.filter((r) => r.status === "rejected").length;
 
-  // Refresh in-app notifications (budget / recurring alerts) for each affected
-  // user. Idempotent and best-effort — failures must not break the sync run.
-  const userIds = [...new Set(activeConnections.map((c) => c.userId))];
-  await Promise.allSettled(userIds.map((id) => generateNotificationsForUser(id)));
+  // Refresh in-app notifications. Idempotent and best-effort — failures must not
+  // break the sync run.
+  //
+  // Deliberately NOT derived from activeConnections. A user whose only connection
+  // has an expired consent has no active connection, so deriving the list from
+  // the sync fan-out silenced notifications for exactly the user in trouble —
+  // including the alert that would have told them the sync had stopped. Anyone
+  // who has ever connected a bank gets their notifications regenerated.
+  const notifiableUsers = await prisma.user.findMany({
+    where: { bankConnections: { some: {} } },
+    select: { id: true },
+  });
+  await Promise.allSettled(
+    notifiableUsers.map((u) => generateNotificationsForUser(u.id))
+  );
 
   return NextResponse.json({
     success: true,

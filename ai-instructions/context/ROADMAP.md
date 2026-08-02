@@ -13,6 +13,16 @@
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
 
+> **Post-roadmap — Salud del sync.** Un consentimiento PSD2 dura **90 días fijos**; al caducar
+> los cuatro productores de sync filtran por `status: "ACTIVE"` y se saltan la conexión **en
+> silencio**. Una caída real duró 8 semanas sin que nada avisara. Ahora hay aviso **preventivo**
+> (`CONSENT_EXPIRING`, a 14/7/3 días) más red de seguridad (`NO_TRANSACTIONS`, medida sobre la
+> transacción más reciente y no sobre `lastSyncAt`, que miente cuando el endpoint devuelve 404).
+> Además: reconectar encola sync al momento en vez de esperar al cron, el 404 se registra con
+> prefijo `UNSUPPORTED:` en vez de desaparecer, y el cron de notificaciones ya no deriva sus
+> usuarios de las conexiones activas — hacerlo silenciaba **todas** las notificaciones justo para
+> quien tenía el sync caído.
+
 > **Post-roadmap — Motor de reglas v2.** Las condiciones pasan de un array plano AND a un
 > **árbol `{op, children}`** con OR y `negate`, campos nuevos (`any` por defecto, `amount`,
 > `direction`, `account`) y operadores `word` (límite de palabra) y `matches` (regex). El

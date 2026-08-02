@@ -20,4 +20,12 @@ export function isAuthError(msg: string): boolean {
 // Prefixes used to tag accumulated errors so the queue consumer can decide how
 // to close out the connection (no retry / mark EXPIRED).
 export const RATE_LIMIT_PREFIX = "RATE_LIMIT:";
+/**
+ * The account has no transactions endpoint (some card/loan products don't).
+ * Recorded on the account but never added to the sync's `errors`, so the sync
+ * still counts as successful and is not retried — it is a permanent property of
+ * the account, not a failure. Kept visible so a permanently history-less account
+ * can't be mistaken for a healthy one.
+ */
+export const UNSUPPORTED_PREFIX = "UNSUPPORTED:";
 export const AUTH_ERROR_PREFIX = "AUTH_ERROR:";
