@@ -58,13 +58,20 @@ migrations — `prisma.config.ts`):
 | `DIRECT_URL`   | `preview`                  | `preview`   | Neon `preview`, direct        |
 | `DATABASE_URL` | `preview`                  | —           | Neon `preview`, pooled — safety net |
 
-The generic `preview` `DATABASE_URL` is the safety net: it is only consulted
-when the integration does not inject a per-deployment branch, and it points at
-the shared non-production `preview` branch rather than production. This is not
-hypothetical — the Neon org is on the **free plan, capped at 10 branches**, and
-the project already sits at that cap, so branch creation for a new preview
-deployment can fail. Prune stale `preview/<git-branch>` branches for merged work
-to keep headroom.
+The generic `preview` `DATABASE_URL` is the safety net: it is only consulted when
+the integration does not inject a per-deployment branch, and it points at the
+shared non-production `preview` branch rather than production. Previously this
+slot held the production URL, which meant any preview that missed the injection
+would have connected to — and, since the build runs `prisma migrate deploy`,
+migrated — production.
+
+**Branch cap.** The Neon org is on the free plan, capped at **10 branches**. When
+the cap is reached the integration cannot create a branch and the deployment
+fails at provisioning with `Resource provisioning failed`, before the build runs
+— it fails closed rather than falling through to another database. Prune stale
+`preview/<git-branch>` branches once their work is merged; each is recreated from
+`main` on the next deployment of that git branch, so the only thing lost is
+throwaway preview data.
 
 There is deliberately **no** generic `preview` `DIRECT_URL`. `prisma.config.ts`
 prefers `DIRECT_URL` over `DATABASE_URL`, so a generic one would send
@@ -72,10 +79,11 @@ feature-branch migrations to the shared `preview` branch while the app ran
 against its own ephemeral branch. `DIRECT_URL` exists only where it is scoped to
 the same branch as its `DATABASE_URL`.
 
-`scripts/migrate.mjs` logs `[migrate] target: <neon-endpoint-id>` at the top of
-every build. That line is how you confirm from a build log which Neon branch a
-deployment actually migrated — Prisma's own "Datasource" line has its host
-redacted by Vercel.
+`scripts/migrate.mjs` logs `[migrate] target: <neon-endpoint-id> (via <var>)` at
+the top of every build. That line is how you confirm from a build log which Neon
+branch a deployment actually migrated — Prisma's own "Datasource" line has its
+host redacted by Vercel. Map the endpoint id back to a branch with
+`GET /api/v2/projects/divine-firefly-20538122/endpoints`.
 
 Tooling note: the Neon API (`console.neon.tech`) is reachable from the Claude
 Code environment, and a Neon API key is exposed as `NEON_DB_KEY` (secret — never
