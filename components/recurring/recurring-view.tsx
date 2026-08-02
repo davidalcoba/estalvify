@@ -39,7 +39,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
         key: "suggested",
         title: `Suggested (${suggested.length})`,
         description:
-          "Detected in your transaction history — confirm the ones that are really recurring.",
+          "Detected in your transaction history — confirming one adds it to your Plan.",
         items: suggested,
       });
     }
@@ -89,6 +89,7 @@ export function RecurringView({ items, summary, currency, locale, dateLocale }: 
     startTransition(async () => {
       try {
         await addRecurringToPlan({
+          merchantKey: item.merchantKey,
           displayName: item.displayName,
           direction: item.direction,
           cadence: item.cadence,

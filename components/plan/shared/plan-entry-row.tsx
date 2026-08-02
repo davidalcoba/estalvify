@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import type { PlanEntryVM } from "@/lib/plan/plan-dto";
@@ -45,7 +45,15 @@ export function PlanEntryRow({
   return (
     <div className="flex items-center gap-3 py-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{primary}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          {entry.fromRecurring && (
+            <Repeat
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="From a confirmed recurring series"
+            />
+          )}
+          <span className="truncate">{primary}</span>
+        </p>
         <p className="truncate text-xs text-muted-foreground">{metaParts.join(" · ")}</p>
       </div>
       <span

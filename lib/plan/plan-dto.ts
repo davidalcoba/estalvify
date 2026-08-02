@@ -33,6 +33,8 @@ export interface PlanItemRecord {
   cadence: PlanCadence;
   dayOfMonth: number | null;
   onDate: Date | string | null;
+  /** Set when the item mirrors a confirmed recurring series. */
+  recurringMerchantKey: string | null;
 }
 
 /** Serializable per-item view model for the client. */
@@ -50,6 +52,8 @@ export interface PlanEntryVM {
   onDate: string | null;
   /** Monthly equivalent (0 for ONE_OFF). */
   monthly: number;
+  /** Came from confirming a detected recurring series, not typed by hand. */
+  fromRecurring: boolean;
 }
 
 /** A category's expense items plus its planned-vs-actual limit row. */
@@ -109,6 +113,7 @@ export function buildPlanData(params: {
       dayOfMonth: item.dayOfMonth,
       onDate: toIsoDate(item.onDate),
       monthly: planMonthlyEquivalent(amount, item.cadence),
+      fromRecurring: item.recurringMerchantKey != null,
     };
   });
 

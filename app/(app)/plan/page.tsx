@@ -37,6 +37,7 @@ export default async function PlanPage() {
         cadence: true,
         dayOfMonth: true,
         onDate: true,
+        recurringMerchantKey: true,
       },
     }),
     prisma.transaction.findMany({

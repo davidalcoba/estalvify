@@ -431,6 +431,12 @@ model PlanItem {
   dayOfMonth Int? // 1–31 anchor for MONTHLY/QUARTERLY/YEARLY (optional)
   onDate     DateTime? @db.Date // Specific date for ONE_OFF
 
+  // Set to a RecurringSeries.merchantKey when this item was created by confirming
+  // a detected series; null for items the user typed. The unique index keeps the
+  // link 1:1, so confirming is idempotent and undoing removes exactly one item
+  // (Postgres treats NULLs as distinct, so manual items are unconstrained).
+  recurringMerchantKey String?
+
   active Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -439,6 +445,7 @@ model PlanItem {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category? @relation(fields: [categoryId], references: [id])
 
+  @@unique([userId, recurringMerchantKey])
   @@index([userId])
   @@map("plan_items")
 }

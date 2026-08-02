@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ListPlus, RotateCcw, X } from "lucide-react";
+import { Check, ListChecks, ListPlus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -35,6 +35,10 @@ export function RecurringItemRow({
 } & RecurringRowHandlers) {
   const income = item.direction === "CREDIT";
   const ignored = item.status === "IGNORED";
+  // Confirming plans the series automatically, except for an expense with no
+  // category — the Plan needs one to turn it into a category limit.
+  const plannable = income || item.categoryId !== null;
+  const needsCategory = item.status === "CONFIRMED" && !item.inPlan && !plannable;
 
   return (
     <div className={`flex items-center gap-3 py-3 ${ignored ? "opacity-60" : ""}`}>
@@ -60,7 +64,7 @@ export function RecurringItemRow({
             month: "short",
             year: "numeric",
           })}{" "}
-          · {item.occurrences}×
+          · {item.occurrences}×{needsCategory && " · add a category to plan it"}
         </p>
       </div>
 
@@ -95,16 +99,24 @@ export function RecurringItemRow({
         {item.status === "CONFIRMED" && (
           <>
             <Badge variant="success-soft">Confirmed</Badge>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onAddToPlan(item)}
-              disabled={disabled}
-              title="Add to Plan"
-            >
-              <ListPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add to Plan</span>
-            </Button>
+            {item.inPlan && (
+              <Badge variant="outline" title="Added to your Plan">
+                <ListChecks />
+                <span className="hidden sm:inline">In Plan</span>
+              </Badge>
+            )}
+            {!item.inPlan && plannable && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onAddToPlan(item)}
+                disabled={disabled}
+                title="Add to Plan"
+              >
+                <ListPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add to Plan</span>
+              </Button>
+            )}
             <Button
               size="icon-sm"
               variant="ghost"

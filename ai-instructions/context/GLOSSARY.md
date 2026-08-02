@@ -70,8 +70,9 @@
   tracked against real spending with the `ok/warning/over` status model.
 - Forecast: the projected balance over the next months, driven by the Plan's monthly net
   (historical-average fallback when there is no Plan yet).
-- Recurring series: an auto-detected recurring charge from bank history; can be added to
-  the Plan.
+- Recurring series: an auto-detected recurring charge from bank history. Confirming it
+  adds a linked Plan item (`PlanItem.recurringMerchantKey`); ignoring or undoing removes
+  it again.
 - Reports: summaries and trends over transactions and spending.
 - (Budget: the previous per-month, one-amount-per-category planning model, now replaced by
   the Plan; `/budget` redirects to `/plan`. The `Budget`/`BudgetItem` tables remain but are
