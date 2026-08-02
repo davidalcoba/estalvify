@@ -9,9 +9,11 @@ export function RecurringMobileView({
   sections,
   currency,
   locale,
+  dateLocale,
   onConfirm,
   onIgnore,
   onReset,
+  onAddToPlan,
   disabled,
 }: RecurringListViewProps) {
   return (
@@ -32,9 +34,11 @@ export function RecurringMobileView({
                     item={item}
                     currency={currency}
                     locale={locale}
+                    dateLocale={dateLocale}
                     onConfirm={onConfirm}
                     onIgnore={onIgnore}
                     onReset={onReset}
+                    onAddToPlan={onAddToPlan}
                     disabled={disabled}
                   />
                 </CardContent>

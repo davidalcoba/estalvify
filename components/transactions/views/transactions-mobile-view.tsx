@@ -34,6 +34,7 @@ interface TransactionsMobileViewProps {
   rangeStart: number;
   rangeEnd: number;
   userLocale: string;
+  userLanguage: string;
   userTimezone: string;
   pageQuery: string;
   categories: Category[];
@@ -75,6 +76,7 @@ export function TransactionsMobileView({
   rangeStart,
   rangeEnd,
   userLocale,
+  userLanguage,
   userTimezone,
   pageQuery,
   categories,
@@ -121,7 +123,7 @@ export function TransactionsMobileView({
       {groupedTransactions.map(({ dateKey, items }) => (
         <section key={dateKey} className="space-y-2">
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide px-1">
-            {formatSectionDate(dateKey, userLocale, userTimezone)}
+            {formatSectionDate(dateKey, userLanguage, userTimezone)}
           </p>
           <div className="space-y-3">
             {items.map((tx) => (
@@ -134,7 +136,7 @@ export function TransactionsMobileView({
                   <TransactionItem
                     tx={tx}
                     locale={userLocale}
-                    dateText={formatMobileDate(tx.valueDate, userLocale, userTimezone)}
+                    dateText={formatMobileDate(tx.valueDate, userLanguage, userTimezone)}
                   />
                 </CardContent>
               </Card>
@@ -179,7 +181,7 @@ export function TransactionsMobileView({
                 <div className="grid gap-2 text-sm">
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-4 w-4 shrink-0" />
-                    {formatLongDate(activeTx.valueDate, userLocale, userTimezone)}
+                    {formatLongDate(activeTx.valueDate, userLanguage, userTimezone)}
                   </p>
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <CreditCard className="h-4 w-4 shrink-0" />

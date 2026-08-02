@@ -1,8 +1,7 @@
 import type { BudgetStatus } from "@/lib/budget/budget-progress";
 
-// Semantic token classes per budget status. Kept in one place so the summary,
-// rows and both device views stay visually consistent.
-
+// Semantic token classes per limit status (reuses the ok/warning/over model from
+// budget-progress). Kept local to the Plan UI so it stays visually consistent.
 export const statusIndicatorClass: Record<BudgetStatus, string> = {
   ok: "bg-success",
   warning: "bg-warning",

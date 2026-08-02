@@ -14,6 +14,7 @@ import { lastNMonths, forwardMonths, monthlyIncomeExpenses, topCategories } from
 import { averageMonthly, projectBalances } from "@/lib/analytics/forecast";
 import { monthlyEquivalent } from "@/lib/recurring/recurring-dto";
 import { buildBudgetData } from "@/lib/budget/budget-dto";
+import { plannedMonthlyByCategory, type PlanItemInput } from "@/lib/plan/plan-item";
 import {
   getAiProvider,
   buildFinancialSummary,
@@ -34,14 +35,14 @@ export async function generateInsights(): Promise<InsightsResult> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
   const userId = session.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const fullMonths = lastNMonths(prev.year, prev.month, HISTORY_MONTHS);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
-  const [accounts, trendTx, spendRows, categories, budget, recurring] = await Promise.all([
+  const [accounts, trendTx, spendRows, categories, planItems, recurring] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { userId, isActive: true },
       select: { balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } } },
@@ -58,18 +59,9 @@ export async function generateInsights(): Promise<InsightsResult> {
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
       select: { id: true, name: true, color: true, parentId: true },
     }),
-    prisma.budget.findUnique({
-      where: { userId_year_month: { userId, year, month } },
-      select: {
-        budgetItems: {
-          select: {
-            categoryId: true,
-            plannedAmount: true,
-            currency: true,
-            category: { select: { name: true, color: true } },
-          },
-        },
-      },
+    prisma.planItem.findMany({
+      where: { userId, active: true },
+      select: { direction: true, categoryId: true, amount: true, cadence: true, onDate: true },
     }),
     prisma.recurringSeries.findMany({
       where: { userId, status: "CONFIRMED" },
@@ -97,11 +89,36 @@ export async function generateInsights(): Promise<InsightsResult> {
   const projected = projectBalances(netWorth, avg.net, forwardMonths(year, month, HORIZON_MONTHS));
 
   const spendingByCategory = aggregateSpendingByCategory(spendRows);
+
+  // Per-category limits come from the Plan; synthesize budget-item records so
+  // buildBudgetData (planned-vs-actual) keeps working for the AI summary.
+  const planInputs: PlanItemInput[] = planItems.map((p) => ({
+    direction: p.direction,
+    categoryId: p.categoryId,
+    amount: Number(p.amount.toString()),
+    cadence: p.cadence,
+    onDate: p.onDate ? p.onDate.toISOString().slice(0, 10) : null,
+  }));
+  const limitByCategory = plannedMonthlyByCategory(planInputs);
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const planItemRecords = Object.entries(limitByCategory)
+    .map(([categoryId, planned]) => {
+      const category = categoryById.get(categoryId);
+      if (!category) return null;
+      return {
+        categoryId,
+        plannedAmount: planned,
+        currency,
+        category: { name: category.name, color: category.color },
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
   const budgetData = buildBudgetData({
     year,
     month,
     currency,
-    items: budget?.budgetItems ?? [],
+    items: planItemRecords,
     spendingByCategory,
     categories,
   });
@@ -115,7 +132,7 @@ export async function generateInsights(): Promise<InsightsResult> {
   const summary = buildFinancialSummary({
     currency,
     locale,
-    monthLabel: formatDate(new Date(Date.UTC(year, month - 1, 1)), locale, "UTC", {
+    monthLabel: formatDate(new Date(Date.UTC(year, month - 1, 1)), language, "UTC", {
       month: "long",
       year: "numeric",
     }),

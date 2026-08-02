@@ -7,7 +7,13 @@ import { getUserPrefs } from "@/lib/user-prefs";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
 import { lastNMonths, forwardMonths, monthlyIncomeExpenses } from "@/lib/analytics/trends";
-import { averageMonthly, projectBalances, projectMonthEndSpend } from "@/lib/analytics/forecast";
+import {
+  averageMonthly,
+  projectBalances,
+  projectBalancesVariable,
+  projectMonthEndSpend,
+} from "@/lib/analytics/forecast";
+import { plannedForMonth, planTotals, type PlanItemInput } from "@/lib/plan/plan-item";
 import { daysBetween } from "@/lib/recurring/detect";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -24,14 +30,14 @@ const UPCOMING_HORIZON_DAYS = 45;
 export default async function ForecastPage() {
   const session = await auth();
   const userId = session!.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const fullMonths = lastNMonths(prev.year, prev.month, HISTORY_MONTHS);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
-  const [accounts, trendTx, recurring] = await Promise.all([
+  const [accounts, trendTx, planItems] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { userId, isActive: true },
       select: { balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } } },
@@ -40,19 +46,22 @@ export default async function ForecastPage() {
       where: { userId, valueDate: { gte: trendStart } },
       select: { amount: true, direction: true, valueDate: true },
     }),
-    prisma.recurringSeries.findMany({
-      where: { userId, status: "CONFIRMED", nextExpectedDate: { not: null } },
+    prisma.planItem.findMany({
+      where: { userId, active: true },
       select: {
-        merchantKey: true,
-        displayName: true,
+        label: true,
         direction: true,
-        averageAmount: true,
-        nextExpectedDate: true,
+        categoryId: true,
+        amount: true,
+        cadence: true,
+        dayOfMonth: true,
+        onDate: true,
+        category: { select: { name: true } },
       },
     }),
   ]);
 
-  const hasData = accounts.length > 0 || trendTx.length > 0;
+  const hasData = accounts.length > 0 || trendTx.length > 0 || planItems.length > 0;
 
   const netWorth = accounts.reduce(
     (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
@@ -68,7 +77,31 @@ export default async function ForecastPage() {
   const avg = averageMonthly(trend);
   const current = monthlyIncomeExpenses(rows, [{ year, month }])[0];
 
-  const projected = projectBalances(netWorth, avg.net, forwardMonths(year, month, HORIZON_MONTHS));
+  // Plan-driven projection: when the user has a Plan, project the balance from
+  // their planned monthly net (income − expenses, one-offs landing in their
+  // month). Otherwise fall back to the historical average so the page still works.
+  const planInputs: PlanItemInput[] = planItems.map((p) => ({
+    direction: p.direction,
+    categoryId: p.categoryId,
+    amount: Number(p.amount.toString()),
+    cadence: p.cadence,
+    onDate: p.onDate ? p.onDate.toISOString().slice(0, 10) : null,
+  }));
+  const hasPlan = planInputs.length > 0;
+  const planNet = planTotals(planInputs).monthlyNet;
+
+  const horizon = forwardMonths(year, month, HORIZON_MONTHS);
+  const projected = hasPlan
+    ? projectBalancesVariable(
+        netWorth,
+        horizon,
+        horizon.map((b) =>
+          Math.round(
+            planInputs.reduce((sum, item) => sum + plannedForMonth(item, b.year, b.month), 0) * 100
+          ) / 100
+        )
+      )
+    : projectBalances(netWorth, avg.net, horizon);
 
   // This month's projected spend by linear extrapolation.
   const dayOfMonth = Number(
@@ -78,7 +111,7 @@ export default async function ForecastPage() {
   const projectedSpend = projectMonthEndSpend(current.expenses, dayOfMonth, daysInMonth);
 
   const monthShort = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), locale, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
   const chartData = [
     { label: monthShort(year, month), balance: Math.round(netWorth * 100) / 100 },
     ...projected.map((p) => ({ label: monthShort(p.year, p.month), balance: p.balance })),
@@ -91,30 +124,56 @@ export default async function ForecastPage() {
     day: "2-digit",
   }).format(new Date());
 
-  const upcoming = recurring
-    .map((r) => ({
-      displayName: r.displayName,
-      direction: r.direction,
-      amount: Number(r.averageAmount.toString()),
-      date: r.nextExpectedDate!.toISOString().slice(0, 10),
-    }))
-    .map((r) => ({ ...r, inDays: daysBetween(today, r.date) }))
-    .filter((r) => r.inDays >= 0 && r.inDays <= UPCOMING_HORIZON_DAYS)
+  // Next dated occurrence of a monthly item on a given day-of-month (this month
+  // if still ahead, else next month, clamped to the month's length).
+  const nextMonthlyOccurrence = (day: number): string => {
+    const [ty, tm, td] = today.split("-").map(Number);
+    let y = ty;
+    let m = tm;
+    if (day < td) {
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+    }
+    const dd = Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate());
+    return `${y}-${String(m).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  };
+
+  // Upcoming charges within the horizon, from the Plan — one-offs by their date
+  // and monthly items with a day-of-month. Other cadences still drive the
+  // projection but have no single near-term date to show.
+  const upcoming = planItems
+    .map((p) => {
+      let date: string | null = null;
+      if (p.cadence === "ONE_OFF" && p.onDate) {
+        date = p.onDate.toISOString().slice(0, 10);
+      } else if (p.cadence === "MONTHLY" && p.dayOfMonth != null) {
+        date = nextMonthlyOccurrence(p.dayOfMonth);
+      }
+      if (!date) return null;
+      return {
+        displayName: p.label ?? p.category?.name ?? (p.direction === "CREDIT" ? "Income" : "Expense"),
+        direction: p.direction,
+        amount: Number(p.amount.toString()),
+        date,
+        inDays: daysBetween(today, date),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null && r.inDays >= 0 && r.inDays <= UPCOMING_HORIZON_DAYS)
     .sort((a, b) => a.inDays - b.inDays)
     .slice(0, 8);
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Forecast"
-        description="Where your money is heading, based on your recent averages and recurring payments."
-      />
+      <PageHeader title="Forecast" />
 
       {!hasData ? (
         <EmptyState
           icon={LineChart}
-          title="Not enough history to forecast yet"
-          description="Once a few months of transactions have synced, you'll see projected spending and balance here."
+          title="Not enough history yet"
+          description="A few months of transactions are needed to forecast."
         />
       ) : (
         <>
@@ -148,16 +207,27 @@ export default async function ForecastPage() {
             <CardContent>
               <BalanceForecastChart data={chartData} currency={currency} locale={locale} />
               <p className="mt-2 text-xs text-muted-foreground">
-                Assumes your average monthly net of{" "}
-                {avg.net >= 0 ? "+" : "−"}
-                {formatCurrency(Math.abs(avg.net), currency, locale)} continues. A projection, not a guarantee.
+                {hasPlan ? (
+                  <>
+                    Based on your Plan (monthly net{" "}
+                    {planNet >= 0 ? "+" : "−"}
+                    {formatCurrency(Math.abs(planNet), currency, locale)}). A projection, not a guarantee.
+                  </>
+                ) : (
+                  <>
+                    Assumes your average monthly net of{" "}
+                    {avg.net >= 0 ? "+" : "−"}
+                    {formatCurrency(Math.abs(avg.net), currency, locale)} continues. Add a Plan for a sharper
+                    forecast.
+                  </>
+                )}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Upcoming recurring charges</CardTitle>
+              <CardTitle className="text-base">Upcoming charges</CardTitle>
             </CardHeader>
             <CardContent>
               {upcoming.length > 0 ? (
@@ -166,7 +236,7 @@ export default async function ForecastPage() {
                     <li key={`${r.displayName}-${i}`} className="flex items-center gap-3 py-2 text-sm">
                       <span className="min-w-0 flex-1 truncate">{r.displayName}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatDate(r.date, locale, "UTC", { day: "numeric", month: "short" })}
+                        {formatDate(r.date, language, "UTC", { day: "numeric", month: "short" })}
                       </span>
                       <span
                         className={`w-24 shrink-0 text-right tabular-nums ${
@@ -181,7 +251,7 @@ export default async function ForecastPage() {
                 </ul>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No upcoming recurring charges. Confirm recurring series to see them here.
+                  No dated charges ahead. Add planned items with a date or day of month to see them here.
                 </p>
               )}
             </CardContent>

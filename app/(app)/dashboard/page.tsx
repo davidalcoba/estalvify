@@ -30,7 +30,7 @@ const TREND_MONTHS = 6;
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user.id;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);
   const months = lastNMonths(year, month, TREND_MONTHS);
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
   const topCats = topCategories(spendingByCategory, categories, 6);
 
   const monthLabel = (y: number, m: number) =>
-    formatDate(new Date(Date.UTC(y, m - 1, 1)), locale, "UTC", { month: "short" });
+    formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", { month: "short" });
   const chartData = trend.map((t) => ({
     label: monthLabel(t.year, t.month),
     income: t.income,
@@ -92,13 +92,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={`Good morning, ${firstName} 👋`}
-        description={`Here's your financial overview for ${formatDate(new Date(), locale, timezone, {
-          month: "long",
-          year: "numeric",
-        })}.`}
-      />
+      <PageHeader title={`Good morning, ${firstName} 👋`} />
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -157,7 +151,7 @@ export default async function DashboardPage() {
         <EmptyState
           icon={Wallet}
           title="Connect your first bank account"
-          description="Link your bank accounts to start tracking your finances automatically. Your data syncs every day so you always have a fresh overview."
+          description="Link a bank to start tracking. Syncs daily."
         >
           <Button asChild variant="outline">
             <Link href="/accounts">Go to Accounts →</Link>

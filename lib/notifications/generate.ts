@@ -10,8 +10,13 @@ import {
   aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
 import { lastNMonths, forwardMonths, monthlyIncomeExpenses } from "@/lib/analytics/trends";
-import { averageMonthly, projectBalances } from "@/lib/analytics/forecast";
+import { averageMonthly, projectBalances, projectBalancesVariable } from "@/lib/analytics/forecast";
 import { buildBudgetData } from "@/lib/budget/budget-dto";
+import {
+  plannedForMonth,
+  plannedMonthlyByCategory,
+  type PlanItemInput,
+} from "@/lib/plan/plan-item";
 import {
   budgetNotifications,
   upcomingRecurringNotifications,
@@ -47,18 +52,15 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
   const fullMonths = lastNMonths(prevMonth.year, prevMonth.month, 6);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
-  const [budget, spendingRows, categories, recurring, accounts, trendTx] = await Promise.all([
-    prisma.budget.findUnique({
-      where: { userId_year_month: { userId, year, month } },
+  const [planItems, spendingRows, categories, recurring, accounts, trendTx] = await Promise.all([
+    prisma.planItem.findMany({
+      where: { userId, active: true },
       select: {
-        budgetItems: {
-          select: {
-            categoryId: true,
-            plannedAmount: true,
-            currency: true,
-            category: { select: { name: true, color: true } },
-          },
-        },
+        direction: true,
+        categoryId: true,
+        amount: true,
+        cadence: true,
+        onDate: true,
       },
     }),
     prisma.transaction.findMany({
@@ -90,18 +92,45 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
   ]);
 
   const spendingByCategory = aggregateSpendingByCategory(spendingRows);
+
+  // Per-category limits come from the Plan (steady monthly expense total). Feed
+  // them into buildBudgetData as synthesized items so the budget-over/near alerts
+  // keep working against planned-vs-actual.
+  const planInputs: PlanItemInput[] = planItems.map((p) => ({
+    direction: p.direction,
+    categoryId: p.categoryId,
+    amount: Number(p.amount.toString()),
+    cadence: p.cadence,
+    onDate: p.onDate ? p.onDate.toISOString().slice(0, 10) : null,
+  }));
+  const limitByCategory = plannedMonthlyByCategory(planInputs);
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const planItemRecords = Object.entries(limitByCategory)
+    .map(([categoryId, planned]) => {
+      const category = categoryById.get(categoryId);
+      if (!category) return null;
+      return {
+        categoryId,
+        plannedAmount: planned,
+        currency: prefs.currency,
+        category: { name: category.name, color: category.color },
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
   const budgetData = buildBudgetData({
     year,
     month,
     currency: prefs.currency,
-    items: budget?.budgetItems ?? [],
+    items: planItemRecords,
     spendingByCategory,
     categories,
   });
 
   const today = todayInTimezone(prefs.timezone);
 
-  // Project the balance forward and alert if it dips below zero.
+  // Project the balance forward and alert if it dips below zero. Plan-driven when
+  // there is a Plan; otherwise the historical average.
   const netWorth = accounts.reduce(
     (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
     0
@@ -115,7 +144,20 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
     fullMonths
   );
   const avg = averageMonthly(trend);
-  const projected = projectBalances(netWorth, avg.net, forwardMonths(year, month, FORECAST_MONTHS));
+  const horizon = forwardMonths(year, month, FORECAST_MONTHS);
+  const projected =
+    planInputs.length > 0
+      ? projectBalancesVariable(
+          netWorth,
+          horizon,
+          horizon.map(
+            (b) =>
+              Math.round(
+                planInputs.reduce((sum, item) => sum + plannedForMonth(item, b.year, b.month), 0) * 100
+              ) / 100
+          )
+        )
+      : projectBalances(netWorth, avg.net, horizon);
 
   const specs: NotificationSpec[] = [
     ...budgetNotifications(year, month, budgetData.rows, prefs.currency, prefs.locale),
@@ -133,7 +175,7 @@ export async function generateNotificationsForUser(userId: string): Promise<numb
       prefs.currency,
       prefs.locale
     ),
-    ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale),
+    ...lowBalanceNotifications(projected, 0, prefs.currency, prefs.locale, prefs.language),
   ];
 
   if (specs.length === 0) return 0;

@@ -102,7 +102,7 @@ export default async function AccountsPage({
     getUserPrefs(session!.user.id),
   ]);
 
-  const { locale, timezone } = prefs;
+  const { locale, language, timezone } = prefs;
 
   // Group connections by bankId so same-bank connections appear in one card
   type BankGroup = {
@@ -150,7 +150,6 @@ export default async function AccountsPage({
   }
 
   const bankGroups = Array.from(bankGroupMap.values());
-  const totalAccounts = bankGroups.reduce((sum, g) => sum + g.allAccounts.length, 0);
   const hasSyncing = bankGroups.some((g) => g.status === "SYNCING");
 
   return (
@@ -179,15 +178,7 @@ export default async function AccountsPage({
           {callbackError}
         </div>
       )}
-      <PageHeader
-        title="Bank Accounts"
-        description={
-          totalAccounts > 0
-            ? `${totalAccounts} account${totalAccounts !== 1 ? "s" : ""} connected across ${bankGroups.length} bank${bankGroups.length !== 1 ? "s" : ""}`
-            : "Connect your bank accounts to sync transactions automatically."
-        }
-        actions={<ConnectBankDialog />}
-      />
+      <PageHeader title="Bank Accounts" actions={<ConnectBankDialog />} />
 
       <Card className="bg-brand/5 border-brand/20">
         <CardContent className="flex items-start gap-3 pt-4 pb-4">
@@ -206,7 +197,7 @@ export default async function AccountsPage({
         <EmptyState
           icon={Building2}
           title="No bank accounts connected"
-          description="Connect your first bank account to start tracking your finances. Estalvify supports thousands of banks across Europe."
+          description="Connect a bank to start tracking."
         >
           <ConnectBankDialog />
         </EmptyState>
@@ -234,9 +225,9 @@ export default async function AccountsPage({
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm leading-tight">{group.bankName}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Connected {formatDate(group.firstConnectedAt, locale, timezone)}
+                        Connected {formatDate(group.firstConnectedAt, language, timezone)}
                         {group.consentExpiresAt && (
-                          <> · Expires {formatDate(group.consentExpiresAt, locale, timezone)}</>
+                          <> · Expires {formatDate(group.consentExpiresAt, language, timezone)}</>
                         )}
                       </p>
                     </div>
@@ -330,7 +321,7 @@ export default async function AccountsPage({
                                 </Badge>
                               ) : latestBalance ? (
                                 <Badge variant="success-soft">
-                                  Synced {formatDate(latestBalance.date, locale, timezone)}
+                                  Synced {formatDate(latestBalance.date, language, timezone)}
                                 </Badge>
                               ) : isSyncing ? (
                                 <Badge variant="brand-soft" className="gap-1">

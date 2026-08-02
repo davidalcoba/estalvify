@@ -55,10 +55,7 @@ export default async function SetupPage({
 
   return (
     <div className="max-w-lg space-y-6">
-      <PageHeader
-        title="Select accounts"
-        description={`Choose which accounts from ${connection.bankName} you want to import.`}
-      />
+      <PageHeader title={`Select accounts · ${connection.bankName}`} />
 
       <Card>
         <CardHeader className="pb-3">

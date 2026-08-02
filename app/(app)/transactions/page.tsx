@@ -154,8 +154,8 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
         title="No transactions found"
         description={
           total === 0
-            ? 'Connect a bank account and click "Sync Now" on the Accounts page to import your transactions.'
-            : "No transactions in this date range. Try widening the filter."
+            ? "Connect a bank account to import transactions."
+            : "None in this date range."
         }
       />
     );
@@ -170,6 +170,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
       rangeStart={rangeStart}
       rangeEnd={rangeEnd}
       userLocale={prefs.locale}
+      userLanguage={prefs.language}
       userTimezone={prefs.timezone}
       pageQuery={pageQuery}
       categories={categories}
@@ -206,10 +207,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Transactions"
-        description="Your complete transaction history across all bank accounts."
-      />
+      <PageHeader title="Transactions" />
 
       {/* Filters stay visible during pagination and filter changes — only the list body skeletons */}
       <Suspense>

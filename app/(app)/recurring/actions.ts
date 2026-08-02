@@ -81,6 +81,46 @@ export async function setRecurringDecision(
   revalidatePath("/dashboard");
 }
 
+// Add a detected series to the Plan as a standing PlanItem, so its amount/cadence
+// feed the forecast and category limits without retyping. IRREGULAR falls back to
+// MONTHLY. Creates a new plan item each time (the user manages duplicates).
+export async function addRecurringToPlan(input: {
+  displayName: string;
+  direction: TransactionDirection;
+  cadence: RecurringCadence;
+  averageAmount: number;
+  currency: string;
+  categoryId: string | null;
+}): Promise<void> {
+  const userId = await requireUserId();
+  if (!Number.isFinite(input.averageAmount) || input.averageAmount < 0) {
+    throw new Error("Invalid amount");
+  }
+  if (input.categoryId) await assertCategoryAccess(userId, input.categoryId);
+  // Expenses need a category to show as a limit; skip the mapping if missing.
+  if (input.direction === "DEBIT" && !input.categoryId) {
+    throw new Error("Category required to plan an expense");
+  }
+
+  const cadence = input.cadence === "IRREGULAR" ? "MONTHLY" : input.cadence;
+
+  await prisma.planItem.create({
+    data: {
+      userId,
+      label: input.displayName.slice(0, 60),
+      direction: input.direction,
+      categoryId: input.categoryId,
+      amount: input.averageAmount,
+      currency: input.currency,
+      cadence,
+    },
+  });
+
+  revalidatePath("/plan");
+  revalidatePath("/forecast");
+  revalidatePath("/dashboard");
+}
+
 // Clear a stored decision, returning the series to a plain suggestion.
 export async function clearRecurringDecision(merchantKey: string): Promise<void> {
   const userId = await requireUserId();

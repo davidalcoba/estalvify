@@ -8,10 +8,20 @@
 > como un PR independiente siguiendo `PLAYBOOK_NEW_FEATURE.md`, y **marca la fase como
 > hecha aquí** en el mismo cambio.
 
-**Última actualización:** 2026-08-01 · **Fase en curso:** ninguna ·
+**Última actualización:** 2026-08-02 · **Fase en curso:** ninguna ·
 **Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
+
+> **Post-roadmap — Plan (planificador manual de flujo de caja).** El antiguo *Budget*
+> (un importe por categoría y mes) se ha sustituido por **Plan** (`/plan`): el usuario
+> declara a mano ingresos y gastos previstos, **varios por categoría** y con **cadencias**
+> (semanal/mensual/trimestral/anual/puntual). El total mensual estable de una categoría es
+> su **límite** (barras real-vs-previsto reutilizando `lib/budget/budget-progress`). El
+> **Forecast** proyecta el saldo desde el Plan (`projectBalancesVariable` + `plannedForMonth`),
+> con fallback a la media histórica si no hay Plan. Los recurrentes confirmados tienen
+> **"Add to Plan"**. Modelo `PlanItem` + enum `PlanCadence`; lógica pura en `lib/plan/`.
+> `/budget` redirige a `/plan` (tablas `budgets`/`budget_items` intactas pero sin uso).
 
 ---
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, RotateCcw, X } from "lucide-react";
+import { Check, ListPlus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -11,6 +11,7 @@ export interface RecurringRowHandlers {
   onConfirm: (item: RecurringItem) => void;
   onIgnore: (item: RecurringItem) => void;
   onReset: (item: RecurringItem) => void;
+  onAddToPlan: (item: RecurringItem) => void;
   disabled?: boolean;
 }
 
@@ -20,11 +21,18 @@ export function RecurringItemRow({
   item,
   currency,
   locale,
+  dateLocale,
   onConfirm,
   onIgnore,
   onReset,
+  onAddToPlan,
   disabled,
-}: { item: RecurringItem; currency: string; locale: string } & RecurringRowHandlers) {
+}: {
+  item: RecurringItem;
+  currency: string;
+  locale: string;
+  dateLocale: string;
+} & RecurringRowHandlers) {
   const income = item.direction === "CREDIT";
   const ignored = item.status === "IGNORED";
 
@@ -47,7 +55,7 @@ export function RecurringItemRow({
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {cadenceLabel[item.cadence]} · next{" "}
-          {formatDate(item.nextExpected, locale, "UTC", {
+          {formatDate(item.nextExpected, dateLocale, "UTC", {
             day: "numeric",
             month: "short",
             year: "numeric",
@@ -87,6 +95,16 @@ export function RecurringItemRow({
         {item.status === "CONFIRMED" && (
           <>
             <Badge variant="success-soft">Confirmed</Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onAddToPlan(item)}
+              disabled={disabled}
+              title="Add to Plan"
+            >
+              <ListPlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add to Plan</span>
+            </Button>
             <Button
               size="icon-sm"
               variant="ghost"

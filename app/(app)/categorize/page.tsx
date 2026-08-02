@@ -125,6 +125,7 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
       pageSize={pageSize}
       pageSizeOptions={pageSizeOptions}
       locale={prefs.locale}
+      dateLocale={prefs.language}
       timezone={prefs.timezone}
     />
   );
@@ -146,7 +147,7 @@ export default async function CategorizePage({ searchParams }: PageProps) {
     <CategorizeSearchProvider>
       <div className="space-y-4">
         {/* Title — always visible, never skeletons on page/size change */}
-        <PageHeader title="Categorize" description="Classify transactions to get accurate reports." />
+        <PageHeader title="Categorize" />
 
         {/* Search bar — always visible, state persists across page changes */}
         <CategorizeSearchBar />

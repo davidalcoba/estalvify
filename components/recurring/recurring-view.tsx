@@ -13,6 +13,7 @@ import type { RecurringItem, RecurringSummary } from "@/lib/recurring/recurring-
 import {
   setRecurringDecision,
   clearRecurringDecision,
+  addRecurringToPlan,
 } from "@/app/(app)/recurring/actions";
 
 interface RecurringViewProps {
@@ -20,9 +21,10 @@ interface RecurringViewProps {
   summary: RecurringSummary;
   currency: string;
   locale: string;
+  dateLocale: string;
 }
 
-export function RecurringView({ items, summary, currency, locale }: RecurringViewProps) {
+export function RecurringView({ items, summary, currency, locale, dateLocale }: RecurringViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -83,19 +85,35 @@ export function RecurringView({ items, summary, currency, locale }: RecurringVie
     });
   }
 
+  function handleAddToPlan(item: RecurringItem) {
+    startTransition(async () => {
+      try {
+        await addRecurringToPlan({
+          displayName: item.displayName,
+          direction: item.direction,
+          cadence: item.cadence,
+          averageAmount: item.averageAmount,
+          currency,
+          categoryId: item.categoryId,
+        });
+        router.refresh();
+      } catch {
+        // no-op
+      }
+    });
+  }
+
   const handlers = {
     onConfirm: (item: RecurringItem) => applyDecision(item, "CONFIRMED"),
     onIgnore: (item: RecurringItem) => applyDecision(item, "IGNORED"),
     onReset: handleReset,
+    onAddToPlan: handleAddToPlan,
     disabled: pending,
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Recurring"
-        description="Subscriptions and regular payments detected from your bank history."
-      />
+      <PageHeader title="Recurring" />
 
       {items.length === 0 ? (
         <EmptyState
@@ -112,6 +130,7 @@ export function RecurringView({ items, summary, currency, locale }: RecurringVie
               sections={sections}
               currency={currency}
               locale={locale}
+              dateLocale={dateLocale}
               {...handlers}
             />
           </div>
@@ -120,6 +139,7 @@ export function RecurringView({ items, summary, currency, locale }: RecurringVie
               sections={sections}
               currency={currency}
               locale={locale}
+              dateLocale={dateLocale}
               {...handlers}
             />
           </div>

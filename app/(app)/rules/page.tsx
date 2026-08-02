@@ -32,10 +32,7 @@ export default async function RulesPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Rules"
-        description="Create rules to automatically categorize transactions."
-      />
+      <PageHeader title="Rules" />
 
       <RulesView
         categories={categories}

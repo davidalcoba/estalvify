@@ -144,9 +144,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
       <Card>
         <CardHeader>
           <CardTitle>Categories</CardTitle>
-          <CardDescription>
-            Organize your transactions with categories and subcategories. These are personal and only visible to you.
-          </CardDescription>
+          <CardDescription>Personal categories and subcategories.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {initialCategories.length === 0 && (

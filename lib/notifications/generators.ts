@@ -104,14 +104,15 @@ export function lowBalanceNotifications(
   projected: ProjectedBalance[],
   threshold: number,
   currency: string,
-  locale: string
+  locale: string,
+  language: string
 ): NotificationSpec[] {
   const breach = firstBelowThreshold(projected, threshold);
   if (!breach) return [];
 
   const monthLabel = formatDate(
     new Date(Date.UTC(breach.year, breach.month - 1, 1)),
-    locale,
+    language,
     "UTC",
     { month: "long", year: "numeric" }
   );

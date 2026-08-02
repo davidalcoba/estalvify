@@ -8,23 +8,31 @@ export async function updatePreferences(data: {
   timezone: string;
   currency: string;
   locale: string;
+  language: string;
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
 
-  const { timezone, currency, locale } = data;
+  const { timezone, currency, locale, language } = data;
 
   // Basic validation
-  if (!timezone || !currency || !locale) throw new Error("Missing fields");
+  if (!timezone || !currency || !locale || !language) throw new Error("Missing fields");
 
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { timezone, currency, locale },
+    data: { timezone, currency, locale, language },
   });
 
+  // Revalidate every route that renders dates or currency with these prefs.
   revalidatePath("/settings");
-  revalidatePath("/transactions");
   revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/categorize");
+  revalidatePath("/reports");
+  revalidatePath("/budget");
+  revalidatePath("/forecast");
+  revalidatePath("/recurring");
+  revalidatePath("/accounts");
 }
 
 // ─────────────────────────────────────────────

@@ -9,10 +9,7 @@ export const metadata: Metadata = { title: "Insights" };
 export default function InsightsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Insights"
-        description="AI recommendations tailored to your money."
-      />
+      <PageHeader title="Insights" />
       <InsightsView />
     </div>
   );

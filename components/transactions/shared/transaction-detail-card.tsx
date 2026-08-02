@@ -14,10 +14,14 @@ import {
 export function TransactionDetailCard({
   transaction,
   locale,
+  dateLocale,
   timezone,
 }: {
   transaction: TransactionListItemDTO;
+  /** Number-format locale for the amount. */
   locale: string;
+  /** Language locale for the date. */
+  dateLocale: string;
   timezone: string;
 }) {
   return (
@@ -58,7 +62,7 @@ export function TransactionDetailCard({
         <span className="flex items-center gap-1 min-w-0">
           <Calendar className="h-3 w-3 shrink-0" />
           <span className="truncate">
-            {formatDate(transaction.valueDate, locale, timezone, {
+            {formatDate(transaction.valueDate, dateLocale, timezone, {
               weekday: "short",
               day: "numeric",
               month: "long",

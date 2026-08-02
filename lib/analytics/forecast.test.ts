@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   averageMonthly,
   projectBalances,
+  projectBalancesVariable,
   projectMonthEndSpend,
   firstBelowThreshold,
 } from "./forecast";
@@ -33,6 +34,26 @@ describe("projectBalances", () => {
       { year: 2026, month: 4 },
     ]);
     expect(result.map((r) => r.balance)).toEqual([700, 400, 100]);
+  });
+});
+
+describe("projectBalancesVariable", () => {
+  it("accumulates a per-month net onto the starting balance", () => {
+    const result = projectBalancesVariable(
+      1000,
+      [
+        { year: 2026, month: 2 },
+        { year: 2026, month: 3 },
+        { year: 2026, month: 4 },
+      ],
+      [200, -500, -300]
+    );
+    expect(result.map((r) => r.balance)).toEqual([1200, 700, 400]);
+  });
+
+  it("treats a missing net as zero", () => {
+    const result = projectBalancesVariable(100, [{ year: 2026, month: 2 }], []);
+    expect(result[0].balance).toBe(100);
   });
 });
 

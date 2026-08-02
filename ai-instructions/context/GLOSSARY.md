@@ -22,10 +22,24 @@
 - Rule-based categorization: category assignment by user-defined rules.
 - (AI suggestion: reserved for a future flow; not implemented.)
 
-## Budget and Reporting Terms
+## Planning and Reporting Terms
 
-- Monthly budget: spending target per month and category/group.
-- Reports: summaries and trends over transactions and budgets.
+- Plan: the single place a user declares expected income and expenses by hand. Replaces
+  the old month-by-month Budget. Lives at `/plan`.
+- Plan item (`PlanItem`): one standing planned entry — an income or expense with an amount,
+  a category (required for expenses), and a cadence. Several are allowed per category.
+- Cadence (`PlanCadence`): how often a plan item recurs — weekly, monthly, quarterly,
+  yearly, or one-off (a single dated entry).
+- Category limit: a category's steady monthly planned total (sum of its periodic items),
+  tracked against real spending with the `ok/warning/over` status model.
+- Forecast: the projected balance over the next months, driven by the Plan's monthly net
+  (historical-average fallback when there is no Plan yet).
+- Recurring series: an auto-detected recurring charge from bank history; can be added to
+  the Plan.
+- Reports: summaries and trends over transactions and spending.
+- (Budget: the previous per-month, one-amount-per-category planning model, now replaced by
+  the Plan; `/budget` redirects to `/plan`. The `Budget`/`BudgetItem` tables remain but are
+  unused by the app; `lib/budget/budget-progress` is reused for limit math.)
 
 ## Operational Terms
 
