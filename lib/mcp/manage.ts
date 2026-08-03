@@ -10,7 +10,7 @@ import type { Prisma } from "@/app/generated/prisma";
 import type { CategoryKind } from "@/app/generated/prisma";
 import { wouldCreateCycle, hasChildren, subtreeIds } from "@/lib/categories/hierarchy";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
-import { runRules } from "@/lib/rules/apply";
+import { nextRulePriority, reorderRulesForUser, runRules } from "@/lib/rules/apply";
 import type { RuleRunReport } from "@/lib/rules/apply";
 
 async function assertOwnedCategory(userId: string, categoryId: string) {
@@ -386,7 +386,7 @@ export async function deleteCategoryForUser(
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
 export async function listRulesForUser(userId: string) {
-  // Listed in evaluation order: lower priority number runs first.
+  // Listed in evaluation order: first in the list runs first.
   const rules = await prisma.categoryRule.findMany({
     where: { userId },
     orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
@@ -443,12 +443,18 @@ export async function createRuleForUser(
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       categoryId: input.categoryId,
       sourceCategoryId: input.sourceCategoryId ?? null,
-      priority: input.priority ?? 0,
+      // Default to last, matching the UI: a new rule must not outrank the
+      // existing ones just because it was created later.
+      priority: input.priority ?? (await nextRulePriority(userId)),
       isActive: true,
     },
     select: { id: true },
   });
 }
+
+// Reordering is the same operation the /rules drag-and-drop performs, so the MCP
+// layer re-exports the shared helper instead of renumbering on its own.
+export { reorderRulesForUser };
 
 export async function updateRuleForUser(
   userId: string,
@@ -458,7 +464,6 @@ export async function updateRuleForUser(
     conditions?: ConditionGroup;
     categoryId?: string;
     isActive?: boolean;
-    priority?: number;
   },
 ) {
   const rule = await prisma.categoryRule.findUnique({
@@ -475,7 +480,7 @@ export async function updateRuleForUser(
   if (input.categoryId !== undefined)
     data.category = { connect: { id: input.categoryId } };
   if (input.isActive !== undefined) data.isActive = input.isActive;
-  if (input.priority !== undefined) data.priority = input.priority;
+  // Position is not updated here — reorderRulesForUser owns the whole ordering.
 
   await prisma.categoryRule.update({ where: { id: ruleId }, data });
   return { id: ruleId };

@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle } from "lucide-react";
+import {
+  Pencil,
+  Play,
+  Trash2,
+  Undo2,
+  CheckCircle2,
+  Circle,
+  GripVertical,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +20,7 @@ import {
   formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
+import { useRuleOrder, type RuleOrderHandleProps } from "@/components/rules/use-rule-order";
 import { RuleConfirmDialog } from "@/components/rules/rule-confirm-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
@@ -22,6 +31,9 @@ interface RulesMobileViewProps {
 }
 
 export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
+  const { orderedRules, containerRef, handleProps, draggingId, error } =
+    useRuleOrder(rules);
+
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
@@ -33,15 +45,34 @@ export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
   }
 
   return (
-    <div className="space-y-3">
-      {rules.map((rule) => (
-        <RulesMobileCard key={rule.id} rule={rule} categories={categories} />
-      ))}
+    <div className="space-y-2">
+      <div className="space-y-3" ref={containerRef}>
+        {orderedRules.map((rule) => (
+          <RulesMobileCard
+            key={rule.id}
+            rule={rule}
+            categories={categories}
+            handleProps={handleProps(rule.id)}
+            isDragging={draggingId === rule.id}
+          />
+        ))}
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }
 
-function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
+function RulesMobileCard({
+  rule,
+  categories,
+  handleProps,
+  isDragging,
+}: {
+  rule: CategoryRuleDTO;
+  categories: Category[];
+  handleProps: RuleOrderHandleProps;
+  isDragging: boolean;
+}) {
   const {
     isPending,
     result,
@@ -87,7 +118,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
             Transactions it categorized keep their category, but lose the link to
             this rule — so they can no longer be reverted.
           </p>
-          <p>To stop the rule without losing it, deactivate it instead.</p>
+          <p>To stop the rule without losing it, pause it instead.</p>
         </>
       }
       confirmLabel="Delete rule"
@@ -96,14 +127,25 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
       onCancel={cancelDelete}
       onConfirm={handleDelete}
     />
-    <Card className={`py-0 gap-0 ${!rule.isActive ? "opacity-60" : ""}`}>
+    <Card
+      data-reorder-id={rule.id}
+      className={`py-0 gap-0 ${isDragging ? "bg-muted/60 shadow-md" : ""} ${!rule.isActive ? "opacity-60" : ""}`}
+    >
       <CardContent className="p-4">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2">
+          <span
+            {...handleProps}
+            className="mt-0.5 flex h-6 w-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <GripVertical className="h-4 w-4" />
+          </span>
+
           <button
             onClick={handleToggleActive}
             disabled={isPending}
             className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={rule.isActive ? "Deactivate" : "Activate"}
+            aria-label={rule.isActive ? "Pause rule" : "Resume rule"}
+            title={rule.isActive ? "Pause rule" : "Resume rule"}
           >
             {rule.isActive ? (
               <CheckCircle2 className="h-5 w-5 text-success" />
@@ -116,7 +158,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{rule.name}</span>
               {!rule.isActive && (
-                <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                <Badge variant="secondary" className="text-xs">Paused</Badge>
               )}
               {rule.neverMatched && (
                 <Badge variant="outline" className="text-xs text-warning border-warning">
@@ -189,7 +231,7 @@ function RulesMobileCard({ rule, categories }: { rule: CategoryRuleDTO; categori
               disabled={isPending || !rule.isActive}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               aria-label="Run"
-              title="Run rule"
+              title={rule.isActive ? "Run rule" : "Paused — resume it to run"}
             >
               <Play className="h-4 w-4" />
             </Button>

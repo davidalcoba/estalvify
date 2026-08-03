@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { RuleConditionRow } from "@/components/rules/rule-condition-row";
@@ -40,7 +39,6 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
     rule.conditionTree.children as RuleCondition[]
   );
   const [categoryId, setCategoryId] = useState(rule.categoryId);
-  const [priority, setPriority] = useState(String(rule.priority));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -61,7 +59,6 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
           name,
           conditions: { op: match, children: conditions.filter(hasConditionValue) },
           categoryId,
-          priority: Number(priority) || 0,
         });
         onClose();
       } catch {
@@ -149,29 +146,6 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
               ariaLabel="Categorize as"
               className="w-full"
             />
-          </div>
-
-          {/* Priority */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="rule-priority">
-              Priority
-            </label>
-            <Input
-              id="rule-priority"
-              type="number"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="w-32"
-            />
-            <p className="text-sm text-muted-foreground">
-              Lower runs first. First match wins. Bands: 0-99 transfers, 100-199
-              income, 200-299 fixed costs, 300+ variable spending.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Match a merchant by description below 300 so it beats the bank&apos;s
-              own category label, which is used from 300 up and gets some
-              merchants wrong.
-            </p>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

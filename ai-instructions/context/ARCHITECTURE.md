@@ -320,8 +320,15 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     Postgres `unaccent` extension, and with ~1.5k rows per user the prefilter +
     in-memory pass is cheap. `apply.ts` is the single execution path — both the MCP
     layer and `app/(app)/rules/actions.ts` go through it, so run semantics cannot
-    drift. Rules run in **ascending priority** (lower number first, `createdAt`
-    tie-break), **first match wins**, and a `MANUAL` categorization is never
+    drift. Rules run **in list order** — `rule-order.ts` (pure) holds the move and
+    validation helpers, `priority` stores the 0-based position and is renumbered
+    contiguously by `reorderRulesForUser` (one transaction, and it rejects an order
+    that isn't exactly the user's full rule set); the /rules list reorders by
+    drag-and-drop (pointer events, so it works on touch; arrow keys on the handle
+    move a rule too) and `reorder_rules` does the same over MCP. The number is
+    never exposed in the UI, and a new rule is appended **last**
+    (`nextRulePriority`) so it can't outrank existing ones. **First match wins**,
+    `createdAt` breaks a tie, and a `MANUAL` categorization is never
     overwritten without an explicit `force`. Every run records an undo trail
     (`previousCategoryId` / `previousSource`) so `undoRuleRun` can revert it, and
     refreshes `matchCount` / `lastRunAt` / `lastMatchAt` on the rule. Rules also run

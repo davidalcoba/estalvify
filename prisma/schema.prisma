@@ -300,7 +300,10 @@ model CategoryRule {
   sourceCategoryId String?
 
   isActive           Boolean @default(true)
-  priority           Int     @default(0) // Lower number = evaluated first; first match wins
+  // Position in the user's rule list, 0-based and renumbered contiguously on
+  // reorder: lower = evaluated first, first match wins. The number is storage
+  // only — the UI shows the order, never the value.
+  priority           Int     @default(0)
   applyRetroactively Boolean @default(false)
 
   // Observability: refreshed on every run so a rule that matches nothing is visible

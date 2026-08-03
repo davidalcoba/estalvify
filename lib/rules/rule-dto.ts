@@ -164,8 +164,8 @@ export interface CategoryRuleDTO {
   categoryId: string;
   categoryName: string;
   categoryColor: string;
+  /** False = paused: the rule is kept but never runs. */
   isActive: boolean;
-  priority: number;
   matchCount: number;
   lastRunAt: string | null;
   lastMatchAt: string | null;
@@ -277,6 +277,9 @@ export function isOperatorValidForField(
   return TEXT_OPERATOR_SET.has(operator);
 }
 
+// Note: `priority` is deliberately absent from the view model. It only stores the
+// rule's position in the list, and the list renders that position by ordering the
+// rows — the number itself is never shown or edited.
 export function toCategoryRuleDTO(rule: {
   id: string;
   name: string;
@@ -284,7 +287,6 @@ export function toCategoryRuleDTO(rule: {
   sourceCategoryId: string | null;
   categoryId: string;
   isActive: boolean;
-  priority: number;
   matchCount: number;
   lastRunAt: Date | null;
   lastMatchAt: Date | null;
@@ -307,7 +309,6 @@ export function toCategoryRuleDTO(rule: {
     categoryName: rule.category.name,
     categoryColor: rule.category.color,
     isActive: rule.isActive,
-    priority: rule.priority,
     matchCount: rule.matchCount,
     lastRunAt: rule.lastRunAt?.toISOString() ?? null,
     lastMatchAt: rule.lastMatchAt?.toISOString() ?? null,

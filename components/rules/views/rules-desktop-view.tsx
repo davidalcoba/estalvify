@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, Undo2, CheckCircle2, Circle } from "lucide-react";
+import {
+  Pencil,
+  Play,
+  Trash2,
+  Undo2,
+  CheckCircle2,
+  Circle,
+  GripVertical,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +19,7 @@ import {
   formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
+import { useRuleOrder, type RuleOrderHandleProps } from "@/components/rules/use-rule-order";
 import { RuleConfirmDialog } from "@/components/rules/rule-confirm-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
@@ -21,6 +30,9 @@ interface RulesDesktopViewProps {
 }
 
 export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
+  const { orderedRules, containerRef, handleProps, draggingId, error } =
+    useRuleOrder(rules);
+
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
@@ -32,28 +44,50 @@ export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
   }
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30">
-            <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8"></th>
-            <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-            <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Conditions</th>
-            <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Target</th>
-            <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {rules.map((rule) => (
-            <RulesDesktopRow key={rule.id} rule={rule} categories={categories} />
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      <div className="rounded-xl border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <th className="px-2 py-2.5 w-8">
+                <span className="sr-only">Order</span>
+              </th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8"></th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Conditions</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Target</th>
+              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y" ref={containerRef}>
+            {orderedRules.map((rule) => (
+              <RulesDesktopRow
+                key={rule.id}
+                rule={rule}
+                categories={categories}
+                handleProps={handleProps(rule.id)}
+                isDragging={draggingId === rule.id}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }
 
-function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categories: Category[] }) {
+function RulesDesktopRow({
+  rule,
+  categories,
+  handleProps,
+  isDragging,
+}: {
+  rule: CategoryRuleDTO;
+  categories: Category[];
+  handleProps: RuleOrderHandleProps;
+  isDragging: boolean;
+}) {
   const {
     isPending,
     result,
@@ -99,7 +133,7 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
             Transactions it categorized keep their category, but lose the link to
             this rule — so they can no longer be reverted.
           </p>
-          <p>To stop the rule without losing it, deactivate it instead.</p>
+          <p>To stop the rule without losing it, pause it instead.</p>
         </>
       }
       confirmLabel="Delete rule"
@@ -108,14 +142,28 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
       onCancel={cancelDelete}
       onConfirm={handleDelete}
     />
-    <tr className={`hover:bg-muted/20 transition-colors ${!rule.isActive ? "opacity-60" : ""}`}>
-      {/* Active toggle */}
+    <tr
+      data-reorder-id={rule.id}
+      className={`transition-colors ${isDragging ? "bg-muted/60" : "hover:bg-muted/20"} ${!rule.isActive ? "opacity-60" : ""}`}
+    >
+      {/* Drag handle — position in this list is the evaluation order */}
+      <td className="px-2 py-3">
+        <span
+          {...handleProps}
+          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
+      </td>
+
+      {/* Pause / resume */}
       <td className="px-4 py-3">
         <button
           onClick={handleToggleActive}
           disabled={isPending}
           className="text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={rule.isActive ? "Deactivate rule" : "Activate rule"}
+          aria-label={rule.isActive ? "Pause rule" : "Resume rule"}
+          title={rule.isActive ? "Pause rule" : "Resume rule"}
         >
           {rule.isActive ? (
             <CheckCircle2 className="h-4 w-4 text-success" />
@@ -130,7 +178,7 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
         <div className="flex items-center gap-2">
           <span className="font-medium">{rule.name}</span>
           {!rule.isActive && (
-            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+            <Badge variant="secondary" className="text-xs">Paused</Badge>
           )}
           {rule.neverMatched && (
             <Badge variant="outline" className="text-xs text-warning border-warning">
@@ -138,10 +186,11 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
             </Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Priority {rule.priority}
-          {rule.lastRunAt && ` · ${rule.matchCount} matched`}
-        </p>
+        {rule.lastRunAt && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {rule.matchCount} matched
+          </p>
+        )}
         {result && (
           <p className="text-xs text-success font-medium mt-0.5">{result}</p>
         )}
@@ -216,7 +265,7 @@ function RulesDesktopRow({ rule, categories }: { rule: CategoryRuleDTO; categori
             disabled={isPending || !rule.isActive}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
             aria-label="Run rule"
-            title="Run rule"
+            title={rule.isActive ? "Run rule" : "Paused — resume it to run"}
           >
             <Play className="h-3.5 w-3.5" />
           </Button>

@@ -9,6 +9,7 @@ import { parseConditions } from "./rule-dto";
 import type { ConditionGroup } from "./rule-dto";
 import { buildRulePrefilterWhere } from "./rule-evaluator";
 import { matchesNode } from "./rule-matcher";
+import { isCompleteOrder } from "./rule-order";
 import { chunk, planRun } from "./rule-plan";
 import type {
   CategorizationSourceLike,
@@ -481,4 +482,51 @@ export async function deleteRuleForUser(userId: string, ruleId: string) {
   await prisma.categoryRule.delete({ where: { id: ruleId } });
 
   return { id: ruleId, name: rule.name, detachedCategorizations: count };
+}
+
+// ── Order ─────────────────────────────────────────────────────────────────────
+// A rule's position in the list is its precedence, and `priority` is only how
+// that position is stored. Shared by the UI action and the MCP layer so the two
+// can't drift on what "next" or "reordered" means.
+
+/**
+ * Position for a newly created rule: last. A new rule must not silently outrank
+ * every existing one — first match wins, so landing at the top would let it
+ * claim transactions the user already assigned elsewhere.
+ */
+export async function nextRulePriority(userId: string): Promise<number> {
+  const last = await prisma.categoryRule.findFirst({
+    where: { userId },
+    orderBy: { priority: "desc" },
+    select: { priority: true },
+  });
+  return last === null ? 0 : last.priority + 1;
+}
+
+/**
+ * Persist a new order by renumbering contiguously from 0, in one transaction so
+ * a partial write can't leave two rules fighting over the same position.
+ * `orderedIds` must be every rule the user owns, exactly once — see
+ * `isCompleteOrder`.
+ */
+export async function reorderRulesForUser(
+  userId: string,
+  orderedIds: string[]
+): Promise<{ reordered: number }> {
+  const owned = await prisma.categoryRule.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+
+  if (!isCompleteOrder(orderedIds, owned.map((r) => r.id))) {
+    throw new Error("Rule order must list every rule exactly once");
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.categoryRule.update({ where: { id }, data: { priority: index } })
+    )
+  );
+
+  return { reordered: orderedIds.length };
 }

@@ -9,6 +9,8 @@ import type { ConditionGroup, RuleCondition } from "@/lib/rules/rule-dto";
 import {
   deleteRuleForUser,
   evaluateConditions,
+  nextRulePriority,
+  reorderRulesForUser,
   runRules,
   undoRuleRun,
 } from "@/lib/rules/apply";
@@ -50,7 +52,6 @@ export async function saveRule(input: {
   conditions: ConditionGroup;
   sourceCategoryId: string | null;
   categoryId: string;
-  priority: number;
 }): Promise<{ id: string }> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
@@ -68,7 +69,8 @@ export async function saveRule(input: {
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       sourceCategoryId: input.sourceCategoryId,
       categoryId: input.categoryId,
-      priority: input.priority,
+      // Last in the list: a new rule must not outrank the existing ones.
+      priority: await nextRulePriority(userId),
       isActive: true,
     },
     select: { id: true },
@@ -76,6 +78,19 @@ export async function saveRule(input: {
 
   revalidatePath("/rules");
   return { id: rule.id };
+}
+
+// ─────────────────────────────────────────────
+// Reorder rules: the list order *is* the evaluation order
+// ─────────────────────────────────────────────
+
+export async function reorderRules(orderedIds: string[]): Promise<void> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  await reorderRulesForUser(session.user.id, orderedIds);
+
+  revalidatePath("/rules");
 }
 
 // ─────────────────────────────────────────────
@@ -129,6 +144,7 @@ export async function executeRuleOnce(input: {
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       sourceCategoryId: input.sourceCategoryId,
       categoryId: input.categoryId,
+      priority: await nextRulePriority(userId),
       isActive: true,
     },
     select: { id: true },
@@ -230,7 +246,7 @@ export async function addConditionToRule(input: {
 }
 
 // ─────────────────────────────────────────────
-// Update a rule (name, conditions, target category, priority)
+// Update a rule (name, conditions, target category)
 // ─────────────────────────────────────────────
 
 export async function updateRule(input: {
@@ -238,7 +254,6 @@ export async function updateRule(input: {
   name: string;
   conditions: ConditionGroup;
   categoryId: string;
-  priority?: number;
 }): Promise<void> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
@@ -258,7 +273,8 @@ export async function updateRule(input: {
       name: input.name.trim(),
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       categoryId: input.categoryId,
-      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      // Position is not editable here — it changes by dragging the rule in the
+      // list, through reorderRules.
     },
   });
 
