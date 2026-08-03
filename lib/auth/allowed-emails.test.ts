@@ -75,8 +75,16 @@ describe("isEmailAllowed", () => {
       expect(isEmailAllowed("anyone@anywhere.com", "*")).toBe(true);
     });
 
-    it("accepts any domain with *@*", () => {
-      expect(isEmailAllowed("anyone@anywhere.com", "*@*")).toBe(true);
+    it("rejects *@* and @* — `*` is the only spelling of everyone", () => {
+      // Dropped rather than aliased, so on their own they deny sign-in. Loud and
+      // safe: one way to open the app to the world, not three.
+      for (const raw of ["*@*", "@*"]) {
+        expect(isEmailAllowed("anyone@anywhere.com", raw)).toBe(false);
+        expect(isEmailAllowed("david@example.com", raw)).toBe(false);
+      }
+      // ...and they do not quietly widen a list that has real entries either.
+      expect(isEmailAllowed("anyone@anywhere.com", "*@*,david@example.com")).toBe(false);
+      expect(isEmailAllowed("david@example.com", "*@*,david@example.com")).toBe(true);
     });
 
     it("still requires a usable address", () => {

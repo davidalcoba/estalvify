@@ -403,8 +403,12 @@ stored hashed.
   The matching is `lib/auth/allowed-emails.ts` — pure and unit-tested, so the one
   rule that decides who gets in is not buried in an Auth.js callback. Entries are
   an exact address, a whole domain (`example.com`, `@example.com`, `*@example.com`
-  are the same thing), a subdomain wildcard (`*.example.com`), or `*` for
-  everyone. `*.example.com` deliberately excludes the apex, following DNS and TLS
+  are the same thing), a subdomain wildcard (`*.example.com`), one mailbox at any
+  domain (`postmaster@*`), or `*` for everyone. `*@*` and `@*` are **rejected**
+  rather than aliased to `*`: a wildcard domain only means something beside a
+  concrete local part, and "everyone" is the entry that most deserves a single
+  spelling. Since rejected entries are dropped, writing `*@*` alone denies sign-in
+  instead of opening it. `*.example.com` deliberately excludes the apex, following DNS and TLS
   wildcard convention: a wildcard label stands for one or more labels, not zero,
   and quietly including the apex would make `*.example.com` and `example.com`
   indistinguishable. Two properties are load-bearing and have tests naming them:

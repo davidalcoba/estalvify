@@ -11,7 +11,14 @@
 //   *@example.com        same again, for people who expect the wildcard spelling
 //   *.example.com        any *subdomain* of example.com — see the note below
 //   *@*.example.com      same as `*.example.com`
+//   postmaster@*         that mailbox at any domain
 //   *                    everyone
+//
+// `*@*` and `@*` are rejected, not accepted as aliases of `*`. A wildcard domain
+// only carries meaning next to a concrete local part; with both sides wildcarded
+// it is a second spelling of `*`, and "everyone" is the entry that most deserves
+// exactly one way to write it. Rejected entries are dropped, so writing `*@*` on
+// its own denies sign-in rather than opening it — loud and safe.
 //
 // `*.example.com` does NOT match `example.com` itself, following the same
 // convention as DNS and TLS wildcards: a wildcard label matches one or more
@@ -57,7 +64,12 @@ function parseEntry(raw: string): AllowedEntry | null {
   if (!domainPart || domainPart.includes("@")) return null;
 
   if (domainPart === "*") {
-    return { local: local === "*" ? null : local, domain: null, subdomainOf: null };
+    // A wildcard domain needs a concrete local part to mean anything: `XXX@*` is
+    // "that mailbox anywhere". With a wildcard local part too (`*@*`, `@*`) it is
+    // just a second spelling of `*`, so it is rejected rather than aliased —
+    // "everyone" is the one entry that should have exactly one way to write it.
+    if (local === "*") return null;
+    return { local, domain: null, subdomainOf: null };
   }
   if (domainPart.startsWith("*.")) {
     const parent = domainPart.slice(2);
