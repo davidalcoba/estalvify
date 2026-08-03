@@ -86,25 +86,26 @@ feature-branch migrations to the shared `preview` branch while the app ran
 against its own ephemeral branch. `DIRECT_URL` exists only where it is scoped to
 the same branch as its `DATABASE_URL`.
 
-**The integration's own `DATABASE_*` vars are `production`-only, and inert.** The
-Neon–Vercel integration also writes ~15 variables holding production credentials
-in every shape: `DATABASE_URL_UNPOOLED` (Prisma's "direct URL"),
+**`DATABASE_URL` and `DIRECT_URL` are the only database variables.** The
+Neon–Vercel integration also wrote ~15 more, holding production credentials in
+every shape: `DATABASE_URL_UNPOOLED` (Prisma's "direct URL"),
 `DATABASE_POSTGRES_*` (backwards compatibility with the Vercel Postgres SDK) and
-`DATABASE_PG*` (the libpq variables, so a bare `psql` connects). They used to be
-exposed to `preview` and `development` too, so the first person to reach for one
-from a preview would have got production; their target is now `production` alone.
+`DATABASE_PG*` (the libpq variables, so a bare `psql` connects). All 15 are
+**deleted**. Two independent reasons: nothing in the codebase read them, and none
+of them could be read by the tools they exist for anyway — a Vercel Marketplace
+integration prefixes its variables with the store name, and this store is
+`DATABASE`, so the compatibility names arrived as `DATABASE_POSTGRES_URL` and
+`DATABASE_PGHOST` while `@vercel/postgres` looks for `POSTGRES_URL` and libpq for
+`PGHOST`. The project does not depend on `@vercel/postgres` regardless; it uses
+`@neondatabase/serverless` + `@prisma/adapter-neon`, both driven by
+`DATABASE_URL`. Until they were deleted they were also exposed to `preview` and
+`development`, so the first person to reach for one from a preview would have got
+production.
 
-None of them can actually be read by the tools they exist for. A Vercel
-Marketplace integration prefixes its variables with the store name, and this
-store is `DATABASE`, so the compatibility names arrive as
-`DATABASE_POSTGRES_URL` and `DATABASE_PGHOST` — while `@vercel/postgres` looks
-for `POSTGRES_URL` and libpq for `PGHOST`. The project does not depend on
-`@vercel/postgres` anyway; it uses `@neondatabase/serverless` +
-`@prisma/adapter-neon`, both driven by `DATABASE_URL`. Deleting the 15 is safe
-and sticks: routine deploys do not recreate them — only re-syncing or
-reinstalling the integration does. If that happens, re-check with
-`GET /v10/projects/{id}/env` for any `DATABASE_*` key whose target is wider than
-`["production"]`.
+The deletion sticks — routine deploys do not recreate them; only re-syncing or
+reinstalling the integration does. If that happens, delete them again rather than
+narrowing their targets, and check `GET /v10/projects/{id}/env` for any
+`DATABASE_*` key that is not `DATABASE_URL`.
 
 **Branch cap.** The Neon org is on the free plan, capped at **10 branches**
 (`GET /api/v2/projects/{id}` → `project.owner.branches_limit`). When the cap is
@@ -180,6 +181,17 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     (PSD2 client), `banking/transaction-parse` (pure ID/remittance parsing),
     `banking/sync-errors` (pure 401/429 classifiers), `banking/connection-status`
     (`expireStaleConsents` — flips connections past `consentExpiresAt` to EXPIRED).
+    The PSD2 `redirect_uri` is never derived from the deployment URL: Enable
+    Banking rejects anything that is not an exact match of a URI registered in the
+    app config (`REDIRECT_URI_NOT_ALLOWED`), so `ENABLE_BANKING_REDIRECT_URI` is
+    set identically on all three Vercel targets and `createBankingSession` throws
+    when neither it nor an explicit `redirectUri` is given. `api/banking/connect`
+    always passes one, falling back to the request origin — right for localhost,
+    where that origin is itself the registered URI. What there is deliberately
+    **no** fallback to is a canonical-app-URL variable: a fixed one is either the
+    same value as `ENABLE_BANKING_REDIRECT_URI` or wrong, and the deleted
+    `NEXT_PUBLIC_APP_URL` was the wrong kind — it held the production URL on
+    preview targets.
   - Writing rules: `description` holds the merchant, `remittanceInfo` the bank's own
     label. For BBVA card payments that label is a merchant **category** ("PAGO CON
     TARJETA EN SUPERMERCADOS"), which is usually the better rule target — it covers
