@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "GitHub ruleset that closes the release path on main: a pull request is required,",
+    "and both the release gate (which rejects a head branch other than preview) and CI",
+    "must pass. Together that means main only ever advances through preview.",
+    "",
+    "It cannot be applied from a Claude Code session — writes to GitHub's",
+    "administration API paths are blocked at the sandbox proxy — so it lives here as a",
+    "reviewable payload. Apply it with a PAT that has `repo` scope:",
+    "",
+    "  curl -X POST -H \"Authorization: Bearer $GH_PAT\" \\",
+    "    -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' \\",
+    "    https://api.github.com/repos/davidalcoba/estalvify/rulesets \\",
+    "    --data-binary @.github/rulesets/main-release-path.json",
+    "",
+    "Or by hand: Settings -> Rules -> Rulesets -> New branch ruleset, target the default",
+    "branch, and tick 'Require a pull request before merging' plus those two status checks.",
+    "",
+    "Note there is no bypass actor, so it applies to the repository owner too. To keep an",
+    "escape hatch, add: \"bypass_actors\": [{\"actor_id\": 5, \"actor_type\": \"RepositoryRole\",",
+    "\"bypass_mode\": \"always\"}] (5 = admin).",
+    "",
+    "The two contexts below are the *job names* of the workflows, which is what GitHub",
+    "reports as the check name. Rename a job and this ruleset must be updated with it, or",
+    "main becomes unmergeable while it waits for a check that never reports."
+  ],
+  "name": "main: release path only (preview -> main)",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          { "context": "A PR into main must come from preview" },
+          { "context": "Typecheck · Lint · Test" }
+        ]
+      }
+    },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ]
+}

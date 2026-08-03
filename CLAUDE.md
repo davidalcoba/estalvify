@@ -27,10 +27,20 @@ Neon branch. Two workflows hold the path together: `release-gate.yml` fails a pu
 request into `main` whose head is not `preview`, and `sync-preview.yml`
 fast-forwards `preview` to `main` after each release so it cannot drift behind
 (the merge commit on `main` would otherwise leave it permanently one commit
-back). Neither can stop a *direct push* to `main` — that needs branch protection
-on `main` (require a pull request + the release gate as a required check) which
-has to be switched on in the GitHub UI. So: never open or merge a pull request
-into `main` from a feature branch, and merge into `preview` first.
+back), after checking that what landed on `main` actually came through `preview`
+(it fails the release otherwise, since a direct push fast-forwards `preview`
+cleanly and would otherwise pass unnoticed).
+
+Neither workflow can *prevent* a direct push to `main` — Actions run after the
+push. That needs a GitHub ruleset, and **a Claude Code session cannot apply one**:
+writes to GitHub's administration API paths are refused at the sandbox proxy
+(`POST /repos/{repo}/rulesets` → 403 "Write access to this GitHub API path is not
+permitted through this proxy"), and the session's integration token reports
+`admin: false` besides. The ruleset is kept as a ready-to-apply payload at
+`.github/rulesets/main-release-path.json` — apply it with a personal token or in
+Settings → Rules. Until it is applied the release path is convention plus loud
+failures, not a lock. So: never open or merge a pull request into `main` from a
+feature branch, and merge into `preview` first.
 
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).

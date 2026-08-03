@@ -32,6 +32,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      # A direct push to main still fast-forwards preview cleanly, so the push
+      # below would succeed and hide it. Check the provenance of what landed:
+      # either it is already on preview (fast-forward release, or this job's own
+      # sync) or it is a merge whose second parent came from preview.
+      - name: Check main came through preview
+        run: |
+          git fetch --quiet origin preview
+          SHA="${{ github.sha }}"
+          if git merge-base --is-ancestor "$SHA" origin/preview; then
+            echo "$SHA is on preview — release path OK."
+          elif git rev-parse -q --verify "$SHA^2" >/dev/null &&
+               git merge-base --is-ancestor "$SHA^2" origin/preview; then
+            echo "$SHA merges a commit from preview — release path OK."
+          else
+            echo "::error::$SHA reached main without going through preview."
+            echo "Production now runs a commit no preview environment ever served."
+            echo "Put it on preview (git push origin $SHA:preview), or revert main."
+            exit 1
+          fi
+
       - name: Push main onto preview
         run: |
           if git push origin "${{ github.sha }}:refs/heads/preview"; then

@@ -33,9 +33,15 @@
   `sync-preview.yml` fast-forwards `preview` to `main` after each release, because
   `main`'s merge commit would otherwise leave `preview` one commit behind and the
   drift compounds silently — that is how `preview` ended up 6 commits behind once.
-  Both are advisory against a direct push to `main`: branch protection on `main`
-  (require a pull request, make the release gate a required check) is the part that
-  has to be enabled in the GitHub UI, and is not enabled yet.
+  Both are advisory against a direct push to `main` — Actions only run after the
+  push, so `sync-preview.yml` also verifies the provenance of what landed and fails
+  the release when it did not come through `preview`. The lock itself is a GitHub
+  ruleset (pull request required + those two checks required), kept as a payload at
+  `.github/rulesets/main-release-path.json` because a Claude Code session cannot
+  apply it: the sandbox proxy refuses writes to GitHub's administration API paths
+  (403 on `POST /repos/{repo}/rulesets`) and the session token is `admin: false`.
+  The repo is public, so rulesets are available on the free plan — it needs a
+  personal token or two clicks in Settings → Rules. **Not applied yet.**
 - Tooling access to Vercel: an API token is exposed as the `VERCEL_TOKEN`
   environment variable (secret — never commit or print it). It is **not
   read-only** — it can write project configuration, and the env var layout below
