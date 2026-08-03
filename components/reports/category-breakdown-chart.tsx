@@ -26,8 +26,14 @@ export function CategoryBreakdownChart({
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <div style={{ width: "100%", maxWidth: 220, height }} className="mx-auto sm:mx-0">
+    // `min-w-0` on the flex container and on the legend is load-bearing: without
+    // it the legend rows' min-content width propagates up and pushes the whole
+    // card past its column on a narrow phone.
+    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+      <div
+        style={{ width: "100%", maxWidth: 220, height }}
+        className="mx-auto shrink-0 sm:mx-0"
+      >
         <ResponsiveContainer>
           <PieChart>
             <Pie
@@ -49,18 +55,18 @@ export function CategoryBreakdownChart({
         </ResponsiveContainer>
       </div>
 
-      <ul className="flex-1 space-y-1.5">
+      <ul className="min-w-0 flex-1 space-y-1.5">
         {data.map((slice) => {
           const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
           return (
-            <li key={slice.name} className="flex items-center gap-2 text-sm">
+            <li key={slice.name} className="flex min-w-0 items-center gap-2 text-sm">
               <span
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: slice.color }}
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate">{slice.name}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">
+              <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
                 {formatCurrency(slice.value, currency, locale)}
               </span>
               <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">

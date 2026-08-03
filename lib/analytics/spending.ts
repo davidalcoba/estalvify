@@ -31,7 +31,9 @@ export function monthRange(year: number, month: number): { start: Date; end: Dat
 export function buildMonthlySpendingWhere(
   userId: string,
   year: number,
-  month: number
+  month: number,
+  /** Restrict to one bank account; omitted or empty means all of them. */
+  bankAccountId?: string
 ): Prisma.TransactionWhereInput {
   const { start, end } = monthRange(year, month);
   return {
@@ -39,6 +41,7 @@ export function buildMonthlySpendingWhere(
     direction: "DEBIT",
     valueDate: { gte: start, lt: end },
     categorization: { is: { status: "APPROVED", category: { is: { kind: "EXPENSE" } } } },
+    ...(bankAccountId ? { bankAccountId } : {}),
   };
 }
 

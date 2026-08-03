@@ -230,7 +230,7 @@ export default async function ForecastPage() {
         />
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Kpi
               title="Projected spend this month"
               icon={<CalendarClock className="h-4 w-4 text-muted-foreground" />}

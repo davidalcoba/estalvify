@@ -32,6 +32,18 @@ describe("buildMonthlySpendingWhere", () => {
     expect(valueDate.gte.toISOString()).toBe("2026-05-01T00:00:00.000Z");
     expect(valueDate.lt.toISOString()).toBe("2026-06-01T00:00:00.000Z");
   });
+
+  it("restricts to one bank account when given, and to none when not", () => {
+    expect(buildMonthlySpendingWhere("user-1", 2026, 5, "acc-1").bankAccountId).toBe(
+      "acc-1"
+    );
+    expect(buildMonthlySpendingWhere("user-1", 2026, 5, "")).not.toHaveProperty(
+      "bankAccountId"
+    );
+    expect(buildMonthlySpendingWhere("user-1", 2026, 5)).not.toHaveProperty(
+      "bankAccountId"
+    );
+  });
 });
 
 describe("aggregateSpendingByCategory", () => {

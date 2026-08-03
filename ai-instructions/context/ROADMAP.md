@@ -90,7 +90,7 @@ recurrentes, etc.).
 | Ajustes / preferencias (zona, moneda, locale) | ✅ Estable | `app/(app)/settings/`, `lib/user-prefs.ts` |
 | **Dashboard** | ✅ Estable | KPIs reales (patrimonio, ingresos/gastos del mes, por categorizar) + gráfica 6 meses + top categorías: `app/(app)/dashboard/page.tsx`, `lib/analytics/trends.ts`, `components/reports/` |
 | **Presupuestos** | ✅ Estable | Presupuesto mensual por categoría vs gasto real: `app/(app)/budget/`, `lib/budget/`, `lib/analytics/spending.ts`, `components/budget/` |
-| **Reports** | ✅ Estable | Tendencia 12 meses (ingresos vs gastos), donut por categoría y top comercios con **Recharts**: `app/(app)/reports/page.tsx`, `components/reports/` |
+| **Reports** | ✅ Estable | Tendencia (ingresos vs gastos), donut por categoría y top comercios con **Recharts**, filtrados por mes / ventana de tendencia (6-12-24) / cuenta desde la URL: `app/(app)/reports/page.tsx`, `lib/analytics/report-filters.ts`, `components/reports/` |
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar (confirmar añade la serie al Plan), contador de pendientes en el sidebar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ✅ Estable | Proyección de saldo/gasto + alerta de saldo bajo: `app/(app)/forecast/`, `lib/analytics/forecast.ts`, `components/reports/balance-forecast-chart.tsx` |
 | Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
