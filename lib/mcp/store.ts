@@ -31,6 +31,37 @@ export function getClient(clientId: string) {
   return prisma.mcpOAuthClient.findUnique({ where: { clientId } });
 }
 
+/**
+ * Make sure a client id exists as a row before anything references it.
+ *
+ * The static confidential client (`MCP_OAUTH_CLIENT_ID`) is configuration, not a
+ * registration, so it has no row — but `mcp_auth_codes` and `mcp_refresh_tokens`
+ * both carry a foreign key to `mcp_oauth_clients.clientId`. Minting a code for a
+ * configured-only client therefore fails with a foreign-key violation, which
+ * surfaces as a crashed function rather than an OAuth error: the browser gets no
+ * response at all. Upserting lazily keeps the static client working on any
+ * database without a seed step — which matters because every preview deployment
+ * gets a fresh Neon branch.
+ *
+ * The secret is deliberately not stored: it stays in the environment, and
+ * `clientSecretMatches` compares against that. This row exists only to satisfy
+ * the foreign key.
+ */
+export async function ensureClientRow(input: {
+  clientId: string;
+  redirectUris: string[];
+}) {
+  return prisma.mcpOAuthClient.upsert({
+    where: { clientId: input.clientId },
+    update: {},
+    create: {
+      clientId: input.clientId,
+      clientName: "Configured static client",
+      redirectUris: input.redirectUris,
+    },
+  });
+}
+
 // ── Authorization codes (single-use, PKCE-bound) ──────────────────────────────
 
 export async function createAuthCode(input: {
