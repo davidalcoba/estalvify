@@ -397,9 +397,31 @@ stored hashed.
 ### Access control
 
 - **Sign-in allowlist**: when `ALLOWED_EMAILS` is set, the Auth.js `signIn`
-  callback (`auth.ts`) only lets those Google accounts in — locking both the app
-  and the MCP (which shares the login) to the owner. This is the decisive
+  callback (`auth.ts`) only lets matching Google accounts in — locking both the
+  app and the MCP (which shares the login) to the owner. This is the decisive
   control: only an allowed account can ever obtain an MCP token.
+  The matching is `lib/auth/allowed-emails.ts` — pure and unit-tested, so the one
+  rule that decides who gets in is not buried in an Auth.js callback. Entries are
+  an exact address, a whole domain (`example.com`, `@example.com`, `*@example.com`
+  are the same thing), a subdomain wildcard (`*.example.com`), one mailbox at any
+  domain (`postmaster@*`), or `*` for everyone. `*@*` and `@*` are **rejected**
+  rather than aliased to `*`: a wildcard domain only means something beside a
+  concrete local part, and "everyone" is the entry that most deserves a single
+  spelling. Since rejected entries are dropped, writing `*@*` alone denies sign-in
+  instead of opening it. `*.example.com` deliberately excludes the apex, following DNS and TLS
+  wildcard convention: a wildcard label stands for one or more labels, not zero,
+  and quietly including the apex would make `*.example.com` and `example.com`
+  indistinguishable. Two properties are load-bearing and have tests naming them:
+  a domain entry never matches a domain that merely *ends with* it
+  (`example.com` must not admit `notexample.com`), and a malformed entry (`@`,
+  `user@`) is discarded rather than treated as a catch-all. An empty list still
+  means open, for compatibility; `*` is the way to say so on purpose. But a value
+  that has entries and no *usable* ones denies everyone rather than falling
+  through to open — otherwise a typo in the only entry would swing the allowlist
+  from one address to the whole world, and the "malformed entries are discarded"
+  guarantee would only hold while some other entry happened to parse. Being
+  locked out is recoverable; the opposite is not. That case was a real bug caught
+  by these tests, not a hypothetical.
 - **Confidential client** (`lib/mcp/clients.ts`): **configured** — both
   `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET` are set on `production` and
   `preview`, so `isDcrDisabled()` is true and open Dynamic Client Registration

@@ -5,6 +5,7 @@ import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Google from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
+import { isEmailAllowed } from "@/lib/auth/allowed-emails";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -21,17 +22,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     // Restrict who can sign in. When ALLOWED_EMAILS is set (comma-separated),
-    // only those Google accounts may authenticate — this locks both the app and
-    // the MCP API (which delegates to the same login) to the owner. When unset,
-    // sign-in stays open (previous behaviour).
+    // only matching Google accounts may authenticate — this locks both the app
+    // and the MCP API (which delegates to the same login) to the owner. When
+    // unset, sign-in stays open (previous behaviour). Entries can be exact
+    // addresses, whole domains, or wildcards; the matching rules live in
+    // `lib/auth/allowed-emails.ts`, which is pure and unit-tested.
     signIn({ profile, user }) {
-      const allowed = (process.env.ALLOWED_EMAILS ?? "")
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-      if (allowed.length === 0) return true;
-      const email = (profile?.email ?? user?.email ?? "").toLowerCase();
-      return email.length > 0 && allowed.includes(email);
+      return isEmailAllowed(
+        profile?.email ?? user?.email,
+        process.env.ALLOWED_EMAILS,
+      );
     },
     // Expose user.id in the session object
     session({ session, user }) {
