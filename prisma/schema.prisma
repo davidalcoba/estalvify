@@ -36,6 +36,17 @@ model User {
   // this. 0 = "don't go negative"; raise it to keep a cushion.
   lowBalanceThreshold Decimal @default(0) @db.Decimal(15, 2)
 
+  // Savings-first budgeting: the monthly savings goal is treated as one more
+  // committed charge, subtracted BEFORE the variable budget — never a residue.
+  // Either a fixed amount (wins when both set) or a percent of fixed income.
+  savingsGoalAmount  Decimal? @db.Decimal(15, 2)
+  savingsGoalPercent Decimal? @db.Decimal(5, 2)
+  // Which bank account holds savings. Real savings is measured as this
+  // account's net balance change — a transfer that comes straight back to cover
+  // rent is churn, not saving. Plain id (no FK): a deleted account just turns
+  // the tracking off.
+  savingsAccountId String?
+
   accounts         Account[]
   sessions         Session[]
   bankConnections  BankConnection[]
@@ -557,6 +568,7 @@ enum NotificationType {
   RECURRING_UPCOMING
   RECURRING_AMOUNT_CHANGE // A recurring charge deviated from its usual amount
   RECURRING_MISSED // An expected recurring charge never arrived
+  SAVINGS_NOT_EXECUTED // Savings goal set but no transfer landed this month
   LOW_BALANCE_PROJECTED
   CONSENT_EXPIRING // PSD2 consent about to lapse — warn before syncing stops
   NO_TRANSACTIONS // Nothing new for days; the sync may have died quietly

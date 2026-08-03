@@ -38,6 +38,21 @@ recurrentes, etc.).
 > configurable en Settings (`User.lowBalanceThreshold`). Un cargo vencido y no llegado se
 > proyecta "mañana" en vez de desaparecer de la curva.
 
+> **Post-roadmap — Ahorro como compromiso + "disponible para gastar".** El orden del
+> cálculo se invierte (`lib/plan/commitments.ts`, puro): ingreso fijo del Plan − cargos
+> comprometidos − **objetivo de ahorro** (€ fijo o % del ingreso fijo, en Settings, tratado
+> como un cargo más) − sinking funds = presupuesto variable. La tarjeta de compromisos vive
+> en /plan (`components/plan/commitments-card.tsx`) y deja claro que **la app no mueve
+> dinero**: detecta si el traspaso se ejecutó (`lib/plan/savings.ts` — TRASPASO/kind
+> TRANSFER en la cuenta de ahorro designada, `User.savingsAccountId`) y mide el **ahorro
+> real como variación neta del saldo** de esa cuenta (un traspaso que vuelve es churn, no
+> ahorro). Aviso `SAVINGS_NOT_EXECUTED` a ≤5 días de fin de mes. El dashboard abre con
+> **"Available to spend"** (`components/plan/available-card.tsx`): presupuesto variable −
+> gasto variable (el gasto fijo se descuenta arriba: un cargo que pertenece a una serie
+> confirmada no mueve el número — `splitVariableSpend` por merchantKey), con ritmo vs lo
+> que tocaría a estas alturas y disponible/día. Todo lo sirve `lib/plan/month-status.ts`
+> (server-only), compartido por dashboard, /plan y el cron.
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

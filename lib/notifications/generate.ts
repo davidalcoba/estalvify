@@ -34,6 +34,7 @@ import {
   detectMissedSeries,
 } from "@/lib/recurring/alerts";
 import { buildCashflowData } from "@/lib/analytics/cashflow-data";
+import { buildMonthStatus } from "@/lib/plan/month-status";
 import {
   budgetNotifications,
   upcomingRecurringNotifications,
@@ -41,6 +42,7 @@ import {
   missedRecurringNotifications,
   lowBalanceNotifications,
   cashflowBreachNotifications,
+  savingsNotExecutedNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
   type AmountChangeInput,
@@ -214,8 +216,12 @@ export async function generateNotificationsForUser(
   const today = todayInTimezone(prefs.timezone);
 
   // Day-level cash-flow projection per account (the "will rent clear before
-  // the salary lands" alert). Shares its math with the Forecast page.
-  const cashflow = await buildCashflowData(userId, prefs.timezone, 60);
+  // the salary lands" alert) and the month's savings/commitments position.
+  // Both share their math with the pages that display them.
+  const [cashflow, monthStatus] = await Promise.all([
+    buildCashflowData(userId, prefs.timezone, 60),
+    buildMonthStatus(userId, prefs.timezone),
+  ]);
 
   // ── Recurring series: live detection ────────────────────────────────────
   // Stored rows are snapshots from the moment the user confirmed; their dates
@@ -362,6 +368,19 @@ export async function generateNotificationsForUser(
       prefs.locale,
     ),
     ...missedRecurringNotifications(missedSeries, prefs.currency, prefs.locale),
+    ...savingsNotExecutedNotifications(
+      {
+        savingsGoal: monthStatus.commitments.savingsGoal,
+        executed: monthStatus.savings?.activity.executed ?? false,
+        tracked: monthStatus.savings !== null,
+        year: monthStatus.year,
+        month: monthStatus.month,
+        dayOfMonth: monthStatus.dayOfMonth,
+        daysInMonth: monthStatus.daysInMonth,
+      },
+      prefs.currency,
+      prefs.locale,
+    ),
     ...lowBalanceNotifications(
       projected,
       0,

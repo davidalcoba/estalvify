@@ -19,13 +19,15 @@ import {
   monthlyIncomeExpenses,
   topCategories,
 } from "@/lib/analytics/trends";
+import { buildMonthStatus } from "@/lib/plan/month-status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IncomeExpensesChart } from "@/components/reports/income-expenses-chart";
 import { CategoryBars } from "@/components/reports/category-bars";
-import { TrendingUp, TrendingDown, Wallet, Tag } from "lucide-react";
+import { AvailableCard } from "@/components/plan/available-card";
+import { TrendingUp, Wallet, Tag } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -40,6 +42,7 @@ export default async function DashboardPage() {
   const months = lastNMonths(year, month, TREND_MONTHS);
   const rangeStart = monthRange(months[0].year, months[0].month).start;
 
+  const monthStatusPromise = buildMonthStatus(userId, timezone);
   const [accounts, trendTx, spendRows, categories, toCategorize] =
     await Promise.all([
       prisma.bankAccount.findMany({
@@ -116,13 +119,20 @@ export default async function DashboardPage() {
   }));
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const monthStatus = await monthStatusPromise;
 
   return (
     <div className="space-y-6">
       <PageHeader title={`Good morning, ${firstName} 👋`} />
 
-      {/* KPI Cards */}
+      {/* KPI Cards — available-to-spend first: it is THE number. */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <AvailableCard
+          status={monthStatus}
+          currency={currency}
+          locale={locale}
+        />
+
         <Kpi
           title="Net Worth"
           icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
@@ -141,16 +151,6 @@ export default async function DashboardPage() {
             +{formatCurrency(thisMonth.income, currency, locale)}
           </div>
           <p className="text-xs text-muted-foreground">Money in this month</p>
-        </Kpi>
-
-        <Kpi
-          title="Expenses this month"
-          icon={<TrendingDown className="h-4 w-4 text-destructive" />}
-        >
-          <div className="text-2xl font-bold text-destructive">
-            −{formatCurrency(thisMonth.expenses, currency, locale)}
-          </div>
-          <p className="text-xs text-muted-foreground">Money out this month</p>
         </Kpi>
 
         <Kpi

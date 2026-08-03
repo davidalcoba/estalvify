@@ -12,6 +12,9 @@ export default function PlanLoading() {
     <div className="space-y-6">
       <PageHeaderSkeleton titleWidth="w-20" actionsWidth="w-52" />
 
+      {/* This month's commitments (savings-first breakdown) */}
+      <ListCardSkeleton rows={4} titleWidth="w-52" />
+
       {/* Expected income / expenses / net */}
       <KpiGridSkeleton count={3} className="grid grid-cols-1 gap-4 sm:grid-cols-3" />
 

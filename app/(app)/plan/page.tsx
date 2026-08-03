@@ -13,7 +13,9 @@ import {
   currentYearMonth,
 } from "@/lib/analytics/spending";
 import { buildPlanData } from "@/lib/plan/plan-dto";
+import { buildMonthStatus } from "@/lib/plan/month-status";
 import { PlanView } from "@/components/plan/plan-view";
+import { CommitmentsCard } from "@/components/plan/commitments-card";
 
 export const metadata: Metadata = { title: "Plan" };
 
@@ -24,6 +26,7 @@ export default async function PlanPage() {
 
   const { year, month } = currentYearMonth(prefs.timezone);
 
+  const monthStatusPromise = buildMonthStatus(userId, prefs.timezone);
   const [planItems, spendingRows, categories] = await Promise.all([
     prisma.planItem.findMany({
       where: { userId, active: true },
@@ -60,6 +63,7 @@ export default async function PlanPage() {
     categories,
     ref: { year, month },
   });
+  const monthStatus = await monthStatusPromise;
 
   return (
     <PlanView
@@ -68,6 +72,13 @@ export default async function PlanPage() {
       locale={prefs.locale}
       currency={prefs.currency}
       dateLocale={prefs.language}
+      commitmentsSlot={
+        <CommitmentsCard
+          status={monthStatus}
+          currency={prefs.currency}
+          locale={prefs.locale}
+        />
+      }
     />
   );
 }
