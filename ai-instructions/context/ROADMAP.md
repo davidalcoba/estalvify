@@ -91,6 +91,16 @@ recurrentes, etc.).
 > reduce el presupuesto variable. UI en /plan: `components/plan/sinking-funds-card.tsx`
 > (lista con progreso + diálogo alta/edición/borrado).
 
+> **Post-roadmap — Titulares de hogar.** `BankAccount.ownerName` (texto libre, editable
+> inline en /accounts junto al nombre — `components/accounts/account-owner-editor.tsx`).
+> La vista consolidada de hogar **ya era** la por defecto y los traspasos entre titulares
+> ya no cuentan como gasto/ingreso vía `Category.kind` TRANSFER; lo nuevo es la dimensión
+> de titular y el **indicador de concentración de ingresos**
+> (`lib/analytics/household.ts`, puro): % del ingreso del hogar (ventana de tendencia,
+> extraordinarios excluidos) que llega vía un solo titular, mostrado en la KPI de ingresos
+> del dashboard cuando hay ≥2 titulares con ingresos. Es el riesgo estructural real de la
+> familia (73% del fijo en una persona).
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

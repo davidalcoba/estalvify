@@ -22,6 +22,7 @@ import { DisconnectBankButton } from "@/components/accounts/disconnect-bank-butt
 import { ReconnectBankButton } from "@/components/accounts/reconnect-bank-button";
 import { SyncNowButton } from "@/components/accounts/sync-now-button";
 import { AccountNameEditor } from "@/components/accounts/account-name-editor";
+import { AccountOwnerEditor } from "@/components/accounts/account-owner-editor";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import { SyncPoller } from "@/components/accounts/sync-poller";
 import type { BankConnectionStatus } from "@/app/generated/prisma";
@@ -300,11 +301,17 @@ export default async function AccountsPage({
                                 accountId={account.id}
                                 initialName={account.name}
                               />
-                              {account.iban && (
-                                <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                  ···{account.iban}
-                                </p>
-                              )}
+                              <div className="flex items-center gap-3 mt-0.5">
+                                {account.iban && (
+                                  <p className="text-xs text-muted-foreground font-mono">
+                                    ···{account.iban}
+                                  </p>
+                                )}
+                                <AccountOwnerEditor
+                                  accountId={account.id}
+                                  initialOwner={account.ownerName}
+                                />
+                              </div>
                             </div>
 
                             {/* Balance + sync status */}

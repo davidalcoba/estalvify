@@ -164,6 +164,10 @@ model BankAccount {
   iban              String?
 
   name     String
+  // Household holder of this account (free text, e.g. "David"). Purely a
+  // reporting dimension: the household view stays the default, and this lets
+  // per-holder breakdowns and the income-concentration indicator exist.
+  ownerName String?
   type     BankAccountType @default(CHECKING)
   currency String          @default("EUR")
   isActive Boolean         @default(true)

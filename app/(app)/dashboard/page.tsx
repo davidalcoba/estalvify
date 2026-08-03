@@ -20,6 +20,7 @@ import {
   topCategories,
 } from "@/lib/analytics/trends";
 import { buildMonthStatus } from "@/lib/plan/month-status";
+import { incomeConcentration } from "@/lib/analytics/household";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
@@ -48,6 +49,9 @@ export default async function DashboardPage() {
       prisma.bankAccount.findMany({
         where: { userId, isActive: true },
         select: {
+          id: true,
+          name: true,
+          ownerName: true,
           balances: {
             orderBy: { date: "desc" },
             take: 1,
@@ -61,6 +65,7 @@ export default async function DashboardPage() {
           amount: true,
           direction: true,
           valueDate: true,
+          bankAccountId: true,
           // Category kind so transfers can be excluded from income/expense totals.
           categorization: { select: { category: { select: { kind: true } } } },
           // Extraordinary split lines are subtracted from income averages.
@@ -118,6 +123,29 @@ export default async function DashboardPage() {
   const spendingByCategory = aggregateSpendingByCategory(spendRows);
   const topCats = topCategories(spendingByCategory, categories, 6);
 
+  // Income concentration: how much of the household's income (trend window,
+  // extraordinary excluded) arrives via a single holder. The consolidated view
+  // stays the default — this is the one structural-risk number worth a line.
+  const holderByAccount = new Map(
+    accounts.map((a) => [a.id, a.ownerName ?? a.name]),
+  );
+  const concentration = incomeConcentration(
+    trendTx
+      .filter(
+        (t) =>
+          t.direction === "CREDIT" &&
+          t.categorization?.category?.kind !== "TRANSFER",
+      )
+      .map((t) => ({
+        holder: holderByAccount.get(t.bankAccountId) ?? "",
+        income: Math.max(
+          0,
+          Math.abs(Number(t.amount.toString())) -
+            t.splits.reduce((sum, s) => sum + Number(s.amount.toString()), 0),
+        ),
+      })),
+  );
+
   const monthLabel = (y: number, m: number) =>
     formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", {
       month: "short",
@@ -160,7 +188,11 @@ export default async function DashboardPage() {
           <div className="text-2xl font-bold text-success">
             +{formatCurrency(thisMonth.income, currency, locale)}
           </div>
-          <p className="text-xs text-muted-foreground">Money in this month</p>
+          <p className="text-xs text-muted-foreground">
+            {concentration
+              ? `${Math.round(concentration.share * 100)}% of household income arrives via ${concentration.holder}`
+              : "Money in this month"}
+          </p>
         </Kpi>
 
         <Kpi
