@@ -414,6 +414,17 @@ stored hashed.
   being open on a single-user deployment.
   Neither var is on `development`, so local runs keep DCR enabled and need no
   client configuration.
+  **A configured client still needs a `mcp_oauth_clients` row**, even though its
+  identity and secret come from the environment: `mcp_auth_codes` and
+  `mcp_refresh_tokens` both have a foreign key to `mcp_oauth_clients.clientId`, so
+  minting a code for a row-less client fails with a foreign-key violation. That
+  surfaces as a *crashed function*, not an OAuth error — the browser gets no
+  response and shows a connection failure, which reads like a DNS or network
+  problem and sends you looking in the wrong place. `authorize` therefore calls
+  `ensureClientRow` (an idempotent upsert) before `createAuthCode`; the secret is
+  never written to the row, it stays in the environment. The upsert matters beyond
+  first-run setup because every preview deployment gets a fresh Neon branch with an
+  empty table.
   `MCP_OAUTH_REDIRECT_URIS` is deliberately **unset**: with the list empty,
   `isAllowedRedirectUri` falls back to a host rule that accepts any redirect on
   `claude.ai` / `claude.com`, which survives Anthropic changing its callback path.
