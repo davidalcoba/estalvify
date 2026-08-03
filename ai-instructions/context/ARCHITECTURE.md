@@ -80,6 +80,16 @@ own Neon branch precisely so that pulling env vars, or running `prisma migrate
 dev` against them, cannot reach production — and so that a local schema
 experiment does not rewrite the history of the shared `preview` branch either.
 
+The same reasoning bounds which *other* secrets carry a `development` target, since
+that target is a download path onto a laptop. `ENABLE_BANKING_PRIVATE_KEY` (the
+RS256 key signing PSD2 requests — the most sensitive credential here) and
+`CRON_SECRET` are `production` + `preview` only; they are copied into `.env.local`
+by hand on the rare occasion local work needs them. `AUTH_GOOGLE_SECRET` and
+`AUTH_SECRET` do keep `development`, because without them local Google sign-in
+does not work at all — the honest trade, revisited if a localhost-only OAuth
+client is ever set up. README → "Setting up a local machine" has the recipe,
+including why the pull goes to `.env` and hand-set values to `.env.local`.
+
 There is deliberately **no** generic `preview` `DIRECT_URL`. `prisma.config.ts`
 prefers `DIRECT_URL` over `DATABASE_URL`, so a generic one would send
 feature-branch migrations to the shared `preview` branch while the app ran
