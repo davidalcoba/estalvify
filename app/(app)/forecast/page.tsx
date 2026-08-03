@@ -78,6 +78,11 @@ export default async function ForecastPage() {
         valueDate: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
+        // Extraordinary split lines are subtracted from income averages.
+        splits: {
+          where: { isExtraordinary: true },
+          select: { amount: true },
+        },
       },
     }),
     prisma.planItem.findMany({
@@ -112,6 +117,10 @@ export default async function ForecastPage() {
     direction: t.direction,
     valueDate: t.valueDate.toISOString(),
     categoryKind: t.categorization?.category?.kind ?? null,
+    extraordinaryAmount: t.splits.reduce(
+      (sum, s) => sum + Number(s.amount.toString()),
+      0,
+    ),
   }));
   const trend = monthlyIncomeExpenses(rows, fullMonths);
   const avg = averageMonthly(trend);

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { detectAmountDeviation, detectMissedSeries } from "./alerts";
+import {
+  detectAmountDeviation,
+  detectMissedSeries,
+  detectIncomeExcess,
+} from "./alerts";
 import type { SeriesOccurrence } from "./detect";
 
 const series = (...amounts: number[]): SeriesOccurrence[] =>
@@ -46,6 +50,27 @@ describe("detectAmountDeviation", () => {
 
   it("ignores a zero baseline", () => {
     expect(detectAmountDeviation(series(0, 0, 50))).toBeNull();
+  });
+});
+
+describe("detectIncomeExcess", () => {
+  it("flags the April payslip (base ~6009 arriving as 20528)", () => {
+    const excess = detectIncomeExcess(series(6009, 6009, 6010, 20528.19));
+    expect(excess).not.toBeNull();
+    expect(excess!.baselineAmount).toBe(6009);
+    expect(excess!.excess).toBeCloseTo(14519.19, 2);
+  });
+
+  it("ignores payslip wobble inside the threshold", () => {
+    expect(detectIncomeExcess(series(6009, 6050, 5980, 6100))).toBeNull();
+  });
+
+  it("a shrunken income is not an excess", () => {
+    expect(detectIncomeExcess(series(6009, 6009, 6009, 4000))).toBeNull();
+  });
+
+  it("needs history to have a baseline", () => {
+    expect(detectIncomeExcess(series(6009, 20528))).toBeNull();
   });
 });
 

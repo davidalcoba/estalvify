@@ -55,6 +55,47 @@ export function detectAmountDeviation(
   };
 }
 
+/**
+ * Fraction above the baseline at which an income's excess counts as
+ * extraordinary rather than payslip noise. Salaries wobble a little with
+ * expense reimbursements; a bonus does not wobble — it jumps.
+ */
+export const EXTRAORDINARY_INCOME_THRESHOLD = 0.2;
+
+export interface IncomeExcess {
+  latestAmount: number;
+  latestDate: string; // YYYY-MM-DD
+  /** Median of the previous occurrences — the base salary. */
+  baselineAmount: number;
+  /** latest − baseline: the part that is not the base salary. */
+  excess: number;
+}
+
+/**
+ * Whether an income series' latest arrival carries an extraordinary excess:
+ * the amount exceeds the median of previous occurrences by more than
+ * `threshold`. The April payslip holding base + a 14.5k variable inside one
+ * row is exactly this. Rules can't divide an amount — a split can, and this
+ * tells the user how much to split off.
+ */
+export function detectIncomeExcess(
+  history: SeriesOccurrence[],
+  threshold: number = EXTRAORDINARY_INCOME_THRESHOLD
+): IncomeExcess | null {
+  if (history.length < 3) return null;
+  const latest = history[history.length - 1];
+  const baseline = median(history.slice(0, -1).map((o) => o.amount));
+  if (baseline <= 0) return null;
+  if (latest.amount <= baseline * (1 + threshold)) return null;
+
+  return {
+    latestAmount: latest.amount,
+    latestDate: latest.date,
+    baselineAmount: round(baseline),
+    excess: round(latest.amount - baseline),
+  };
+}
+
 export interface MissedSeries {
   expectedDate: string; // YYYY-MM-DD
   daysOverdue: number;

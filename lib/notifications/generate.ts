@@ -32,6 +32,7 @@ import {
 import {
   detectAmountDeviation,
   detectMissedSeries,
+  detectIncomeExcess,
 } from "@/lib/recurring/alerts";
 import { buildCashflowData } from "@/lib/analytics/cashflow-data";
 import { buildMonthStatus } from "@/lib/plan/month-status";
@@ -40,6 +41,7 @@ import {
   upcomingRecurringNotifications,
   recurringAmountChangeNotifications,
   missedRecurringNotifications,
+  extraordinaryIncomeNotifications,
   lowBalanceNotifications,
   cashflowBreachNotifications,
   savingsNotExecutedNotifications,
@@ -47,6 +49,7 @@ import {
   staleTransactionNotifications,
   type AmountChangeInput,
   type MissedSeriesInput,
+  type ExtraordinaryIncomeInput,
   type NotificationSpec,
 } from "./generators";
 
@@ -157,6 +160,11 @@ export async function generateNotificationsForUser(
         remittanceInfo: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
+        // Extraordinary split lines are subtracted from income averages.
+        splits: {
+          where: { isExtraordinary: true },
+          select: { amount: true },
+        },
       },
       orderBy: { valueDate: "asc" },
     }),
@@ -277,14 +285,37 @@ export async function generateNotificationsForUser(
 
   const amountChanges: AmountChangeInput[] = [];
   const missedSeries: MissedSeriesInput[] = [];
+  const extraordinaryIncomes: ExtraordinaryIncomeInput[] = [];
   for (const c of liveConfirmed) {
-    const deviation = detectAmountDeviation(c.history);
-    if (deviation) {
-      amountChanges.push({
-        merchantKey: c.merchantKey,
-        displayName: c.displayName,
-        ...deviation,
-      });
+    if (c.direction === "CREDIT") {
+      // An income far above its usual amount is a windfall to split and
+      // assign, not a price change; a shrunken income is still worth a look.
+      const excess = detectIncomeExcess(c.history);
+      if (excess) {
+        extraordinaryIncomes.push({
+          merchantKey: c.merchantKey,
+          displayName: c.displayName,
+          ...excess,
+        });
+      } else {
+        const deviation = detectAmountDeviation(c.history);
+        if (deviation && deviation.relativeChange < 0) {
+          amountChanges.push({
+            merchantKey: c.merchantKey,
+            displayName: c.displayName,
+            ...deviation,
+          });
+        }
+      }
+    } else {
+      const deviation = detectAmountDeviation(c.history);
+      if (deviation) {
+        amountChanges.push({
+          merchantKey: c.merchantKey,
+          displayName: c.displayName,
+          ...deviation,
+        });
+      }
     }
     const missed = detectMissedSeries(c.nextExpected, today);
     if (missed) {
@@ -327,6 +358,10 @@ export async function generateNotificationsForUser(
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
       categoryKind: t.categorization?.category?.kind ?? null,
+      extraordinaryAmount: t.splits.reduce(
+        (sum, s) => sum + Number(s.amount.toString()),
+        0,
+      ),
     })),
     fullMonths,
   );
@@ -369,6 +404,11 @@ export async function generateNotificationsForUser(
       prefs.locale,
     ),
     ...missedRecurringNotifications(missedSeries, prefs.currency, prefs.locale),
+    ...extraordinaryIncomeNotifications(
+      extraordinaryIncomes,
+      prefs.currency,
+      prefs.locale,
+    ),
     ...savingsNotExecutedNotifications(
       {
         savingsGoal: monthStatus.commitments.savingsGoal,

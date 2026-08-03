@@ -87,6 +87,11 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
         valueDate: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
+        // Extraordinary split lines are subtracted from income averages.
+        splits: {
+          where: { isExtraordinary: true },
+          select: { amount: true },
+        },
       },
     }),
     prisma.transaction.findMany({
@@ -134,6 +139,10 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
       categoryKind: t.categorization?.category?.kind ?? null,
+      extraordinaryAmount: t.splits.reduce(
+        (sum, s) => sum + Number(s.amount.toString()),
+        0,
+      ),
     })),
     months,
   );

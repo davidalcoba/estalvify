@@ -66,6 +66,19 @@ recurrentes, etc.).
 > ya explican, y Reports lo muestra en la tarjeta "Untracked spending". `isExtraordinary`
 > en una línea marca ingreso extraordinario (ver siguiente nota).
 
+> **Post-roadmap — Ingresos extraordinarios como evento.** Los variables anuales llegan
+> **dentro del mismo apunte** que la nómina (abril: 14,5k sobre una base de 6k), así que la
+> media de ingresos de 6 meses sobreestima el fijo en miles de euros. Detección pura
+> (`detectIncomeExcess` en `lib/recurring/alerts.ts`): si el último cobro de una serie
+> CREDIT confirmada supera la mediana de los anteriores en >20%, aviso
+> `EXTRAORDINARY_INCOME` con el exceso cuantificado y la instrucción de **partir el apunte**
+> (split con línea `isExtraordinary`) y asignarlo antes de que el mes se lo coma. Las
+> líneas extraordinarias se **restan de las medias de ingresos** en toda la app
+> (`TrendRow.extraordinaryAmount` en `lib/analytics/trends.ts`, alimentado desde los 4
+> consumidores del trend). El presupuesto/tasa de ahorro ya usaba solo el ingreso fijo del
+> Plan, inmune por construcción. Una nómina reducida (deviation a la baja) sigue avisando
+> vía `RECURRING_AMOUNT_CHANGE`.
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

@@ -6,6 +6,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { setTransactionSplits } from "@/app/(app)/transactions/actions";
@@ -21,6 +22,7 @@ interface LineDraft {
   amount: string;
   categoryId: string | null;
   note: string;
+  isExtraordinary: boolean;
 }
 
 interface TransactionSplitDialogProps {
@@ -46,16 +48,18 @@ export function TransactionSplitDialog({
   const [error, setError] = useState<string | null>(null);
   const total = Math.abs(transaction.amount);
 
+  const isIncome = transaction.direction === "CREDIT";
   const [lines, setLines] = useState<LineDraft[]>(() =>
     transaction.splits.length > 0
       ? transaction.splits.map((s) => ({
           amount: String(s.amount),
           categoryId: s.categoryId,
           note: s.note ?? "",
+          isExtraordinary: s.isExtraordinary,
         }))
       : [
-          { amount: "", categoryId: null, note: "" },
-          { amount: "", categoryId: null, note: "" },
+          { amount: "", categoryId: null, note: "", isExtraordinary: false },
+          { amount: "", categoryId: null, note: "", isExtraordinary: false },
         ]
   );
 
@@ -63,6 +67,7 @@ export function TransactionSplitDialog({
     amount: Number(l.amount),
     categoryId: l.categoryId,
     note: l.note,
+    isExtraordinary: l.isExtraordinary,
   }));
   const remainder = splitRemainder(total, parsed);
   const validationError = validateSplitLines(total, parsed);
@@ -121,6 +126,19 @@ export function TransactionSplitDialog({
                   onChange={(e) => patch(i, { note: e.target.value })}
                   aria-label={`Line ${i + 1} note`}
                 />
+                {isIncome && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                      checked={line.isExtraordinary}
+                      onCheckedChange={(checked) =>
+                        patch(i, { isExtraordinary: checked === true })
+                      }
+                      aria-label={`Line ${i + 1} extraordinary`}
+                    />
+                    Extraordinary (a bonus or annual variable — kept out of
+                    income averages)
+                  </label>
+                )}
               </div>
               <Button
                 type="button"
@@ -149,6 +167,7 @@ export function TransactionSplitDialog({
                   amount: remainder > 0 ? String(remainder) : "",
                   categoryId: null,
                   note: "",
+                  isExtraordinary: false,
                 },
               ])
             }

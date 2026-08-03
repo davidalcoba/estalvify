@@ -31,6 +31,21 @@ describe("forwardMonths", () => {
 });
 
 describe("monthlyIncomeExpenses", () => {
+  it("subtracts extraordinary split amounts from income", () => {
+    const rows = [
+      {
+        amount: 20528.19,
+        direction: "CREDIT" as const,
+        valueDate: "2026-04-28T00:00:00Z",
+        categoryKind: "INCOME" as const,
+        extraordinaryAmount: 14519.19,
+      },
+    ];
+    const totals = monthlyIncomeExpenses(rows, [{ year: 2026, month: 4 }]);
+    expect(totals[0].income).toBe(6009);
+  });
+
+
   it("buckets income and expenses per month", () => {
     const rows = [
       { amount: 2000, direction: "CREDIT" as const, valueDate: "2026-07-30" },

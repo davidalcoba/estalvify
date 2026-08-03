@@ -281,6 +281,40 @@ export function staleTransactionNotifications(
   return specs;
 }
 
+export interface ExtraordinaryIncomeInput {
+  merchantKey: string;
+  displayName: string;
+  latestAmount: number;
+  latestDate: string; // YYYY-MM-DD
+  baselineAmount: number;
+  excess: number;
+}
+
+/**
+ * An income arrived far above its usual amount — a bonus or annual variable
+ * riding inside the salary row. The ask is explicit: split it and assign it,
+ * because an unassigned windfall is absorbed by the month (April's 14.5k
+ * changed that month's spending by nothing). One alert per arrival.
+ */
+export function extraordinaryIncomeNotifications(
+  inputs: ExtraordinaryIncomeInput[],
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return inputs.map((i) => ({
+    type: "EXTRAORDINARY_INCOME" as NotificationType,
+    severity: "INFO" as NotificationSeverity,
+    title: `Extraordinary income: ${i.displayName}`,
+    body: `${formatCurrency(i.latestAmount, currency, locale)} arrived against a usual ${formatCurrency(
+      i.baselineAmount,
+      currency,
+      locale
+    )} — about ${formatCurrency(i.excess, currency, locale)} extra. Split the transaction (base + extraordinary) and assign the excess to savings or a fund; money left unassigned gets spent by the month.`,
+    dedupeKey: `extra-income:${i.merchantKey}:${i.latestDate}`,
+    metadata: { merchantKey: i.merchantKey, date: i.latestDate },
+  }));
+}
+
 export interface SavingsExecutionInput {
   savingsGoal: number; // resolved €, > 0 means a goal is set
   /** Whether an inbound transfer landed on the savings account this month. */
