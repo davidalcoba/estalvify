@@ -81,6 +81,37 @@ generator — keep the four in sync.
   category's own hex when the series maps to a category. Axis/grid/tooltip use semantic
   tokens (`--muted-foreground`, `--border`, `--popover`) so charts read in light **and**
   dark. Format values with `lib/formatters` (`formatCurrency`).
+- **Selecting a slice of the donut is legend-first** (`category-breakdown-chart`).
+  A 1 % category is a sliver no finger can hit and a floating tooltip lands on
+  top of the very chart you tapped, so: the legend rows are buttons (hover
+  previews, click pins, click again releases), the selected sector reaches out
+  while the others dim, and the reading happens in the donut's hole — no
+  tooltip over the chart. When a text control already carries the same numbers,
+  take the chart's `<svg>` out of the tab order (`tabIndex={-1}`) and suppress
+  the two artifacts a tap leaves behind: `-webkit-tap-highlight-color` and the
+  focus ring on `.recharts-surface`.
+
+## A card must never outgrow its column
+
+A grid whose only column count is a breakpoint variant — `grid gap-4
+lg:grid-cols-2` — leaves the base layout with a single **implicit** `auto`
+track. An `auto` track is sized by its items' *min-content* width, and a grid
+item's default `min-width: auto` lets that min-content push the track wider
+than the grid itself. One long legend row inside a card is then enough to make
+the whole card hang off the right edge of a phone screen, while every sibling
+outside the grid stays put. This is exactly how the Reports donut card ended up
+overflowing on a 375 px viewport.
+
+- **Always state the base column count**: `grid grid-cols-1 gap-4
+  lg:grid-cols-2`. Tailwind's `grid-cols-N` expands to `minmax(0, 1fr)` tracks,
+  which cannot exceed the container. It changes nothing visually when the
+  content already fits.
+- **Let text rows shrink.** A `flex` row whose label must truncate needs
+  `min-w-0` on the row *and* on the flex ancestors between it and the card —
+  `truncate` alone does nothing if an ancestor still reports a wide
+  min-content.
+- The route's `loading.tsx` mirrors the grid classes, so it gets `grid-cols-1`
+  in the same change.
 
 ## Copy: terse, SaaS-style
 
