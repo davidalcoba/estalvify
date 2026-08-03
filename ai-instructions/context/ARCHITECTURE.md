@@ -102,11 +102,25 @@ every shape: `DATABASE_URL_UNPOOLED` (Prisma's "direct URL"),
 `DATABASE_POSTGRES_*` (backwards compatibility with the Vercel Postgres SDK) and
 `DATABASE_PG*` (the libpq variables, so a bare `psql` connects). All 15 are
 **deleted**. Two independent reasons: nothing in the codebase read them, and none
-of them could be read by the tools they exist for anyway — a Vercel Marketplace
-integration prefixes its variables with the store name, and this store is
-`DATABASE`, so the compatibility names arrived as `DATABASE_POSTGRES_URL` and
+of them could be read by the tools they exist for anyway — this project's
+resource↔project connection carries the environment-variable prefix `DATABASE`,
+so the compatibility names arrived as `DATABASE_POSTGRES_URL` and
 `DATABASE_PGHOST` while `@vercel/postgres` looks for `POSTGRES_URL` and libpq for
-`PGHOST`. The project does not depend on `@vercel/postgres` regardless; it uses
+`PGHOST`. The prefix is a **per-connection setting, not something every
+Marketplace integration does automatically**: Vercel's docs are explicit that by
+default "these variables use the names provided by the integration (for example,
+`PGHOST`, `PGPASSWORD`)", and that a **Custom Prefix** chosen when connecting the
+project is "prepended to each environment variable name with an underscore
+separator" (`PGHOST` → `DB1_PGHOST`). Neon documents the same thing from its side
+— its default set is unprefixed (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`,
+`PGHOST`, `POSTGRES_*`) and "you can add a prefix if you have multiple databases
+in the same project". So do not expect the prefix to reappear by itself if the
+integration is ever reinstalled: check the actual names rather than assuming
+either shape. (The store name behind the prefix could not be read back to
+confirm — `GET /v1/storage/stores` needs more than the read-scoped
+`VERCEL_TOKEN` and returns 403 — but the observed names are consistent only with
+a `DATABASE` prefix.) The project does not depend on `@vercel/postgres`
+regardless; it uses
 `@neondatabase/serverless` + `@prisma/adapter-neon`, both driven by
 `DATABASE_URL`. Until they were deleted they were also exposed to `preview` and
 `development`, so the first person to reach for one from a preview would have got
@@ -133,11 +147,19 @@ integration recreates the branch from `main` on the next deployment of that git
 branch, so the only thing lost is throwaway preview data.
 
 The workflow exists because of *which* integration this is. Neon ships two, and
-they clean up differently: the **Neon-Managed** integration has an "Automatically
-delete obsolete Neon branches" toggle that fires when the git branch is deleted,
-but this project uses the **Vercel-Managed** (Marketplace) one, whose cleanup
-instead follows Vercel's deployment-retention policy and so can lag by months —
-long enough to hit the 10-branch cap first, which is exactly what happened. A
+they clean up differently. The **Neon-Managed** integration does it
+git-branch-based: it has an "Automatically delete obsolete Neon branches"
+(recommended) toggle that cleans up branches when the git branch is deleted. This
+project uses the **Vercel-Managed** (Marketplace) one — confirmed directly:
+`GET /api/v2/organizations/org-autumn-pond-35905682` returns
+`"managed_by": "vercel"` (org name "Vercel: David's projects", `"plan": "free"`).
+Its cleanup is deployment-based instead, and Neon's own docs warn that it
+"depends on Vercel's deployment retention policy, which can delay branch deletion
+by months". For *this* project that retention is currently 30 days
+(`GET /v9/projects/{id}` → `deploymentExpiration`: `expirationDays: 30`,
+`deploymentsToKeep: 10`), so the realistic lag here is weeks rather than Neon's
+worst case — still far longer than it takes concurrent feature branches to hit
+the 10-branch cap, which is exactly what happened. A
 GitHub Action is Neon's own documented answer for this case
 (`neondatabase/delete-branch-action` is the official one; the workflow here is a
 few lines of `curl` instead, to avoid pinning a third-party action and to keep
