@@ -71,6 +71,25 @@ first time a branch is deployed and injects that branch's connection string into
 the deployment. Those injected values win over the project-level env vars, which
 is what keeps feature-branch previews isolated.
 
+**Nothing keeps the long-lived `preview` branch's *data* in sync with `main`.** It
+drifts: by 2026-08 it still held a 2026-03-02 snapshot with zero rules and a user
+row that predated the production one, so the rules page on preview looked empty
+while production had 35. Refresh it with Neon's restore endpoint, which keeps the
+branch id and endpoint (so the Vercel connection strings keep working — the role
+and password are inherited from `main` and already identical):
+
+```bash
+curl -X POST -H "Authorization: Bearer $NEON_DB_KEY" -H 'Content-Type: application/json' \
+  https://console.neon.tech/api/v2/projects/divine-firefly-20538122/branches/br-shy-bird-albcqv1g/restore \
+  --data-binary '{"source_branch_id":"br-lively-cell-alldlk0k","preserve_under_name":"preview_before_reset_<date>"}'
+```
+
+It is destructive to whatever only preview had — notably a bank consent
+reconnected there, which comes back as production's (expired) connection rows.
+`preserve_under_name` keeps the old state as a separate branch; delete it when
+done, because the free plan caps the project at 10 branches and a full project
+makes preview provisioning fail before the build even runs.
+
 **Env var layout in Vercel** (the app reads only `DATABASE_URL` at runtime —
 `lib/prisma.ts` — and `DIRECT_URL`, falling back to `DATABASE_URL`, for
 migrations — `prisma.config.ts`):
