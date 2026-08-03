@@ -24,6 +24,18 @@
   deployment; merges to `main` promote to production. Vercel-native features in
   use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
   (`/api/queues/sync-connection`).
+- **Branch flow: feature branch → `preview` → `main`.** Three long-lived refs
+  matter: a feature branch (throwaway preview + throwaway Neon branch), `preview`
+  (the release candidate, fixed URL `https://estalvify-preview.vercel.app` — a
+  project domain pinned to the branch — on Neon branch `preview`), and `main`
+  (production). Nothing merges into `main` except `preview`.
+  `.github/workflows/release-gate.yml` enforces that on pull requests and
+  `sync-preview.yml` fast-forwards `preview` to `main` after each release, because
+  `main`'s merge commit would otherwise leave `preview` one commit behind and the
+  drift compounds silently — that is how `preview` ended up 6 commits behind once.
+  Both are advisory against a direct push to `main`: branch protection on `main`
+  (require a pull request, make the release gate a required check) is the part that
+  has to be enabled in the GitHub UI, and is not enabled yet.
 - Tooling access to Vercel: an API token is exposed as the `VERCEL_TOKEN`
   environment variable (secret — never commit or print it). It is **not
   read-only** — it can write project configuration, and the env var layout below

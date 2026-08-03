@@ -1,0 +1,45 @@
+name: Sync preview with main
+
+# Second half of the release gate. `main` merges with a merge commit, so right
+# after a release `preview` is one commit behind main and every later comparison
+# reads as drift — which is exactly how `preview` silently fell 6 commits behind
+# once already. This pushes main back onto preview after each release.
+#
+# It is a fast-forward, not a force push: the release merge has preview's head as
+# a parent, so main is a descendant of preview. If the push is rejected, main got
+# a commit that never went through preview (a direct push or an admin merge) and
+# the branches have genuinely diverged — the job fails loudly instead of forcing,
+# because forcing here would discard whatever preview holds.
+
+on:
+  push:
+    branches: [main]
+
+# Only ever one reconciliation in flight.
+concurrency:
+  group: sync-preview
+  cancel-in-progress: false
+
+jobs:
+  fast-forward-preview:
+    name: Fast-forward preview to main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main onto preview
+        run: |
+          if git push origin "${{ github.sha }}:refs/heads/preview"; then
+            echo "preview is level with main."
+          else
+            echo "::error::Could not fast-forward 'preview' to main."
+            echo "main has commits that did not come through preview, or preview has commits that are not in main."
+            echo "Reconcile by hand — do not force push without checking what preview holds:"
+            echo "  git fetch origin && git log --oneline --left-right origin/preview...origin/main"
+            exit 1
+          fi
