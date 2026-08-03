@@ -35,8 +35,39 @@ curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
 Pick the newest deployment whose `meta.githubCommitRef` matches the branch (or
 whose `meta.githubCommitSha` matches the pushed commit) and give the user
 `https://<url>` plus its `state` (`READY` / `BUILDING` / `ERROR`); if it is still
-`BUILDING`, say so and offer to re-check. Preview URLs are behind Vercel
-Authentication, so mention that a team login may be required to open them.
+`BUILDING`, say so and offer to re-check.
+
+### Opening a protected URL yourself
+
+Vercel Authentication is on (`ssoProtection: prod_deployment_urls_and_all_previews`),
+so **a human** opening a preview link needs a team login — mention that when you
+hand over a URL. You do not: the project has a Protection Bypass for Automation,
+and the secret is the *key* of the `protectionBypass` map returned by
+`GET /v9/projects/{id}`, so it needs nothing passed in.
+
+```bash
+BYPASS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v9/projects/prj_MwnNS5SFs4qNiRu6G6DFfrzYbYjI?teamId=team_qo5V9Jw7mrPRQUOl9TjhJGIi" \
+  | python3 -c "import json,sys; print(next(iter(json.load(sys.stdin)['protectionBypass'])))")
+curl -sL -H "x-vercel-protection-bypass: $BYPASS" https://estalvify-preview.vercel.app
+```
+
+It is a secret: never print it or commit it. Verified behaviour — without the
+header a preview answers `302` to `vercel.com/sso-api?url=…&nonce=…` (the SSO
+wall, not a `401`); with it you get the app, `307` to `/login` for an
+unauthenticated request. The production alias `estalvify.vercel.app` needs no
+header at all: that protection setting covers deployment URLs and previews, not
+the production domain.
+
+Network policy note — this part is **not** stable, so test it, do not trust this
+paragraph. The egress allowlist belongs to the Claude Code environment, not to the
+repo, and it is fixed when the container starts: a host the owner unblocks
+mid-session may only work in the next one. As last observed (2026-08-03),
+`*.vercel.app`, `api.vercel.com`, `console.neon.tech` and `api.github.com` were
+reachable, while `vercel.com`, `neon.com` and `registry.npmjs.org` were not. That
+last one matters: with it blocked `npm ci` fails, so
+`npm run typecheck && npm run lint && npm run test` can only run in CI — push and
+read the check result off the PR rather than claiming the gate passed locally.
 
 ## Databases (Neon)
 
