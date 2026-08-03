@@ -9,6 +9,17 @@
 > (`proxy.ts`, `api/queues/sync-connection/route.ts`, `api/cron/sync/route.ts`,
 > `accounts/setup/actions.ts`, `rule-matcher.ts`, `next.config.ts`).
 
+## Estado de implementación (rama `claude/codebase-architecture-security-qaevxy`)
+
+**Resuelto en esta rama** (gate verde: typecheck, lint, tests):
+A1, A2, A3, A4, A6, A7 · B1, B2, B7, B8.
+
+**Pendiente / deliberadamente diferido** (decisiones de producto o infra, no aptos
+para hacer sin revisión): B3 (modelo de alta multi-usuario), B4 (rate limiting — elige
+infra), B5 (consent screen + enforcement de scopes OAuth), B6 (trustHost/AUTH_URL +
+separar `MCP_JWT_SECRET`), C5 (rediseño de la cola), C6 (harness de tests con BD), D6
+(estrategia i18n). El resto de C/D son quick-wins oportunistas.
+
 ## Contexto
 
 Estalvify es una app de finanzas personales (Next.js 16 App Router, Auth.js v5 con
