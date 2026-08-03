@@ -16,6 +16,7 @@ import { buildPlanData } from "@/lib/plan/plan-dto";
 import { buildMonthStatus } from "@/lib/plan/month-status";
 import { PlanView } from "@/components/plan/plan-view";
 import { CommitmentsCard } from "@/components/plan/commitments-card";
+import { SinkingFundsCard } from "@/components/plan/sinking-funds-card";
 
 export const metadata: Metadata = { title: "Plan" };
 
@@ -77,11 +78,19 @@ export default async function PlanPage() {
       currency={prefs.currency}
       dateLocale={prefs.language}
       commitmentsSlot={
-        <CommitmentsCard
-          status={monthStatus}
-          currency={prefs.currency}
-          locale={prefs.locale}
-        />
+        <>
+          <CommitmentsCard
+            status={monthStatus}
+            currency={prefs.currency}
+            locale={prefs.locale}
+          />
+          <SinkingFundsCard
+            funds={monthStatus.funds}
+            currency={prefs.currency}
+            locale={prefs.locale}
+            dateLocale={prefs.language}
+          />
+        </>
       }
     />
   );

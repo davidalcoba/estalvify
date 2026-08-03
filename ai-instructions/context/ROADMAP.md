@@ -79,6 +79,18 @@ recurrentes, etc.).
 > Plan, inmune por construcción. Una nómina reducida (deviation a la baja) sigue avisando
 > vía `RECURRING_AMOUNT_CHANGE`.
 
+> **Post-roadmap — Sinking funds.** Modelo `SinkingFund` (`{name, targetAmount,
+> targetDate?, monthlyContribution, startDate, initialAmount, active}`): provisión mensual
+> para golpes previsibles no mensuales (IBI — que no aparece en 8 meses de histórico y va a
+> llegar —, vacaciones, vuelta al cole, taller). **Contabilidad interna** sobre el saldo de
+> Estalvis, sin cuenta real ni cron: lo acumulado se **computa** (`lib/plan/sinking-funds.ts`,
+> puro — inicial + aportación × meses desde startDate, cap en el objetivo; un fondo lleno
+> deja de aportar, sin cobrar dos veces el mes que lo completa; `suggestedContribution`
+> reparte lo restante hasta targetDate). La aportación mensual de los fondos activos entra
+> en el **bloque de compromisos** junto al objetivo de ahorro (`buildMonthStatus`), así que
+> reduce el presupuesto variable. UI en /plan: `components/plan/sinking-funds-card.tsx`
+> (lista con progreso + diálogo alta/edición/borrado).
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

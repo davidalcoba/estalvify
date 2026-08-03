@@ -15,6 +15,9 @@ export default function PlanLoading() {
       {/* This month's commitments (savings-first breakdown) */}
       <ListCardSkeleton rows={4} titleWidth="w-52" />
 
+      {/* Sinking funds */}
+      <ListCardSkeleton rows={2} titleWidth="w-32" />
+
       {/* Expected income / expenses / net */}
       <KpiGridSkeleton count={3} className="grid grid-cols-1 gap-4 sm:grid-cols-3" />
 

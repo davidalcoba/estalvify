@@ -123,3 +123,79 @@ export async function deletePlanItem(id: string) {
   await prisma.planItem.delete({ where: { id } });
   revalidate();
 }
+
+// ─────────────────────────────────────────────
+// Sinking funds
+// ─────────────────────────────────────────────
+
+export interface SinkingFundFields {
+  name: string;
+  targetAmount: number;
+  targetDate: string | null; // ISO "YYYY-MM-DD"
+  monthlyContribution: number;
+  initialAmount: number;
+}
+
+function normalizeFundFields(fields: SinkingFundFields) {
+  const name = fields.name?.trim();
+  if (!name) throw new Error("Name is required");
+  if (!Number.isFinite(fields.targetAmount) || fields.targetAmount <= 0) {
+    throw new Error("Invalid target amount");
+  }
+  if (
+    !Number.isFinite(fields.monthlyContribution) ||
+    fields.monthlyContribution < 0
+  ) {
+    throw new Error("Invalid monthly contribution");
+  }
+  if (!Number.isFinite(fields.initialAmount) || fields.initialAmount < 0) {
+    throw new Error("Invalid initial amount");
+  }
+  let targetDate: Date | null = null;
+  if (fields.targetDate) {
+    targetDate = new Date(`${fields.targetDate}T00:00:00Z`);
+    if (Number.isNaN(targetDate.getTime())) throw new Error("Invalid target date");
+  }
+  return {
+    name: name.slice(0, 80),
+    targetAmount: fields.targetAmount,
+    targetDate,
+    monthlyContribution: fields.monthlyContribution,
+    initialAmount: fields.initialAmount,
+  };
+}
+
+function revalidateFunds(): void {
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
+  revalidatePath("/forecast");
+}
+
+export async function createSinkingFund(fields: SinkingFundFields): Promise<void> {
+  const userId = await requireUserId();
+  const data = normalizeFundFields(fields);
+  await prisma.sinkingFund.create({
+    data: { userId, startDate: new Date(), ...data },
+  });
+  revalidateFunds();
+}
+
+export async function updateSinkingFund(
+  id: string,
+  fields: SinkingFundFields,
+): Promise<void> {
+  const userId = await requireUserId();
+  const data = normalizeFundFields(fields);
+  const { count } = await prisma.sinkingFund.updateMany({
+    where: { id, userId },
+    data,
+  });
+  if (count === 0) throw new Error("Fund not found");
+  revalidateFunds();
+}
+
+export async function deleteSinkingFund(id: string): Promise<void> {
+  const userId = await requireUserId();
+  await prisma.sinkingFund.deleteMany({ where: { id, userId } });
+  revalidateFunds();
+}

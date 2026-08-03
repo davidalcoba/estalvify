@@ -30,6 +30,7 @@ import {
   netSavingsChange,
   type MonthTransferActivity,
 } from "./savings";
+import { accruedAmount, isFunded, totalMonthlyContribution } from "./sinking-funds";
 
 export interface SavingsStatus {
   accountId: string;
@@ -37,6 +38,17 @@ export interface SavingsStatus {
   /** Net balance change of the savings account this month (null = no snapshots). */
   netChange: number | null;
   activity: MonthTransferActivity;
+}
+
+export interface SinkingFundStatus {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetDate: string | null; // YYYY-MM-DD
+  monthlyContribution: number;
+  initialAmount: number;
+  accrued: number;
+  funded: boolean;
 }
 
 export interface MonthStatus {
@@ -53,18 +65,18 @@ export interface MonthStatus {
   hasSavingsGoal: boolean;
   /** True when the Plan has at least one periodic item (the budget is real). */
   hasPlan: boolean;
+  /** Active sinking funds with their computed accruals. */
+  funds: SinkingFundStatus[];
 }
 
 export async function buildMonthStatus(
   userId: string,
-  timezone: string,
-  /** Sinking-fund monthly total, once those exist; commitments include it. */
-  sinkingContribution = 0
+  timezone: string
 ): Promise<MonthStatus> {
   const { year, month } = currentYearMonth(timezone);
   const { start, end } = monthRange(year, month);
 
-  const [user, planItems, spendRows, confirmedDebit] = await Promise.all([
+  const [user, planItems, spendRows, confirmedDebit, fundRows] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -92,6 +104,19 @@ export async function buildMonthStatus(
       where: { userId, status: "CONFIRMED", direction: "DEBIT" },
       select: { merchantKey: true },
     }),
+    prisma.sinkingFund.findMany({
+      where: { userId, active: true },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        targetAmount: true,
+        targetDate: true,
+        monthlyContribution: true,
+        startDate: true,
+        initialAmount: true,
+      },
+    }),
   ]);
 
   const planInputs: PlanItemInput[] = planItems.map((p) => ({
@@ -109,6 +134,20 @@ export async function buildMonthStatus(
   const savingsGoalPercent = user?.savingsGoalPercent
     ? Number(user.savingsGoalPercent.toString())
     : null;
+
+  const fundInputs = fundRows.map((f) => ({
+    id: f.id,
+    name: f.name,
+    targetAmount: Number(f.targetAmount.toString()),
+    targetDate: f.targetDate ? f.targetDate.toISOString().slice(0, 10) : null,
+    monthlyContribution: Number(f.monthlyContribution.toString()),
+    startDate: f.startDate.toISOString().slice(0, 10),
+    initialAmount: Number(f.initialAmount.toString()),
+  }));
+  const sinkingContribution = totalMonthlyContribution(fundInputs, {
+    year,
+    month,
+  });
 
   const commitments = computeCommitments({
     planItems: planInputs,
@@ -213,5 +252,15 @@ export async function buildMonthStatus(
     savings,
     hasSavingsGoal: commitments.savingsGoal > 0,
     hasPlan: planInputs.some((p) => p.cadence !== "ONE_OFF"),
+    funds: fundInputs.map((f) => ({
+      id: f.id,
+      name: f.name,
+      targetAmount: f.targetAmount,
+      targetDate: f.targetDate,
+      monthlyContribution: f.monthlyContribution,
+      initialAmount: f.initialAmount,
+      accrued: accruedAmount(f, { year, month }),
+      funded: isFunded(f, { year, month }),
+    })),
   };
 }

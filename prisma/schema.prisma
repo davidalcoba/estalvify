@@ -55,6 +55,7 @@ model User {
   categories       Category[]
   categoryRules    CategoryRule[]
   transactionSplits TransactionSplit[]
+  sinkingFunds     SinkingFund[]
   budgets          Budget[]
   planItems        PlanItem[]
   recurringSeries  RecurringSeries[]
@@ -512,6 +513,40 @@ enum PlanCadence {
   QUARTERLY
   YEARLY
   ONE_OFF
+}
+
+// ─────────────────────────────────────────────
+// SINKING FUNDS - Provisioning for foreseeable non-monthly expenses
+// ─────────────────────────────────────────────
+
+// A named pot the user provisions monthly for a foreseeable lump expense (IBI,
+// car maintenance, summer holidays, back-to-school). Internal accounting over
+// the savings balance — no real sub-account exists. The accrued amount is
+// COMPUTED, never cron-updated: initialAmount + monthlyContribution per month
+// elapsed since startDate, capped at targetAmount (lib/plan/sinking-funds.ts).
+// Contributions of unfunded active funds join the month's commitments.
+model SinkingFund {
+  id     String @id @default(cuid())
+  userId String
+
+  name                String
+  targetAmount        Decimal   @db.Decimal(15, 2)
+  targetDate          DateTime? @db.Date // When the expense is expected (optional)
+  monthlyContribution Decimal   @db.Decimal(15, 2)
+
+  // Accrual anchor: contributions count from this month (inclusive) onward.
+  startDate     DateTime @db.Date
+  initialAmount Decimal  @default(0) @db.Decimal(15, 2)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sinking_funds")
 }
 
 // ─────────────────────────────────────────────
