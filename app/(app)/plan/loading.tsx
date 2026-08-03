@@ -13,7 +13,7 @@ export default function PlanLoading() {
       <PageHeaderSkeleton titleWidth="w-20" actionsWidth="w-52" />
 
       {/* Expected income / expenses / net */}
-      <KpiGridSkeleton count={3} className="grid gap-4 sm:grid-cols-3" />
+      <KpiGridSkeleton count={3} className="grid grid-cols-1 gap-4 sm:grid-cols-3" />
 
       {/* Expected income entries */}
       <ListCardSkeleton rows={3} titleWidth="w-36" />

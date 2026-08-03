@@ -32,15 +32,32 @@ back), after checking that what landed on `main` actually came through `preview`
 cleanly and would otherwise pass unnoticed).
 
 Neither workflow can *prevent* a direct push to `main` — Actions run after the
-push. That needs a GitHub ruleset, and **a Claude Code session cannot apply one**:
-writes to GitHub's administration API paths are refused at the sandbox proxy
-(`POST /repos/{repo}/rulesets` → 403 "Write access to this GitHub API path is not
-permitted through this proxy"), and the session's integration token reports
-`admin: false` besides. The ruleset is kept as a ready-to-apply payload at
-`.github/rulesets/main-release-path.json` — apply it with a personal token or in
-Settings → Rules. Until it is applied the release path is convention plus loud
-failures, not a lock. So: never open or merge a pull request into `main` from a
-feature branch, and merge into `preview` first.
+push. **That part is a GitHub ruleset, and it is applied**: "main: solo desde
+preview" (id `20327850`, `enforcement: active`) targets the default branch and
+requires a pull request (0 approvals) plus both checks —
+`A PR into main must come from preview` and `Typecheck · Lint · Test` — with
+force pushes and deletion blocked. So a direct push to `main` is now rejected by
+GitHub, not merely reported after the fact. Confirm it any time with
+
+```bash
+curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/repos/davidalcoba/estalvify/rules/branches/main
+```
+
+which answers with the rules in force on that ref (an empty array means the lock
+is gone). A Claude Code session **cannot create or edit it** — writes to GitHub's
+administration API paths are refused at the sandbox proxy (`POST
+/repos/{repo}/rulesets` → 403 "Write access to this GitHub API path is not
+permitted through this proxy") and the session token reports `admin: false` — so
+changes go through the GitHub UI (Settings → Rules) or a personal token, using
+the payload kept at `.github/rulesets/main-release-path.json`.
+
+The two required contexts are the workflows' **job names**. Renaming a job
+without updating the ruleset leaves `main` unmergeable, waiting for a check that
+never reports.
+
+So: never open or merge a pull request into `main` from a feature branch, and
+merge into `preview` first.
 
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).

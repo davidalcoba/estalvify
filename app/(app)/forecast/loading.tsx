@@ -12,7 +12,7 @@ export default function ForecastLoading() {
     <div className="space-y-6">
       <PageHeaderSkeleton titleWidth="w-36" />
 
-      <KpiGridSkeleton count={3} className="grid gap-4 md:grid-cols-3" />
+      <KpiGridSkeleton count={3} className="grid grid-cols-1 gap-4 md:grid-cols-3" />
 
       <ChartCardSkeleton titleWidth="w-64" height={260} />
 

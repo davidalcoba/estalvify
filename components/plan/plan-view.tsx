@@ -108,7 +108,7 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
       ) : (
         <>
           {/* Monthly summary — the goal: am I planning to save? */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <SummaryTile
               title="Expected income"
               icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
