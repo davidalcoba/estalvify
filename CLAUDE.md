@@ -19,6 +19,29 @@ This project deploys on **Vercel** — project `estalvify`
 `https://estalvify.vercel.app`. Every push to a branch produces a preview
 deployment; merges to `main` deploy to production.
 
+**Release path: feature branch → `preview` → `main`.** `main` is production and is
+reached only through `preview`, which has a fixed URL —
+`https://estalvify-preview.vercel.app` (a project domain pinned to the `preview`
+git branch, so it always serves that branch's newest deployment) — and its own
+Neon branch. Two workflows hold the path together: `release-gate.yml` fails a pull
+request into `main` whose head is not `preview`, and `sync-preview.yml`
+fast-forwards `preview` to `main` after each release so it cannot drift behind
+(the merge commit on `main` would otherwise leave it permanently one commit
+back), after checking that what landed on `main` actually came through `preview`
+(it fails the release otherwise, since a direct push fast-forwards `preview`
+cleanly and would otherwise pass unnoticed).
+
+Neither workflow can *prevent* a direct push to `main` — Actions run after the
+push. That needs a GitHub ruleset, and **a Claude Code session cannot apply one**:
+writes to GitHub's administration API paths are refused at the sandbox proxy
+(`POST /repos/{repo}/rulesets` → 403 "Write access to this GitHub API path is not
+permitted through this proxy"), and the session's integration token reports
+`admin: false` besides. The ruleset is kept as a ready-to-apply payload at
+`.github/rulesets/main-release-path.json` — apply it with a personal token or in
+Settings → Rules. Until it is applied the release path is convention plus loud
+failures, not a lock. So: never open or merge a pull request into `main` from a
+feature branch, and merge into `preview` first.
+
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).
 Use it against the Vercel REST API at `https://api.vercel.com`.
@@ -46,6 +69,11 @@ Pick the newest deployment whose `meta.githubCommitRef` matches the branch (or
 whose `meta.githubCommitSha` matches the pushed commit) and give the user
 `https://<url>` plus its `state` (`READY` / `BUILDING` / `ERROR`); if it is still
 `BUILDING`, say so and offer to re-check.
+
+For the `preview` branch, hand over the fixed `https://estalvify-preview.vercel.app`
+rather than the per-deployment hash URL — same deployment, stable link — but still
+look up the deployment's `state` so you report whether that URL is already serving
+the new commit. The hash URLs are the ones to report for feature branches.
 
 ### Opening a protected URL yourself
 

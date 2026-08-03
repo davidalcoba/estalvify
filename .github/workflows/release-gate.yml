@@ -1,0 +1,33 @@
+name: Release gate
+
+# `main` is production. Every change reaches it through `preview`, so that the
+# release candidate is exercised on the fixed preview environment
+# (https://estalvify-preview.vercel.app, Neon branch `preview`) before it is
+# promoted. A pull request into `main` from anything other than `preview` is
+# rejected here.
+#
+# This job only sees pull requests. To actually close the door, make it a
+# required status check on `main` and require a pull request before merging
+# (GitHub → Settings → Branches → branch protection for `main`); without that,
+# a direct push or an admin merge still bypasses it.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  from-preview-only:
+    name: A PR into main must come from preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the head branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "preview" ]; then
+            echo "::error::A pull request into main must come from 'preview', but this one comes from '$HEAD_REF'."
+            echo "Merge the branch into 'preview' first, check https://estalvify-preview.vercel.app,"
+            echo "then open a 'preview' → 'main' pull request."
+            exit 1
+          fi
+          echo "Head branch is 'preview' — on the release path."

@@ -24,6 +24,24 @@
   deployment; merges to `main` promote to production. Vercel-native features in
   use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
   (`/api/queues/sync-connection`).
+- **Branch flow: feature branch → `preview` → `main`.** Three long-lived refs
+  matter: a feature branch (throwaway preview + throwaway Neon branch), `preview`
+  (the release candidate, fixed URL `https://estalvify-preview.vercel.app` — a
+  project domain pinned to the branch — on Neon branch `preview`), and `main`
+  (production). Nothing merges into `main` except `preview`.
+  `.github/workflows/release-gate.yml` enforces that on pull requests and
+  `sync-preview.yml` fast-forwards `preview` to `main` after each release, because
+  `main`'s merge commit would otherwise leave `preview` one commit behind and the
+  drift compounds silently — that is how `preview` ended up 6 commits behind once.
+  Both are advisory against a direct push to `main` — Actions only run after the
+  push, so `sync-preview.yml` also verifies the provenance of what landed and fails
+  the release when it did not come through `preview`. The lock itself is a GitHub
+  ruleset (pull request required + those two checks required), kept as a payload at
+  `.github/rulesets/main-release-path.json` because a Claude Code session cannot
+  apply it: the sandbox proxy refuses writes to GitHub's administration API paths
+  (403 on `POST /repos/{repo}/rulesets`) and the session token is `admin: false`.
+  The repo is public, so rulesets are available on the free plan — it needs a
+  personal token or two clicks in Settings → Rules. **Not applied yet.**
 - Tooling access to Vercel: an API token is exposed as the `VERCEL_TOKEN`
   environment variable (secret — never commit or print it). It is **not
   read-only** — it can write project configuration, and the env var layout below
@@ -66,6 +84,19 @@ migrations — `prisma.config.ts`):
 | `DATABASE_URL` | `preview`     | —           | Neon `preview`, pooled — safety net |
 | `DATABASE_URL` | `development` | —           | Neon `development`, pooled          |
 | `DIRECT_URL`   | `development` | —           | Neon `development`, direct          |
+
+One more var is branch-scoped for the same reason:
+`ENABLE_BANKING_REDIRECT_URI` on target `preview` with `gitBranch: preview` points
+at `https://estalvify-preview.vercel.app/api/banking/callback`, while the unscoped
+entry keeps the production callback. PSD2 requires the redirect URI to match a
+registered value exactly, so the bank flow can only complete on a deployment whose
+origin *is* that registered URI: without the branch-scoped value, a reconnect
+started on preview stores its `PENDING_REAUTH` row in Neon `preview`, the bank
+returns the user to production, and production looks the `state` up in its own
+database and answers `connection_not_found` — the "session expired" that never
+expired. Both URLs must stay registered on the Enable Banking side; the Vercel
+value alone fails earlier, at session creation. Feature-branch previews still send
+the production callback, since a per-deploy origin can never be registered.
 
 Every target is paired: a `DIRECT_URL` always names the same Neon branch as the
 `DATABASE_URL` next to it, so the database a build migrates is the one the app

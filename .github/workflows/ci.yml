@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `preview` is the release candidate, so it is verified on the branch itself
+    # and not only through the pull request that fed it.
+    branches: [main, preview]
   pull_request:
 
 # Cancel in-progress runs for the same ref when a new commit is pushed.
