@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LogoMark } from "@/components/brand/logo";
 
 export const metadata: Metadata = {
   title: "Sign In",
@@ -42,11 +43,9 @@ export default async function LoginPage(props: {
       <CardHeader className="text-center space-y-2 pb-6">
         {/* App logo */}
         <div className="flex justify-center mb-2">
-          <div className="w-12 h-12 rounded-2xl bg-brand flex items-center justify-center">
-            <span className="text-white font-bold text-xl">E</span>
-          </div>
+          <LogoMark className="size-12 rounded-xl" />
         </div>
-        <CardTitle className="text-2xl font-bold">Welcome to Estalvify</CardTitle>
+        <CardTitle className="text-2xl font-bold tracking-tight">Welcome to Estalvify</CardTitle>
         <CardDescription className="text-base">
           Your personal finance companion. Sign in to get started.
         </CardDescription>

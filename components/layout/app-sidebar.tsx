@@ -46,6 +46,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NavItemIcon } from "@/components/layout/nav-progress";
+import { LogoMark } from "@/components/brand/logo";
 
 const navItems = [
   {
@@ -163,11 +164,9 @@ export function AppSidebar({
                   href="/dashboard"
                   onClick={isMobile ? () => setOpenMobile(false) : undefined}
                 >
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-brand text-brand-foreground">
-                    <Sparkles className="size-4" />
-                  </div>
+                  <LogoMark />
                   <div className="flex flex-col gap-0.5 leading-none">
-                    <span className="font-semibold">Estalvify</span>
+                    <span className="font-semibold tracking-tight">Estalvify</span>
                     <span className="text-xs text-muted-foreground">Personal Finance</span>
                   </div>
                 </Link>

@@ -37,6 +37,40 @@ Pages can compose UI, but base controls must come from `components/ui/*`.
 - Dynamic per-category colors (hex from the DB) via `style={{}}` are the one
   allowed exception — they are user data, not tokens.
 
+## Brand (logo)
+
+The logo is an **"E" built from three ascending bars on a spine** — the initial
+and a rising bar chart at once. It lives in `components/brand/logo.tsx` as three
+exports; never re-draw it inline or substitute a lucide icon for it:
+
+- `LogoGlyph` — the bare mark on a 24×24 viewBox, filled with `currentColor` and
+  sized like a lucide icon. Use it when the mark sits on an existing surface.
+- `LogoMark` — the glyph on a brand-coloured rounded tile (`bg-brand` /
+  `text-brand-foreground`, so it is theme-aware for free). `size-8 rounded-lg` by
+  default; override both together via `className` and the glyph scales with it,
+  keeping the corner radius near the ~23% the app icons use.
+- `Logo` — the full lockup, `LogoMark` plus the "Estalvify" wordmark and an
+  optional `subtitle` line.
+
+In use: the sidebar header (`app-sidebar.tsx`, which keeps its own wordmark so it
+collapses correctly) and the login card.
+
+### Icon assets are generated, not hand-edited
+
+`scripts/generate-icons.mjs` holds the same four rects and emits every brand
+asset from them — `app/icon.svg`, `app/apple-icon.png`, `app/favicon.ico`,
+`public/logo.svg`, `public/logo-glyph.svg`, and the `public/icons/*` PWA set.
+**Changing the mark means editing the geometry in both `logo.tsx` and that
+script, then re-running `node scripts/generate-icons.mjs`** — do not touch the
+generated files directly. The script needs `sharp` (present in the tree via
+Next.js, not a declared devDependency); nothing at build or runtime uses it.
+
+The manifest carries rounded `purpose: "any"` icons plus a separate full-bleed
+`purpose: "maskable"` one, because a platform that masks the icon crops a rounded
+tile badly. Brand indigo `#6366f1` is duplicated in `--brand` (`app/globals.css`),
+`themeColor` (`app/layout.tsx`), `theme_color` (`public/manifest.json`) and the
+generator — keep the four in sync.
+
 ## Charts
 
 - Charts use **Recharts**, wrapped in reusable client components under
