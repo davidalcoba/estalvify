@@ -1,5 +1,15 @@
 export type TransactionDirection = "DEBIT" | "CREDIT";
 
+export interface TransactionSplitDTO {
+  id: string;
+  amount: number;
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryColor: string | null;
+  note: string | null;
+  isExtraordinary: boolean;
+}
+
 export interface TransactionListItemDTO {
   id: string;
   amount: number;
@@ -15,6 +25,8 @@ export interface TransactionListItemDTO {
     id?: string;
     name: string;
   };
+  /** User-authored breakdown; empty for the vast majority of rows. */
+  splits: TransactionSplitDTO[];
 }
 
 interface TxAmountLike {
@@ -40,6 +52,14 @@ interface TransactionRecordLike {
     id?: string;
     name: string;
   };
+  splits?: {
+    id: string;
+    amount: TxAmountLike;
+    categoryId: string | null;
+    note: string | null;
+    isExtraordinary: boolean;
+    category?: { name: string; color?: string | null } | null;
+  }[];
 }
 
 export function toTransactionListItemDTO(tx: TransactionRecordLike): TransactionListItemDTO {
@@ -58,6 +78,15 @@ export function toTransactionListItemDTO(tx: TransactionRecordLike): Transaction
       id: tx.bankAccount.id,
       name: tx.bankAccount.name,
     },
+    splits: (tx.splits ?? []).map((s) => ({
+      id: s.id,
+      amount: Number(s.amount.toString()),
+      categoryId: s.categoryId,
+      categoryName: s.category?.name ?? null,
+      categoryColor: s.category?.color ?? null,
+      note: s.note,
+      isExtraordinary: s.isExtraordinary,
+    })),
   };
 }
 

@@ -114,6 +114,7 @@ export async function generateNotificationsForUser(
       select: {
         amount: true,
         categorization: { select: { categoryId: true } },
+        splits: { select: { amount: true, categoryId: true } },
       },
     }),
     prisma.category.findMany({

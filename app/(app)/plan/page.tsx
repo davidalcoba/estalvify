@@ -46,7 +46,11 @@ export default async function PlanPage() {
     }),
     prisma.transaction.findMany({
       where: buildMonthlySpendingWhere(userId, year, month),
-      select: { amount: true, categorization: { select: { categoryId: true } } },
+      select: {
+        amount: true,
+        categorization: { select: { categoryId: true } },
+        splits: { select: { amount: true, categoryId: true } },
+      },
     }),
     prisma.category.findMany({
       where: { isActive: true, OR: [{ userId }, { userId: null }] },

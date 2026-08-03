@@ -54,6 +54,7 @@ model User {
   transactions     Transaction[]
   categories       Category[]
   categoryRules    CategoryRule[]
+  transactionSplits TransactionSplit[]
   budgets          Budget[]
   planItems        PlanItem[]
   recurringSeries  RecurringSeries[]
@@ -242,11 +243,43 @@ model Transaction {
   bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
 
   categorization TransactionCategorization?
+  splits         TransactionSplit[]
 
   @@unique([bankAccountId, externalTransactionId])
   @@index([userId, valueDate])
   @@index([bankAccountId, valueDate])
   @@map("transactions")
+}
+
+// A user-authored breakdown of one bank transaction into lines (a cash
+// withdrawal split into what the cash actually bought; a salary split into base
+// and extraordinary). The bank row stays immutable — splits sit next to it, and
+// when they exist they are the truth for category aggregation: the parent's own
+// categorization no longer counts, a line without a category falls back to it.
+// Lines must sum to the parent's amount exactly (enforced in the action).
+model TransactionSplit {
+  id            String @id @default(cuid())
+  transactionId String
+  userId        String
+
+  amount     Decimal @db.Decimal(15, 2) // absolute value, same currency as parent
+  categoryId String? // null = unassigned remainder (keeps the parent's category)
+  note       String?
+
+  // Marks an income line as extraordinary (the April bonus inside the salary
+  // row): excluded from base-income medians and savings-rate calculations.
+  isExtraordinary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?   @relation(fields: [categoryId], references: [id])
+
+  @@index([transactionId])
+  @@index([userId])
+  @@map("transaction_splits")
 }
 
 enum TransactionDirection {
@@ -289,6 +322,7 @@ model Category {
   budgetItems           BudgetItem[]
   planItems             PlanItem[]
   recurringSeries       RecurringSeries[]
+  transactionSplits     TransactionSplit[]
 
   @@map("categories")
 }

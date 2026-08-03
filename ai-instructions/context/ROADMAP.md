@@ -53,6 +53,19 @@ recurrentes, etc.).
 > que tocaría a estas alturas y disponible/día. Todo lo sirve `lib/plan/month-status.ts`
 > (server-only), compartido por dashboard, /plan y el cron.
 
+> **Post-roadmap — Split de transacciones + gasto sin trazabilidad.** Nuevo modelo
+> `TransactionSplit`: una fila del banco (inmutable) se parte en líneas que **deben sumar
+> exactamente el importe** (`lib/transactions/splits.ts`, puro; acción
+> `setTransactionSplits` reemplaza el set completo). Cuando hay líneas, **ellas son la
+> verdad** para la agregación por categoría (`aggregateSpendingByCategory`): cada línea
+> cuenta en su categoría y una línea sin categoría cae en la del padre. UI: botón Split en
+> el diálogo de detalle de transacción (editor de líneas con resto por asignar). El caso
+> que lo motiva: ~7% del gasto es opaco — retiradas de cajero (`RET. EFECTIVO`/`EN
+> CAJERO`) y liquidaciones de tarjeta (`ADEUDO MENSUAL DE TARJETA`).
+> `lib/analytics/traceability.ts` (puro) mide ese % por mes, descontando lo que los splits
+> ya explican, y Reports lo muestra en la tarjeta "Untracked spending". `isExtraordinary`
+> en una línea marca ingreso extraordinario (ver siguiente nota).
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

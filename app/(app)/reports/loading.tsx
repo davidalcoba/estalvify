@@ -25,6 +25,9 @@ export default function ReportsLoading() {
         <ListCardSkeleton rows={6} titleWidth="w-56" />
         <ListCardSkeleton rows={6} titleWidth="w-48" />
       </div>
+
+      {/* Untracked spending */}
+      <ListCardSkeleton rows={3} titleWidth="w-64" />
     </div>
   );
 }
