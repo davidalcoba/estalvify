@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createAuthCode } from "@/lib/mcp/store";
+import { createAuthCode, ensureClientRow } from "@/lib/mcp/store";
 import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
 
 /** Redirect back to the client with an OAuth error (RFC 6749 §4.1.2.1). */
@@ -78,6 +78,14 @@ export async function GET(request: NextRequest) {
   }
 
   // 4) Auto-approve: mint a single-use, PKCE-bound authorization code.
+  //    A static client is configuration rather than a registration, so it has no
+  //    row yet — and the code table has a foreign key to one. See ensureClientRow.
+  if (client.isStatic) {
+    await ensureClientRow({
+      clientId: client.clientId,
+      redirectUris: client.redirectUris,
+    });
+  }
   const code = await createAuthCode({
     clientId,
     userId: session.user.id,
