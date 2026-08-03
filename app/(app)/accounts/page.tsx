@@ -60,9 +60,12 @@ export default async function AccountsPage({
     connection_not_found: "Connection session expired or not found. Please try again.",
     missing_code_or_state: "The authorisation request was incomplete. Please try again.",
     setup_expired: "Account setup session expired. Please connect the bank again.",
+    connection_failed: "Something went wrong connecting your bank. Please try again.",
   };
+  // Only render known error codes. An unrecognised value (e.g. a hand-crafted
+  // URL) maps to a generic message rather than being reflected back verbatim.
   const callbackError = params.error
-    ? (errorMessages[params.error] ?? decodeURIComponent(params.error))
+    ? (errorMessages[params.error] ?? "Something went wrong. Please try again.")
     : null;
 
   // Auto-recover connections stuck in SYNCING for more than 10 minutes.

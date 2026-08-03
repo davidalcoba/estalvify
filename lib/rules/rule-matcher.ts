@@ -9,7 +9,7 @@
 import {
   isConditionGroup,
   normalizeText,
-  MAX_CONDITION_VALUE_LENGTH,
+  isSafeRegexSource,
   type ConditionNode,
   type RuleCondition,
   type RuleConditionField,
@@ -65,7 +65,10 @@ function escapeRegex(value: string): string {
  * must not abort a run over every transaction.
  */
 function compilePattern(source: string): RegExp | null {
-  if (source.length > MAX_CONDITION_VALUE_LENGTH) return null;
+  // isSafeRegexSource also enforces the length cap and rejects patterns with a
+  // nested unbounded quantifier — a legacy rule stored before that guard simply
+  // stops matching rather than risking catastrophic backtracking on every row.
+  if (!isSafeRegexSource(source)) return null;
   try {
     return new RegExp(source, "i");
   } catch {

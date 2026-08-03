@@ -124,6 +124,9 @@ model BankConnection {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bankAccounts BankAccount[]
 
+  // Connections are listed per user; the daily cron scans by status.
+  @@index([userId])
+  @@index([status])
   @@map("bank_connections")
 }
 
@@ -141,8 +144,10 @@ model BankAccount {
   userId           String
   bankConnectionId String
 
-  // Enable Banking account identifiers
-  externalAccountId String  @unique // ID from Enable Banking API
+  // Enable Banking account identifiers. Unique *per user* — a bank uid is only
+  // globally unique in practice, and a global constraint let one user's upsert
+  // silently retarget another user's account row (see finalizeSetup).
+  externalAccountId String  // ID from Enable Banking API
   // Last 4 digits of IBAN only — full IBAN is never stored (privacy)
   iban              String?
 
@@ -163,6 +168,10 @@ model BankAccount {
   balances       AccountBalance[]
   transactions   Transaction[]
 
+  // A bank uid is unique within a user, not globally.
+  @@unique([userId, externalAccountId])
+  @@index([userId])
+  @@index([bankConnectionId])
   @@map("bank_accounts")
 }
 
@@ -275,6 +284,8 @@ model Category {
   planItems             PlanItem[]
   recurringSeries       RecurringSeries[]
 
+  // Almost every page reads the user's categories (OR system defaults).
+  @@index([userId])
   @@map("categories")
 }
 
@@ -319,6 +330,8 @@ model CategoryRule {
   sourceCategory        Category?                   @relation("SourceCategoryRules", fields: [sourceCategoryId], references: [id])
   transactionCategories TransactionCategorization[]
 
+  // Rules are loaded per user, ordered by priority, on every run and list.
+  @@index([userId, priority])
   @@map("category_rules")
 }
 
@@ -353,6 +366,9 @@ model TransactionCategorization {
   category     Category      @relation(fields: [categoryId], references: [id])
   categoryRule CategoryRule? @relation(fields: [categoryRuleId], references: [id])
 
+  // Hot filters: grouping by category, and looking up / detaching a rule's rows.
+  @@index([categoryId])
+  @@index([categoryRuleId])
   @@map("transaction_categorizations")
 }
 

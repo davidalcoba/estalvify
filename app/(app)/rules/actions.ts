@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/app/generated/prisma";
-import { parseConditions } from "@/lib/rules/rule-dto";
+import { parseConditions, assertValidConditionTree } from "@/lib/rules/rule-dto";
 import type { ConditionGroup, RuleCondition } from "@/lib/rules/rule-dto";
 import {
   deleteRuleForUser,
@@ -29,6 +29,8 @@ export async function previewRuleTransactions(
 ): Promise<{ transactions: TransactionListItemDTO[]; total: number }> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
+
+  assertValidConditionTree(conditions);
 
   const { matched, transactions } = await evaluateConditions(
     session.user.id,
@@ -57,6 +59,7 @@ export async function saveRule(input: {
   if (!session?.user) throw new Error("Unauthorized");
   const userId = session.user.id;
 
+  assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
   if (input.sourceCategoryId) {
     await validateCategoryAccess(userId, input.sourceCategoryId);
@@ -129,6 +132,7 @@ export async function executeRuleOnce(input: {
   if (!session?.user) throw new Error("Unauthorized");
   const userId = session.user.id;
 
+  assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
   if (input.sourceCategoryId) {
     await validateCategoryAccess(userId, input.sourceCategoryId);
@@ -231,6 +235,7 @@ export async function addConditionToRule(input: {
     op: tree.op,
     children: [...tree.children, input.condition],
   };
+  assertValidConditionTree(updated);
 
   await prisma.categoryRule.update({
     where: { id: input.ruleId },
@@ -265,6 +270,7 @@ export async function updateRule(input: {
   });
   if (!rule || rule.userId !== userId) throw new Error("Rule not found");
 
+  assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
 
   await prisma.categoryRule.update({
