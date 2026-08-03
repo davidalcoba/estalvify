@@ -42,6 +42,13 @@ export interface RuleOrder {
   containerRef: (node: HTMLElement | null) => void;
   /** Put on each row's handle; the row itself needs `data-reorder-id`. */
   handleProps: (ruleId: string) => RuleOrderHandleProps;
+  /**
+   * Move a rule by one position and save. Backs the up/down buttons, which are
+   * the reliable path on a phone: dragging a tall card means hitting a small
+   * handle and travelling ~100px before anything moves, measured in a touch
+   * harness. Returns false when the move would fall off either end.
+   */
+  moveBy: (ruleId: string, delta: -1 | 1) => boolean;
   draggingId: string | null;
   isSaving: boolean;
   error: string | null;
@@ -123,15 +130,37 @@ export function useRuleOrder(rules: CategoryRuleDTO[]): RuleOrder {
       if (orderBeforeDrag && !isSameOrder(ids, orderBeforeDrag)) commit(ids);
     }
 
+    // `touch-action: none` on the handle already stops the page scrolling under
+    // the drag; this is the belt-and-braces version for touch engines that only
+    // honour a cancelled touchmove, and it has to be non-passive to be allowed to.
+    function blockScroll(e: TouchEvent) {
+      e.preventDefault();
+    }
+
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp);
     window.addEventListener("pointercancel", handleUp);
+    window.addEventListener("touchmove", blockScroll, { passive: false });
     return () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleUp);
+      window.removeEventListener("touchmove", blockScroll);
     };
   }, [draggingId, container, ids, orderBeforeDrag, commit]);
+
+  const moveBy = useCallback(
+    (ruleId: string, delta: -1 | 1) => {
+      const from = ids.indexOf(ruleId);
+      const to = from + delta;
+      if (from === -1 || to < 0 || to >= ids.length) return false;
+      const next = moveItem(ids, from, to);
+      setIds(next);
+      commit(next);
+      return true;
+    },
+    [ids, commit]
+  );
 
   const handleProps = useCallback(
     (ruleId: string): RuleOrderHandleProps => ({
@@ -139,6 +168,9 @@ export function useRuleOrder(rules: CategoryRuleDTO[]): RuleOrder {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         // Stops the touch gesture turning into a page scroll mid-drag.
         e.preventDefault();
+        // Keeps the gesture ours: without capture a touch drag can be handed to
+        // an ancestor as a pan, which arrives as pointercancel and kills it.
+        e.currentTarget.setPointerCapture?.(e.pointerId);
         setOrderBeforeDrag(ids);
         setDraggingId(ruleId);
       },
@@ -146,19 +178,14 @@ export function useRuleOrder(rules: CategoryRuleDTO[]): RuleOrder {
         const delta = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
         if (delta === 0) return;
         e.preventDefault();
-        const from = ids.indexOf(ruleId);
-        const to = from + delta;
-        if (from === -1 || to < 0 || to >= ids.length) return;
-        const next = moveItem(ids, from, to);
-        setIds(next);
-        commit(next);
+        moveBy(ruleId, delta as -1 | 1);
       },
       role: "button",
       tabIndex: 0,
       "aria-label": "Move rule earlier or later with the arrow keys",
       title: "Drag to reorder — earlier rules win",
     }),
-    [ids, commit]
+    [ids, moveBy]
   );
 
   const orderedRules = useMemo(() => {
@@ -176,6 +203,7 @@ export function useRuleOrder(rules: CategoryRuleDTO[]): RuleOrder {
     orderedRules,
     containerRef: setContainer,
     handleProps,
+    moveBy,
     draggingId,
     isSaving,
     error,

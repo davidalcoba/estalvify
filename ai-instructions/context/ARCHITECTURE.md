@@ -71,6 +71,25 @@ first time a branch is deployed and injects that branch's connection string into
 the deployment. Those injected values win over the project-level env vars, which
 is what keeps feature-branch previews isolated.
 
+**Nothing keeps the long-lived `preview` branch's *data* in sync with `main`.** It
+drifts: by 2026-08 it still held a 2026-03-02 snapshot with zero rules and a user
+row that predated the production one, so the rules page on preview looked empty
+while production had 35. Refresh it with Neon's restore endpoint, which keeps the
+branch id and endpoint (so the Vercel connection strings keep working — the role
+and password are inherited from `main` and already identical):
+
+```bash
+curl -X POST -H "Authorization: Bearer $NEON_DB_KEY" -H 'Content-Type: application/json' \
+  https://console.neon.tech/api/v2/projects/divine-firefly-20538122/branches/br-shy-bird-albcqv1g/restore \
+  --data-binary '{"source_branch_id":"br-lively-cell-alldlk0k","preserve_under_name":"preview_before_reset_<date>"}'
+```
+
+It is destructive to whatever only preview had — notably a bank consent
+reconnected there, which comes back as production's (expired) connection rows.
+`preserve_under_name` keeps the old state as a separate branch; delete it when
+done, because the free plan caps the project at 10 branches and a full project
+makes preview provisioning fail before the build even runs.
+
 **Env var layout in Vercel** (the app reads only `DATABASE_URL` at runtime —
 `lib/prisma.ts` — and `DIRECT_URL`, falling back to `DATABASE_URL`, for
 migrations — `prisma.config.ts`):
@@ -355,8 +374,12 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     validation helpers, `priority` stores the 0-based position and is renumbered
     contiguously by `reorderRulesForUser` (one transaction, and it rejects an order
     that isn't exactly the user's full rule set); the /rules list reorders by
-    drag-and-drop (pointer events, so it works on touch; arrow keys on the handle
-    move a rule too) and `reorder_rules` does the same over MCP. The number is
+    drag-and-drop (pointer events, so touch works too; arrow keys on the handle
+    move a rule as well) and `reorder_rules` does the same over MCP. On mobile the
+    primary control is the up/down buttons next to the handle, not the drag: a card
+    is ~90px tall, so a touch drag has to travel about that far before the list
+    reacts (measured in a Playwright touch harness — the mechanics work, the
+    ergonomics do not), and the handle is a small target beside it. The number is
     never exposed in the UI, and a new rule is appended **last**
     (`nextRulePriority`) so it can't outrank existing ones. **First match wins**,
     `createdAt` breaks a tie, and a `MANUAL` categorization is never
