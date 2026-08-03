@@ -8,6 +8,7 @@ import type { ProjectedBalance } from "@/lib/analytics/forecast";
 import { firstBelowThreshold } from "@/lib/analytics/forecast";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { daysBetween } from "@/lib/recurring/detect";
+import type { DuplicateGroup } from "@/lib/transactions/duplicates";
 
 export interface NotificationSpec {
   type: NotificationType;
@@ -93,6 +94,67 @@ export function upcomingRecurringNotifications(
       body: `${lead} ${amount} is due ${when} (${item.nextExpectedDate}).`,
       dedupeKey: `recurring-due:${item.merchantKey}:${item.nextExpectedDate}`,
       metadata: { merchantKey: item.merchantKey },
+    });
+  }
+  return specs;
+}
+
+/**
+ * Warn about charges that look like the same payment taken more than once.
+ * Clustering lives in `lib/transactions/duplicates.ts`; this only turns a
+ * cluster into wording.
+ *
+ * Credits are skipped. The alert exists so money that left twice can be
+ * disputed while the merchant still remembers the transaction — being paid
+ * twice is not that, and flagging it would double the false-positive rate for
+ * nothing.
+ *
+ * The count is part of the dedupeKey. Generation upserts with `update: {}`, so a
+ * key that has already fired is silent forever; without the count, a cluster
+ * that grew from two charges to three would never say so — and the third charge
+ * is exactly the point at which "probably a coincidence" stops being tenable.
+ * The cost is one superseded notification per growth, which the /notifications
+ * history handles fine.
+ */
+export function duplicateChargeNotifications(
+  groups: DuplicateGroup[],
+  currency: string,
+  locale: string,
+  language: string
+): NotificationSpec[] {
+  const specs: NotificationSpec[] = [];
+  for (const group of groups) {
+    if (group.direction !== "DEBIT") continue;
+
+    const amount = formatCurrency(group.amount, currency, locale);
+    const dayLabel = (date: string) =>
+      formatDate(new Date(`${date}T00:00:00Z`), language, "UTC", {
+        day: "numeric",
+        month: "short",
+      });
+
+    const when =
+      group.spanDays === 0
+        ? `on ${dayLabel(group.firstDate)}`
+        : `between ${dayLabel(group.firstDate)} and ${dayLabel(group.lastDate)}`;
+
+    specs.push({
+      type: "DUPLICATE_CHARGE",
+      // Three identical charges is no longer a plausible coincidence.
+      severity: group.count >= 3 ? "ALERT" : "WARNING",
+      title: `Possible duplicate charge: ${group.displayName}`,
+      body: `${group.count} charges of ${amount} to ${group.displayName} hit ${group.accountName} ${when}. If it was meant to be paid once, check with the merchant or your bank.`,
+      dedupeKey: `duplicate-charge:${group.bankAccountId}:${Math.round(
+        group.amount * 100
+      )}:${group.merchantKey}:${group.firstDate}:${group.count}`,
+      metadata: {
+        bankAccountId: group.bankAccountId,
+        merchantKey: group.merchantKey,
+        count: String(group.count),
+        firstDate: group.firstDate,
+        lastDate: group.lastDate,
+        transactionIds: group.transactionIds.join(","),
+      },
     });
   }
   return specs;

@@ -25,16 +25,33 @@ import {
   plannedMonthlyByCategory,
   type PlanItemInput,
 } from "@/lib/plan/plan-item";
+import { findDuplicateGroups } from "@/lib/transactions/duplicates";
 import {
   budgetNotifications,
   upcomingRecurringNotifications,
   lowBalanceNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
+  duplicateChargeNotifications,
   type NotificationSpec,
 } from "./generators";
 
 const FORECAST_MONTHS = 6;
+
+/**
+ * How much recent history duplicate detection looks at. Bounded on purpose: a
+ * full-history scan would dump every historical coincidence into the bell on the
+ * first run, and a duplicate is only actionable while it is fresh enough to
+ * dispute. Comfortably wider than DUPLICATE_WINDOW_DAYS so a cluster is still
+ * whole when a late-posting charge arrives.
+ */
+const DUPLICATE_LOOKBACK_DAYS = 21;
+
+/** `date` (YYYY-MM-DD) shifted back by `days`, as a UTC midnight Date. */
+function daysBefore(date: string, days: number): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - days));
+}
 
 /** Today's date (YYYY-MM-DD) in a given IANA timezone. */
 function todayInTimezone(timezone: string, now: Date = new Date()): string {
@@ -58,6 +75,7 @@ export async function generateNotificationsForUser(
 ): Promise<number> {
   const prefs = await getUserPrefs(userId);
   const { year, month } = currentYearMonth(prefs.timezone);
+  const today = todayInTimezone(prefs.timezone);
 
   // Forecast baseline: the 6 full months ending last month.
   const prevMonth =
@@ -74,6 +92,7 @@ export async function generateNotificationsForUser(
     trendTx,
     connections,
     lastTxByAccount,
+    recentDebits,
   ] = await Promise.all([
     prisma.planItem.findMany({
       where: { userId, active: true },
@@ -144,9 +163,28 @@ export async function generateNotificationsForUser(
       where: { userId },
       _max: { valueDate: true },
     }),
+    // Duplicate detection only ever reports charges, so only charges are loaded.
+    // The generator re-checks the direction — the filter is not load-bearing.
+    prisma.transaction.findMany({
+      where: {
+        userId,
+        direction: "DEBIT",
+        valueDate: { gte: daysBefore(today, DUPLICATE_LOOKBACK_DAYS) },
+      },
+      select: {
+        id: true,
+        bankAccountId: true,
+        amount: true,
+        direction: true,
+        valueDate: true,
+        description: true,
+        remittanceInfo: true,
+      },
+    }),
   ]);
 
   const spendingByCategory = aggregateSpendingByCategory(spendingRows);
+  const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
 
   // Per-category limits come from the Plan (steady monthly expense total). Feed
   // them into buildBudgetData as synthesized items so the budget-over/near alerts
@@ -182,8 +220,6 @@ export async function generateNotificationsForUser(
     spendingByCategory,
     categories,
   });
-
-  const today = todayInTimezone(prefs.timezone);
 
   // Project the balance forward and alert if it dips below zero. Plan-driven when
   // there is a Plan; otherwise the historical average.
@@ -273,6 +309,32 @@ export async function generateNotificationsForUser(
             .slice(0, 10) ?? null,
       })),
       today,
+    ),
+    ...duplicateChargeNotifications(
+      findDuplicateGroups(
+        recentDebits.flatMap((t) => {
+          // Rows from a deactivated account are dropped along with the account:
+          // there is nothing left to dispute there, and the rest of the
+          // notification logic ignores those accounts too.
+          const accountName = accountNameById.get(t.bankAccountId);
+          if (!accountName) return [];
+          return [
+            {
+              id: t.id,
+              bankAccountId: t.bankAccountId,
+              accountName,
+              amount: Number(t.amount.toString()),
+              direction: t.direction,
+              valueDate: t.valueDate.toISOString().slice(0, 10),
+              description: t.description,
+              remittanceInfo: t.remittanceInfo,
+            },
+          ];
+        }),
+      ),
+      prefs.currency,
+      prefs.locale,
+      prefs.language,
     ),
   ];
 

@@ -342,6 +342,19 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     transaction rather than `BankAccount.lastSyncAt` — that field stays fresh even
     when the transactions endpoint 404s. Reconnecting enqueues a sync immediately
     instead of waiting for the nightly cron.
+  - Duplicate charges: `lib/transactions/duplicates.ts` (pure) clusters recent
+    charges and `DUPLICATE_CHARGE` reports them. The import can never duplicate an
+    operation by itself — `@@unique([bankAccountId, externalTransactionId])` — so
+    this is only about the merchant or bank charging twice, which is disputable
+    only while recent. A cluster needs the same account, direction, amount **to
+    the cent** and normalized merchant key, within 3 days (`DUPLICATE_WINDOW_DAYS`,
+    below the weekly minimum cadence in `recurring/detect.ts`, so a subscription
+    can never be mistaken for a double charge) and over
+    `DUPLICATE_MIN_AMOUNT` (€10 — small identical amounts repeat honestly all the
+    time). Generation scans the last 21 days only: a full-history scan would dump
+    every historical coincidence into the bell on the first run. The count is part
+    of the `dedupeKey` because generation upserts with `update: {}` — a pair that
+    grows to three charges must be able to say so.
   - Rule engine: `lib/rules/` — `rule-matcher.ts` and `rule-plan.ts` are **pure**
     (condition evaluation; run ordering, precedence and the undo trail), `apply.ts`
     does the loading and writing, `rule-evaluator.ts` is only the SQL prefilter and

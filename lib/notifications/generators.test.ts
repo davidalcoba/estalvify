@@ -4,9 +4,11 @@ import {
   upcomingRecurringNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
+  duplicateChargeNotifications,
   isoYearWeek,
 } from "./generators";
 import type { BudgetRow } from "@/lib/budget/budget-progress";
+import type { DuplicateGroup } from "@/lib/transactions/duplicates";
 
 function row(overrides: Partial<BudgetRow>): BudgetRow {
   return {
@@ -179,6 +181,86 @@ describe("staleTransactionNotifications", () => {
 
     expect(keyOn("2026-08-03")).toBe(keyOn("2026-08-07"));
     expect(keyOn("2026-08-03")).not.toBe(keyOn("2026-08-11"));
+  });
+});
+
+describe("duplicateChargeNotifications", () => {
+  const group = (overrides: Partial<DuplicateGroup> = {}): DuplicateGroup => ({
+    bankAccountId: "acc-1",
+    accountName: "Despeses",
+    merchantKey: "NETFLIX",
+    displayName: "NETFLIX 1234",
+    direction: "DEBIT",
+    amount: 49.9,
+    count: 2,
+    firstDate: "2026-08-01",
+    lastDate: "2026-08-02",
+    spanDays: 1,
+    transactionIds: ["a", "b"],
+    ...overrides,
+  });
+
+  it("warns about a pair, naming the merchant, amount and account", () => {
+    const specs = duplicateChargeNotifications([group()], "EUR", "en-GB", "en-GB");
+    expect(specs).toHaveLength(1);
+    expect(specs[0]).toMatchObject({
+      type: "DUPLICATE_CHARGE",
+      severity: "WARNING",
+      title: "Possible duplicate charge: NETFLIX 1234",
+    });
+    expect(specs[0].body).toContain("2 charges");
+    expect(specs[0].body).toContain("Despeses");
+    expect(specs[0].body).toContain("1 Aug");
+    expect(specs[0].body).toContain("2 Aug");
+  });
+
+  it("says 'on <day>' when every charge landed the same day", () => {
+    const specs = duplicateChargeNotifications(
+      [group({ lastDate: "2026-08-01", spanDays: 0 })],
+      "EUR",
+      "en-GB",
+      "en-GB"
+    );
+    expect(specs[0].body).toContain("on 1 Aug");
+    expect(specs[0].body).not.toContain("between");
+  });
+
+  it("escalates to ALERT at three charges", () => {
+    const specs = duplicateChargeNotifications(
+      [group({ count: 3 })],
+      "EUR",
+      "en-GB",
+      "en-GB"
+    );
+    expect(specs[0].severity).toBe("ALERT");
+  });
+
+  it("ignores credits — being paid twice is not this alert's job", () => {
+    expect(
+      duplicateChargeNotifications([group({ direction: "CREDIT" })], "EUR", "en-GB", "en-GB")
+    ).toEqual([]);
+  });
+
+  it("keys on the cluster so a re-run is a no-op, but growth re-alerts", () => {
+    const keyOf = (g: DuplicateGroup) =>
+      duplicateChargeNotifications([g], "EUR", "en-GB", "en-GB")[0].dedupeKey;
+
+    expect(keyOf(group())).toBe(keyOf(group()));
+    // A third charge is new information — it must not be swallowed by the
+    // already-fired pair notification.
+    expect(keyOf(group())).not.toBe(keyOf(group({ count: 3, lastDate: "2026-08-03" })));
+    // Different account, same merchant and amount: a distinct problem.
+    expect(keyOf(group())).not.toBe(keyOf(group({ bankAccountId: "acc-2" })));
+  });
+
+  it("carries the transaction ids for later deep-linking", () => {
+    const specs = duplicateChargeNotifications([group()], "EUR", "en-GB", "en-GB");
+    expect(specs[0].metadata).toMatchObject({
+      bankAccountId: "acc-1",
+      merchantKey: "NETFLIX",
+      count: "2",
+      transactionIds: "a,b",
+    });
   });
 });
 

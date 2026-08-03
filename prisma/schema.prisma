@@ -554,6 +554,7 @@ enum NotificationType {
   LOW_BALANCE_PROJECTED
   CONSENT_EXPIRING // PSD2 consent about to lapse — warn before syncing stops
   NO_TRANSACTIONS // Nothing new for days; the sync may have died quietly
+  DUPLICATE_CHARGE // Same charge appears to have been taken more than once
 }
 
 enum NotificationSeverity {

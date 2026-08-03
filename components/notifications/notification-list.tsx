@@ -103,7 +103,7 @@ export function NotificationList({
           description={
             unreadOnly
               ? "Everything here has been read."
-              : "Budget, recurring and sync alerts will show up here."
+              : "Budget, recurring, duplicate-charge and sync alerts will show up here."
           }
         />
       ) : (

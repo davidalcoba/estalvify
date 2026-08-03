@@ -88,6 +88,11 @@
   adds a linked Plan item (`PlanItem.recurringMerchantKey`); ignoring or undoing removes
   it again. Series with no decision yet are the "to review" count badged on the sidebar.
 - Reports: summaries and trends over transactions and spending.
+- Duplicate charge: the same payment taken more than once by the merchant or the bank — not an
+  import artifact, which `unique(bankAccountId, externalTransactionId)` already rules out. A
+  cluster (`lib/transactions/duplicates.ts`) is same account + direction + amount to the cent +
+  normalized merchant key, within 3 days and over €10, and raises `DUPLICATE_CHARGE` (WARNING;
+  ALERT from three charges). Charges only — a duplicated incoming payment is not reported.
 - (Budget: the previous per-month, one-amount-per-category planning model, now replaced by
   the Plan; `/budget` redirects to `/plan`. The `Budget`/`BudgetItem` tables remain but are
   unused by the app; `lib/budget/budget-progress` is reused for limit math.)

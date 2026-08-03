@@ -74,6 +74,20 @@ recurrentes, etc.).
 > Plan automáticamente. Modelo `PlanItem` + enum `PlanCadence`; lógica pura en `lib/plan/`.
 > `/budget` redirige a `/plan` (tablas `budgets`/`budget_items` intactas pero sin uso).
 
+> **Post-roadmap — Aviso de cargos duplicados.** `DUPLICATE_CHARGE` avisa cuando un cargo
+> parece haberse cobrado más de una vez. El id del banco ya impide importar dos veces la
+> misma operación (`unique(bankAccountId, externalTransactionId)`), así que esto cubre lo
+> que el import no puede ver: el comercio o el banco cobrando dos veces (doble paso de
+> tarjeta, pago reintentado que cuela dos veces, recibo presentado dos veces) — algo que
+> solo se puede reclamar mientras es reciente, y por eso es una notificación y no un
+> informe. Detección pura en `lib/transactions/duplicates.ts`: mismo importe **al céntimo**,
+> misma cuenta, misma dirección y misma clave de comercio normalizada, dentro de 3 días
+> (por debajo de la cadencia semanal mínima de `lib/recurring/detect.ts`, así que una
+> suscripción nunca se confunde con un duplicado) y por encima de 10 € (los importes
+> pequeños idénticos se repiten a diario de forma legítima). Solo cargos: que te paguen dos
+> veces no es este aviso. Se mira solo la ventana de 21 días más reciente — escanear todo el
+> histórico volcaría cada coincidencia antigua en la campana en la primera ejecución.
+
 ---
 
 ## 1. Revisión de lo existente
@@ -93,7 +107,7 @@ recurrentes, etc.).
 | **Reports** | ✅ Estable | Tendencia 12 meses (ingresos vs gastos), donut por categoría y top comercios con **Recharts**: `app/(app)/reports/page.tsx`, `components/reports/` |
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar (confirmar añade la serie al Plan), contador de pendientes en el sidebar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ✅ Estable | Proyección de saldo/gasto + alerta de saldo bajo: `app/(app)/forecast/`, `lib/analytics/forecast.ts`, `components/reports/balance-forecast-chart.tsx` |
-| Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
+| Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Avisa de presupuesto, cargos recurrentes próximos, saldo bajo proyectado, salud del sync y **posibles cargos duplicados** (`lib/transactions/duplicates.ts`). Push/email pendientes |
 | Recomendaciones con IA | ✅ Estable (apagada) | Wrapper agnóstico de proveedor + página de insights: `lib/ai/`, `app/(app)/insights/`, `components/insights/`. Envía solo agregados anonimizados. Claude por defecto (`AI_PROVIDER`). **`ANTHROPIC_API_KEY` no está puesta en ningún entorno de Vercel**, así que en producción `/insights` no da recomendaciones: muestra el estado "no configurado" (`app/(app)/insights/actions.ts` → `status: "not_configured"`). Encenderla es solo poner la variable; el código no necesita cambios |
 
 **Convenciones a respetar** (de `ARCHITECTURE.md` / `CODING_RULES.md`): lógica de
