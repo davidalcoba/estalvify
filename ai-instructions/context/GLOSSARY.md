@@ -33,8 +33,14 @@
   `ESCLATOIL`. `matches` is the raw-regex escape hatch.
 - Normalization: text comparison folds accents and case on both sides, so `AMORTIZACION`
   matches `AMORTIZACIÓN`.
-- Priority: lower number is evaluated first; ties break on `createdAt`. Convention: 0-99
-  exclusions and transfers, 100-199 income, 200-299 fixed costs, 300+ variable spending.
+- Order: a rule's **position in the list** is its precedence — the first rule in the list is
+  evaluated first. It is stored in `priority` (0-based, renumbered contiguously on every
+  reorder, ties break on `createdAt`), but that number is never shown or typed: the /rules
+  list is drag-and-drop, and `reorder_rules` sets the whole order over MCP. New rules are
+  appended **last**, so they can't outrank the existing ones. Useful orderings: exclusions and
+  transfers first, then income and fixed costs, variable spending last; specific before
+  generic (fuel before groceries); a merchant rule (`description`) above the bank-label rules
+  (`remittanceInfo`), which are high-coverage but wrong for some merchants.
 - First match wins: within a run, the first rule to match a transaction claims it; later
   rules skip it.
 - Precedence: MANUAL > RULE > AI > uncategorized. A run never overwrites a manual
@@ -44,7 +50,11 @@
 - Undo (`undo_rule_run`): reverts everything a rule categorized, using the
   `previousCategoryId` / `previousSource` trail each run records.
 - Deleting a rule: detaches the categorizations it produced — the transactions keep their
-  category but lose the undo trail. Deactivating (`isActive: false`) pauses a rule instead.
+  category but lose the undo trail. Disabling (`isActive: false`) keeps the rule and stops it
+  running instead — it is skipped by every run, including the post-sync one. Enabling and
+  disabling is its own control (an explicit "Active" switch per row, "Disabled" badge when
+  off), separate from "run now": the run action on a disabled rule is greyed out, since
+  running it by hand would contradict the switch.
 - (AI suggestion: reserved for a future flow; not implemented.)
 
 ## Category Terms

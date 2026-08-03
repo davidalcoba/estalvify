@@ -94,9 +94,10 @@ export interface RunPlan {
 }
 
 /**
- * Rules are evaluated in priority order — **lower number first** — with
- * `createdAt` ascending as the tie-break, so the outcome never depends on
- * database insertion order.
+ * Rules are evaluated in list order: `priority` ascending — it stores the rule's
+ * 0-based position, so **earlier in the list runs first** — with `createdAt`
+ * ascending as the tie-break, so the outcome never depends on database insertion
+ * order.
  */
 export function sortRulesForRun<T extends { priority: number; createdAt: Date }>(
   rules: T[]
@@ -121,7 +122,7 @@ function isUncategorized(tx: { categoryId: string | null; isRejected: boolean })
  * - Category state is tracked **in memory** as the run progresses, so a
  *   re-categorization rule (one with `sourceCategoryId`) sees what an earlier
  *   rule assigned in this same run rather than the stale database value. Such a
- *   rule therefore needs a higher priority number than the one feeding it.
+ *   rule therefore has to sit **below** the one feeding it in the list.
  * - `onlyUncategorized` skips source-category rules entirely — they need a
  *   pre-existing category by definition.
  */

@@ -95,13 +95,16 @@ export function RuleConditionRow({
 
   return (
     // Mobile: 2-column grid (field+operator row 1, value full-width row 2)
-    // Desktop (sm+): single flex row
+    // Desktop (sm+): single flex row. The selects get a fixed width there and
+    // stop shrinking — with `w-full` they each claimed the whole row as their
+    // flex basis, shrank proportionally and left the value input at ~0, so a
+    // saved value was invisible in the narrower edit dialog.
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-nowrap sm:items-center sm:gap-2">
       <SimpleSelect
         value={condition.field}
         onValueChange={(v) => handleFieldChange(v as RuleConditionField)}
         ariaLabel="Condition field"
-        className="col-span-1 w-full"
+        className="col-span-1 w-full sm:w-[140px] sm:shrink-0"
         options={ALL_FIELDS.map((f) => ({ value: f, label: FIELD_LABELS[f] }))}
       />
 
@@ -109,7 +112,7 @@ export function RuleConditionRow({
         value={condition.negate ? "not" : "is"}
         onValueChange={(v) => onChange(index, { ...condition, negate: v === "not" })}
         ariaLabel="Condition negation"
-        className="col-span-1 w-full sm:w-[92px]"
+        className="col-span-1 w-full sm:w-[104px] sm:shrink-0"
         options={[
           { value: "is", label: "does" },
           { value: "not", label: "does not" },
@@ -120,7 +123,7 @@ export function RuleConditionRow({
         value={condition.operator}
         onValueChange={(v) => handleOperatorChange(v as RuleConditionOperator)}
         ariaLabel="Condition operator"
-        className="col-span-1 w-full"
+        className="col-span-1 w-full sm:w-[148px] sm:shrink-0"
         options={operators.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
       />
 

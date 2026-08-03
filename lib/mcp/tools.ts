@@ -24,7 +24,12 @@ import {
   runRuleForUser,
   runAllRulesForUser,
 } from "@/lib/mcp/manage";
-import { deleteRuleForUser, testConditions, undoRuleRun } from "@/lib/rules/apply";
+import {
+  deleteRuleForUser,
+  reorderRulesForUser,
+  testConditions,
+  undoRuleRun,
+} from "@/lib/rules/apply";
 import { parseConditions, MAX_CONDITION_VALUE_LENGTH } from "@/lib/rules/rule-dto";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { isValidRegex } from "@/lib/rules/rule-matcher";
@@ -568,8 +573,8 @@ export function registerTools(server: McpServer): void {
     "list_rules",
     {
       description:
-        "List the user's categorization rules in evaluation order (lowest priority number " +
-        "first, which is the one that wins). Includes conditions, target category, ids and " +
+        "List the user's categorization rules in evaluation order — first in the list runs " +
+        "first and wins. Includes conditions, target category, ids and " +
         "run metrics: `matchCount` is how many transactions the rule claimed in its most " +
         "recent run, and `neverMatched` flags a rule that has run and caught nothing — " +
         "usually a sign its conditions look at the wrong field or word.",
@@ -605,15 +610,14 @@ export function registerTools(server: McpServer): void {
         "magnitudes — use direction ('DEBIT'|'CREDIT') to tell money out from money in.\n" +
         "Text comparison folds accents and case, so AMORTIZACION matches AMORTIZACIÓN. " +
         "`negate: true` inverts a condition, which is how you exclude.\n" +
-        "priority: LOWER number is evaluated FIRST and the first matching rule wins. Bands: " +
-        "0-99 exclusions and transfers, 100-199 income, 200-299 fixed costs, 300+ variable spending. " +
-        "Put the specific rule before the generic one (fuel before groceries).\n" +
-        "Within variable spending there is a further convention: rules matching a MERCHANT via " +
-        "`description` go BELOW 300, rules matching the bank's category label via " +
-        "`remittanceInfo` go 300 and above. The bank label is high-coverage but wrong for some " +
-        "merchants — ON STAGE MONTJUIC (concert tickets) arrives as \"EN HOGAR, MUEBLES\", " +
-        "MULTIOPTICAS as \"EN DISCOS, LIBROS, FOTOS Y PC'S\" — so a per-merchant rule has to be " +
-        "able to beat it.\n" +
+        "Order: a rule's POSITION in the list is its precedence — earlier runs first and the " +
+        "first matching rule wins. `priority` is how that position is stored (lower = earlier); " +
+        "omit it and the rule is appended LAST, then move it with reorder_rules. Put the " +
+        "specific rule before the generic one (fuel before groceries), and a MERCHANT rule " +
+        "(`description`) before the bank-category-label rules (`remittanceInfo`): the bank label " +
+        "is high-coverage but wrong for some merchants — ON STAGE MONTJUIC (concert tickets) " +
+        "arrives as \"EN HOGAR, MUEBLES\", MULTIOPTICAS as \"EN DISCOS, LIBROS, FOTOS Y PC'S\" — " +
+        "so a per-merchant rule has to sit above it to win.\n" +
         "sourceCategoryId (optional) restricts matching to transactions already in that category. " +
         "Creating a rule does NOT apply it — call run_rule (start with dryRun: true).",
       inputSchema: {
@@ -647,8 +651,10 @@ export function registerTools(server: McpServer): void {
     "update_rule",
     {
       description:
-        "Update a rule's name, conditions, target category, active state and/or priority. " +
-        "Only the provided fields change; `conditions` replaces the whole tree. " +
+        "Update a rule's name, conditions, target category or enabled state (`isActive: false` " +
+        "keeps the rule but stops it running — it is skipped by every run, including the " +
+        "post-sync one). Only the provided fields change; `conditions` " +
+        "replaces the whole tree. To move a rule in the evaluation order use reorder_rules. " +
         "Does NOT re-apply the rule — call run_rule afterwards.",
       inputSchema: {
         ruleId: z.string(),
@@ -656,10 +662,9 @@ export function registerTools(server: McpServer): void {
         conditions: conditionsSchema.optional(),
         categoryId: z.string().optional(),
         isActive: z.boolean().optional(),
-        priority: z.number().int().optional(),
       },
     },
-    async ({ ruleId, name, conditions, categoryId, isActive, priority }, extra) => {
+    async ({ ruleId, name, conditions, categoryId, isActive }, extra) => {
       const userId = requireUserId(extra as ToolExtra);
       try {
         return json(
@@ -668,11 +673,35 @@ export function registerTools(server: McpServer): void {
             conditions: conditions === undefined ? undefined : normalizeConditions(conditions),
             categoryId,
             isActive,
-            priority,
           }),
         );
       } catch (err) {
         return errorResult(err, "update_rule failed");
+      }
+    },
+  );
+
+  // ── reorder_rules ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "reorder_rules",
+    {
+      description:
+        "Set the evaluation order of ALL rules at once. `ruleIds` must list every rule the " +
+        "user has, exactly once, in the order they should run — first in the list runs first " +
+        "and the first match wins. Call list_rules to get the current order, move the ids you " +
+        "need and send the whole array back; a partial list is rejected so a stale view can't " +
+        "silently drop a rule. Positions are renumbered from 0. Does NOT re-apply anything — " +
+        "call run_rule (dryRun first) to see the new order's effect.",
+      inputSchema: {
+        ruleIds: z.array(z.string()),
+      },
+    },
+    async ({ ruleIds }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await reorderRulesForUser(userId, ruleIds));
+      } catch (err) {
+        return errorResult(err, "reorder_rules failed");
       }
     },
   );

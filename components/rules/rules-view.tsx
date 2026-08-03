@@ -28,7 +28,7 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
 
       {/* ── Saved rules ── */}
       <section>
-        <div className="mb-4">
+        <div className="mb-4 space-y-1">
           <h3 className="text-base font-semibold">
             Saved rules
             {savedRules.length > 0 && (
@@ -37,6 +37,12 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
               </span>
             )}
           </h3>
+          {savedRules.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Rules run top to bottom and the first match wins. Drag a rule to
+              move it.
+            </p>
+          )}
         </div>
 
         {/* Desktop table */}
