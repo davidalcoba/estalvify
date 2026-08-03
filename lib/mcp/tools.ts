@@ -651,8 +651,9 @@ export function registerTools(server: McpServer): void {
     "update_rule",
     {
       description:
-        "Update a rule's name, conditions, target category or paused state (`isActive: false` " +
-        "keeps the rule but stops it running). Only the provided fields change; `conditions` " +
+        "Update a rule's name, conditions, target category or enabled state (`isActive: false` " +
+        "keeps the rule but stops it running — it is skipped by every run, including the " +
+        "post-sync one). Only the provided fields change; `conditions` " +
         "replaces the whole tree. To move a rule in the evaluation order use reorder_rules. " +
         "Does NOT re-apply the rule — call run_rule afterwards.",
       inputSchema: {

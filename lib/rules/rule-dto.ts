@@ -164,7 +164,7 @@ export interface CategoryRuleDTO {
   categoryId: string;
   categoryName: string;
   categoryColor: string;
-  /** False = paused: the rule is kept but never runs. */
+  /** False = disabled: the rule is kept but never runs. */
   isActive: boolean;
   matchCount: number;
   lastRunAt: string | null;

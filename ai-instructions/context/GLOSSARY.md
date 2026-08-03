@@ -50,9 +50,11 @@
 - Undo (`undo_rule_run`): reverts everything a rule categorized, using the
   `previousCategoryId` / `previousSource` trail each run records.
 - Deleting a rule: detaches the categorizations it produced — the transactions keep their
-  category but lose the undo trail. Pausing (`isActive: false`) keeps the rule and stops it
-  running instead — it is skipped by every run, including the post-sync one, and the UI calls
-  it "Paused" (the run button on a paused rule is disabled for that reason).
+  category but lose the undo trail. Disabling (`isActive: false`) keeps the rule and stops it
+  running instead — it is skipped by every run, including the post-sync one. Enabling and
+  disabling is its own control (an explicit "Active" switch per row, "Disabled" badge when
+  off), separate from "run now": the run action on a disabled rule is greyed out, since
+  running it by hand would contradict the switch.
 - (AI suggestion: reserved for a future flow; not implemented.)
 
 ## Category Terms

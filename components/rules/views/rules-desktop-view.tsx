@@ -1,17 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Pencil,
-  Play,
-  Trash2,
-  Undo2,
-  CheckCircle2,
-  Circle,
-  GripVertical,
-} from "lucide-react";
+import { Pencil, Play, Trash2, Undo2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   type CategoryRuleDTO,
   FIELD_LABELS,
@@ -52,7 +45,7 @@ export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
               <th className="px-2 py-2.5 w-8">
                 <span className="sr-only">Order</span>
               </th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8"></th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">Active</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Conditions</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Target</th>
@@ -133,7 +126,7 @@ function RulesDesktopRow({
             Transactions it categorized keep their category, but lose the link to
             this rule — so they can no longer be reverted.
           </p>
-          <p>To stop the rule without losing it, pause it instead.</p>
+          <p>To stop the rule without losing it, switch it off instead.</p>
         </>
       }
       confirmLabel="Delete rule"
@@ -156,21 +149,20 @@ function RulesDesktopRow({
         </span>
       </td>
 
-      {/* Pause / resume */}
+      {/* Active: enable / disable the rule. Nothing to do with "run now" — a
+          disabled rule is skipped by every run, including the post-sync one. */}
       <td className="px-4 py-3">
-        <button
-          onClick={handleToggleActive}
+        <Switch
+          checked={rule.isActive}
+          onCheckedChange={handleToggleActive}
           disabled={isPending}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={rule.isActive ? "Pause rule" : "Resume rule"}
-          title={rule.isActive ? "Pause rule" : "Resume rule"}
-        >
-          {rule.isActive ? (
-            <CheckCircle2 className="h-4 w-4 text-success" />
-          ) : (
-            <Circle className="h-4 w-4" />
-          )}
-        </button>
+          aria-label={rule.isActive ? "Disable rule" : "Enable rule"}
+          title={
+            rule.isActive
+              ? "Disable rule — it stays saved but stops running"
+              : "Enable rule"
+          }
+        />
       </td>
 
       {/* Name */}
@@ -178,7 +170,7 @@ function RulesDesktopRow({
         <div className="flex items-center gap-2">
           <span className="font-medium">{rule.name}</span>
           {!rule.isActive && (
-            <Badge variant="secondary" className="text-xs">Paused</Badge>
+            <Badge variant="secondary" className="text-xs">Disabled</Badge>
           )}
           {rule.neverMatched && (
             <Badge variant="outline" className="text-xs text-warning border-warning">
@@ -264,8 +256,12 @@ function RulesDesktopRow({
             onClick={handleExecute}
             disabled={isPending || !rule.isActive}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="Run rule"
-            title={rule.isActive ? "Run rule" : "Paused — resume it to run"}
+            aria-label="Run rule now"
+            title={
+              rule.isActive
+                ? "Run rule now"
+                : "Disabled — turn it on to run it"
+            }
           >
             <Play className="h-3.5 w-3.5" />
           </Button>

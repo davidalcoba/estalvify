@@ -1,17 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Pencil,
-  Play,
-  Trash2,
-  Undo2,
-  CheckCircle2,
-  Circle,
-  GripVertical,
-} from "lucide-react";
+import { Pencil, Play, Trash2, Undo2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   type CategoryRuleDTO,
@@ -118,7 +111,7 @@ function RulesMobileCard({
             Transactions it categorized keep their category, but lose the link to
             this rule — so they can no longer be reverted.
           </p>
-          <p>To stop the rule without losing it, pause it instead.</p>
+          <p>To stop the rule without losing it, switch it off instead.</p>
         </>
       }
       confirmLabel="Delete rule"
@@ -140,26 +133,9 @@ function RulesMobileCard({
             <GripVertical className="h-4 w-4" />
           </span>
 
-          <button
-            onClick={handleToggleActive}
-            disabled={isPending}
-            className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={rule.isActive ? "Pause rule" : "Resume rule"}
-            title={rule.isActive ? "Pause rule" : "Resume rule"}
-          >
-            {rule.isActive ? (
-              <CheckCircle2 className="h-5 w-5 text-success" />
-            ) : (
-              <Circle className="h-5 w-5" />
-            )}
-          </button>
-
           <div className="flex-1 min-w-0 space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{rule.name}</span>
-              {!rule.isActive && (
-                <Badge variant="secondary" className="text-xs">Paused</Badge>
-              )}
               {rule.neverMatched && (
                 <Badge variant="outline" className="text-xs text-warning border-warning">
                   Never matched
@@ -208,6 +184,23 @@ function RulesMobileCard({
             {result && (
               <p className="text-xs text-success font-medium">{result}</p>
             )}
+
+            {/* Enable / disable, spelled out — a separate thing from running the
+                rule now (the ▷ action above). */}
+            <div className="flex items-center gap-2 pt-0.5">
+              <Switch
+                id={`rule-active-${rule.id}`}
+                checked={rule.isActive}
+                onCheckedChange={handleToggleActive}
+                disabled={isPending}
+              />
+              <label
+                htmlFor={`rule-active-${rule.id}`}
+                className="text-xs text-muted-foreground"
+              >
+                {rule.isActive ? "Active" : "Disabled"}
+              </label>
+            </div>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
@@ -230,8 +223,8 @@ function RulesMobileCard({
               onClick={handleExecute}
               disabled={isPending || !rule.isActive}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="Run"
-              title={rule.isActive ? "Run rule" : "Paused — resume it to run"}
+              aria-label="Run rule now"
+              title={rule.isActive ? "Run rule now" : "Disabled — turn it on to run it"}
             >
               <Play className="h-4 w-4" />
             </Button>
