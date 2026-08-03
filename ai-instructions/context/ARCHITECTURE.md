@@ -194,18 +194,20 @@ exits 0 rather than reddening every closed PR. Deleting is safe — the
 integration recreates the branch from `main` on the next deployment of that git
 branch, so the only thing lost is throwaway preview data.
 
-**It only covers PRs whose branches carry the workflow file.** A closed PR prunes
-nothing if the workflow does not exist in the branches involved, which is not a
-detail: while the file lived only on `preview`, PR #53 was merged with base `main`
-and left `preview/claude/mcp-delete-category-filter-elc9vw` orphaned, whereas
-PR #52 (base `preview`) pruned correctly. So the workflow has to live on `main`
-too, not just on the integration branch — otherwise it silently covers half the
-PRs and the cap creeps up anyway. Do not read more mechanism into that evidence
-than it supports: PR #53's head branch was cut from `main` and so lacked the file
-as well, which means the observation does not settle whether GitHub resolves a
-`pull_request: closed` workflow from the base branch or from the head. Once the
-file is on `main` the distinction stops mattering, because branches cut from
-`main` inherit it.
+**A `pull_request: closed` workflow is resolved from the PR's base branch**, so it
+prunes nothing unless the file exists on the branch being merged *into*. That is
+measured, not assumed: PR #55 had head `main` at `c711175`, a commit that does not
+contain `prune-neon-branch.yml`, and base `preview`, which did — and the run fired
+anyway. Conversely PR #53 merged with base `main` while the file lived only on
+`preview`, and left `preview/claude/mcp-delete-category-filter-elc9vw` orphaned
+(deleted by hand afterwards).
+
+The practical consequence is that the file has to be on **`main`** as well as on
+`preview`, or it silently covers only the PRs targeting the integration branch and
+the cap creeps up regardless. It now is, promoted by the `preview` → `main` release.
+Keep it that way: a future workflow reshuffle that drops it from `main` would
+reintroduce the gap without any signal, since a missing workflow produces no failed
+run — just no run at all.
 
 The workflow exists because of *which* integration this is. Neon ships two, and
 they clean up differently. The **Neon-Managed** integration does it
