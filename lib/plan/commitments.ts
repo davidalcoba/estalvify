@@ -68,12 +68,6 @@ export function computeCommitments(input: {
   };
 }
 
-export interface SpendRow {
-  amount: number; // absolute
-  description: string | null;
-  remittanceInfo: string | null;
-}
-
 export interface VariableSpendSplit {
   total: number;
   fixed: number;
@@ -81,30 +75,29 @@ export interface VariableSpendSplit {
 }
 
 /**
- * Split a month's expense rows into fixed (charges belonging to a confirmed
- * recurring series — already accounted for as commitments) and variable
- * (everything else). The available-to-spend number only moves with the
- * variable part: if rent's 1.389 € knocked it down on the 1st, the single
- * number would be noise instead of signal.
+ * Split a month's categorized spending into fixed — covered by a category's
+ * planned monthly limit from the Plan, capped at that limit — and variable
+ * (everything beyond a limit, and every category without one). The
+ * available-to-spend number only moves with the variable part: if rent's
+ * 1.389 € knocked it down on the 1st, the single number would be noise
+ * instead of signal.
  *
- * `keyOf` maps a row's descriptors to its series key (pass
- * `normalizeMerchantKey` from lib/recurring/detect — injected to keep this
- * module dependency-free and the tests explicit).
+ * Capping by the Plan's own per-category limits is what prevents double
+ * counting against the commitments: a charge already subtracted upfront as a
+ * committed plan amount (a confirmed series' mirror OR a hand-typed fixed
+ * item) never also drains the variable budget — and the same limits drive the
+ * category bars and the budget-over alerts, so the three surfaces agree.
  */
 export function splitVariableSpend(
-  rows: SpendRow[],
-  confirmedDebitKeys: ReadonlySet<string>,
-  keyOf: (description: string | null, remittanceInfo: string | null) => string
+  spendByCategory: Record<string, number>,
+  plannedByCategory: Record<string, number>
 ): VariableSpendSplit {
   let total = 0;
   let fixed = 0;
-  for (const row of rows) {
-    const amount = Math.abs(row.amount);
-    if (!Number.isFinite(amount)) continue;
-    total += amount;
-    if (confirmedDebitKeys.has(keyOf(row.description, row.remittanceInfo))) {
-      fixed += amount;
-    }
+  for (const [categoryId, spent] of Object.entries(spendByCategory)) {
+    if (!Number.isFinite(spent)) continue;
+    total += spent;
+    fixed += Math.min(spent, plannedByCategory[categoryId] ?? 0);
   }
   return {
     total: round(total),

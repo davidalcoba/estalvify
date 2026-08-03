@@ -5,7 +5,6 @@ import {
   splitVariableSpend,
   computeAvailable,
 } from "./commitments";
-import { normalizeMerchantKey } from "@/lib/recurring/detect";
 import type { PlanItemInput } from "./plan-item";
 
 const REF = { year: 2026, month: 8 };
@@ -70,28 +69,27 @@ describe("computeCommitments", () => {
 });
 
 describe("splitVariableSpend", () => {
-  it("keeps fixed charges out of the variable number", () => {
-    const confirmed = new Set([normalizeMerchantKey("ALQUILER PISO BARCELONA", null)]);
+  it("spend inside a category's planned limit is fixed, not variable", () => {
     const split = splitVariableSpend(
-      [
-        { amount: 1389.17, description: "ALQUILER PISO BARCELONA", remittanceInfo: null },
-        { amount: 23.5, description: "XINA CENTER", remittanceInfo: null },
-        { amount: 18.2, description: "RESTAURANT CAN PEP", remittanceInfo: null },
-      ],
-      confirmed,
-      normalizeMerchantKey
+      { housing: 1389.17, hogar: 23.5, restaurants: 18.2 },
+      { housing: 1951.65 }
     );
     expect(split.total).toBe(1430.87);
     expect(split.fixed).toBe(1389.17);
     expect(split.variable).toBe(41.7);
   });
 
-  it("handles no confirmed series", () => {
-    const split = splitVariableSpend(
-      [{ amount: 10, description: "X", remittanceInfo: null }],
-      new Set(),
-      normalizeMerchantKey
-    );
+  it("caps the fixed part at the limit — a hand-typed fixed item never double-counts", () => {
+    // Rent planned at 1389.17 by hand; a rent rise charges 1450. The planned
+    // 1389.17 was already subtracted as a commitment; only the 60.83 beyond
+    // the limit drains the variable budget.
+    const split = splitVariableSpend({ housing: 1450 }, { housing: 1389.17 });
+    expect(split.fixed).toBe(1389.17);
+    expect(split.variable).toBe(60.83);
+  });
+
+  it("everything is variable without plan limits", () => {
+    const split = splitVariableSpend({ x: 10 }, {});
     expect(split.variable).toBe(10);
   });
 });

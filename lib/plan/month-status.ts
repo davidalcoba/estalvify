@@ -14,9 +14,9 @@ import {
   currentYearMonth,
   monthRange,
   buildMonthlySpendingWhere,
+  aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
-import { normalizeMerchantKey } from "@/lib/recurring/detect";
-import type { PlanItemInput } from "./plan-item";
+import { plannedMonthlyByCategory, type PlanItemInput } from "./plan-item";
 import {
   computeCommitments,
   splitVariableSpend,
@@ -76,7 +76,7 @@ export async function buildMonthStatus(
   const { year, month } = currentYearMonth(timezone);
   const { start, end } = monthRange(year, month);
 
-  const [user, planItems, spendRows, confirmedDebit, fundRows] = await Promise.all([
+  const [user, planItems, spendRows, fundRows] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -98,11 +98,11 @@ export async function buildMonthStatus(
     }),
     prisma.transaction.findMany({
       where: buildMonthlySpendingWhere(userId, year, month),
-      select: { amount: true, description: true, remittanceInfo: true },
-    }),
-    prisma.recurringSeries.findMany({
-      where: { userId, status: "CONFIRMED", direction: "DEBIT" },
-      select: { merchantKey: true },
+      select: {
+        amount: true,
+        categorization: { select: { categoryId: true } },
+        splits: { select: { amount: true, categoryId: true } },
+      },
     }),
     prisma.sinkingFund.findMany({
       where: { userId, active: true },
@@ -158,13 +158,8 @@ export async function buildMonthStatus(
   });
 
   const spend = splitVariableSpend(
-    spendRows.map((r) => ({
-      amount: Number(r.amount.toString()),
-      description: r.description,
-      remittanceInfo: r.remittanceInfo,
-    })),
-    new Set(confirmedDebit.map((s) => s.merchantKey)),
-    normalizeMerchantKey
+    aggregateSpendingByCategory(spendRows),
+    plannedMonthlyByCategory(planInputs, { year, month })
   );
 
   const now = new Date();

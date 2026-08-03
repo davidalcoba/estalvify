@@ -275,8 +275,15 @@ export async function generateNotificationsForUser(
         }),
         // Auto-linked plan items mirror the series; keep the mirror true so the
         // forecast and category limits track reality (a rent raise included).
+        // Only while it still IS a mirror: the amount guard skips items the
+        // user has hand-edited since — the plan is theirs, the refresh isn't
+        // allowed to silently revert an intentional override.
         prisma.planItem.updateMany({
-          where: { userId, recurringMerchantKey: c.merchantKey },
+          where: {
+            userId,
+            recurringMerchantKey: c.merchantKey,
+            amount: storedByKey.get(c.merchantKey)!.averageAmount,
+          },
           data: { amount: c.averageAmount, cadence: c.cadence },
         }),
       ]),

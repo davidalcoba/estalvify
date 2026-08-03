@@ -48,8 +48,11 @@ recurrentes, etc.).
 > real como variación neta del saldo** de esa cuenta (un traspaso que vuelve es churn, no
 > ahorro). Aviso `SAVINGS_NOT_EXECUTED` a ≤5 días de fin de mes. El dashboard abre con
 > **"Available to spend"** (`components/plan/available-card.tsx`): presupuesto variable −
-> gasto variable (el gasto fijo se descuenta arriba: un cargo que pertenece a una serie
-> confirmada no mueve el número — `splitVariableSpend` por merchantKey), con ritmo vs lo
+> gasto variable. El gasto fijo se descuenta arriba: `splitVariableSpend` topa el gasto de
+> cada categoría con su **límite mensual del Plan** (los mismos límites de las barras y de
+> las alertas de budget), así un cargo ya comprometido — espejo de serie confirmada O item
+> fijo tecleado a mano — nunca cuenta dos veces, y solo el exceso sobre el límite drena el
+> variable. Con ritmo vs lo
 > que tocaría a estas alturas y disponible/día. Todo lo sirve `lib/plan/month-status.ts`
 > (server-only), compartido por dashboard, /plan y el cron.
 
