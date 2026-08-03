@@ -25,10 +25,16 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/oauth") ||
     pathname.startsWith("/.well-known") ||
     pathname.startsWith("/_next") ||
+    // Brand assets. `app/icon.svg` and `app/apple-icon.png` are served as App
+    // Router routes rather than from `public/`, so they pass through here — a
+    // logged-out visitor must still resolve them or the login screen, which is
+    // the one page they see, has no icon.
     pathname.startsWith("/favicon") ||
+    pathname.startsWith("/icon") || // /icon.svg and /icons/*
+    pathname.startsWith("/apple-icon") ||
+    pathname.startsWith("/logo") ||
     pathname.startsWith("/manifest") ||
-    pathname.startsWith("/sw.js") ||
-    pathname.startsWith("/icons");
+    pathname.startsWith("/sw.js");
 
   if (!session?.user && !isPublicPath) {
     return NextResponse.redirect(new URL("/login", request.url));
