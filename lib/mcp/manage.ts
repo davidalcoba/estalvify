@@ -81,11 +81,19 @@ export async function updateCategoryForUser(
     kind?: CategoryKind;
     /** `null` promotes the category to the top level. Omit to leave it where it is. */
     parentId?: string | null;
+    /**
+     * `true` restores a soft-deleted category — the undo `delete_category`
+     * never had. Restoring does NOT reactivate the rules that were deactivated
+     * when it was deleted, and a deactivated category (`false`) follows the
+     * delete_category path semantics minus its transaction guard, so prefer
+     * delete_category for turning things off.
+     */
+    isActive?: boolean;
   },
 ) {
   const cat = await prisma.category.findUnique({
     where: { id: categoryId },
-    select: { userId: true },
+    select: { userId: true, parentId: true },
   });
   // Only the user's own categories are editable (system categories are shared).
   if (!cat || cat.userId !== userId) throw new Error("Category not found");
@@ -99,6 +107,21 @@ export async function updateCategoryForUser(
   if (input.color !== undefined) data.color = input.color;
   if (input.kind !== undefined) data.kind = input.kind;
 
+  if (input.isActive !== undefined) {
+    if (input.isActive && cat.parentId) {
+      // A subcategory only renders under an active parent; restoring it below
+      // a deleted one would make it exist and stay invisible.
+      const parent = await prisma.category.findUnique({
+        where: { id: cat.parentId },
+        select: { isActive: true },
+      });
+      if (parent && !parent.isActive) {
+        throw new Error("Restore the parent category first");
+      }
+    }
+    data.isActive = input.isActive;
+  }
+
   if (input.parentId !== undefined) {
     await applyMove(userId, categoryId, input.parentId, data);
   }
@@ -106,7 +129,7 @@ export async function updateCategoryForUser(
   return prisma.category.update({
     where: { id: categoryId },
     data,
-    select: { id: true, name: true, color: true, parentId: true, kind: true },
+    select: { id: true, name: true, color: true, parentId: true, kind: true, isActive: true },
   });
 }
 

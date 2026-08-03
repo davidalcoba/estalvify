@@ -651,20 +651,30 @@ export function registerTools(server: McpServer): void {
         "category has subcategories of its own, or if the target is itself a subcategory — " +
         "nesting is limited to two levels.\n" +
         "`kind` controls how it counts: EXPENSE in spending totals, INCOME in income, TRANSFER " +
-        "in neither.",
+        "in neither.\n" +
+        "`isActive: true` restores a soft-deleted category — the undo delete_category never " +
+        "had. Rules deactivated by the deletion stay off; re-enable them (or write new ones) " +
+        "explicitly. A subcategory can only be restored under an active parent.",
       inputSchema: {
         categoryId: z.string(),
         name: z.string().optional(),
         color: z.string().optional(),
         kind: z.enum(["EXPENSE", "INCOME", "TRANSFER"]).optional(),
         parentId: z.string().nullable().optional(),
+        isActive: z.boolean().optional(),
       },
     },
-    async ({ categoryId, name, color, kind, parentId }, extra) => {
+    async ({ categoryId, name, color, kind, parentId, isActive }, extra) => {
       const userId = requireUserId(extra as ToolExtra);
       try {
         return json(
-          await updateCategoryForUser(userId, categoryId, { name, color, kind, parentId }),
+          await updateCategoryForUser(userId, categoryId, {
+            name,
+            color,
+            kind,
+            parentId,
+            isActive,
+          }),
         );
       } catch (err) {
         return errorResult(err, "update_category failed");
