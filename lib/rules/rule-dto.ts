@@ -312,7 +312,9 @@ export function toCategoryRuleDTO(rule: {
     matchCount: rule.matchCount,
     lastRunAt: rule.lastRunAt?.toISOString() ?? null,
     lastMatchAt: rule.lastMatchAt?.toISOString() ?? null,
-    neverMatched: rule.lastRunAt !== null && rule.matchCount === 0,
+    // matchCount only holds the most recent run's matches, so it can't say
+    // "never" — a healthy rule with nothing new to claim would be flagged.
+    neverMatched: rule.lastRunAt !== null && rule.lastMatchAt === null,
     createdAt: rule.createdAt.toISOString(),
   };
 }

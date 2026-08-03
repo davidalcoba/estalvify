@@ -101,6 +101,23 @@ recurrentes, etc.).
 > del dashboard cuando hay ≥2 titulares con ingresos. Es el riesgo estructural real de la
 > familia (73% del fijo en una persona).
 
+> **Post-roadmap — Deuda técnica MCP.** (1) `neverMatched` corregido: era
+> `matchCount === 0` con al menos un run — pero `matchCount` solo guarda el **último** run,
+> así que marcaba en rojo reglas sanas sin nada nuevo que coger. Ahora es
+> `lastRunAt !== null && lastMatchAt === null` (mismo fix en `lib/rules/rule-dto.ts` para
+> la UI, con test). (2) `lib/mcp/tools-schema.test.ts`: parsea el registro de tools y
+> **rompe el build** si un handler destructura un parámetro que su `inputSchema` no declara
+> o declara uno que no lee — la divergencia que ya pasó tres veces (`offset`,
+> `dateFrom`/`dateTo`, `categoryId`). Requiere schemas inline (el test cazó un schema por
+> referencia el mismo día que nació). (3) En vez de `create_budget` (budgets está
+> deprecado a favor del Plan): tools `list_plan_items` / `create_plan_item` /
+> `update_plan_item` / `delete_plan_item` (`lib/mcp/manage.ts`, misma validación que las
+> Server Actions; los items espejados de una serie confirmada se rechazan — los gestiona la
+> serie). `get_budgets` queda marcado LEGACY en su descripción. (4) La renumeración de
+> prioridades 0..N es **diseño**, no bug: el número nunca se muestra, el orden se cambia con
+> `reorder_rules`/drag — insertar entre dos reglas es reordenar, no numerar. (5) La alerta
+> de >72 h sin transacciones ya existía (`NO_TRANSACTIONS`, umbral 3 días).
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por
