@@ -35,13 +35,19 @@
   drift compounds silently — that is how `preview` ended up 6 commits behind once.
   Both are advisory against a direct push to `main` — Actions only run after the
   push, so `sync-preview.yml` also verifies the provenance of what landed and fails
-  the release when it did not come through `preview`. The lock itself is a GitHub
-  ruleset (pull request required + those two checks required), kept as a payload at
-  `.github/rulesets/main-release-path.json` because a Claude Code session cannot
-  apply it: the sandbox proxy refuses writes to GitHub's administration API paths
-  (403 on `POST /repos/{repo}/rulesets`) and the session token is `admin: false`.
-  The repo is public, so rulesets are available on the free plan — it needs a
-  personal token or two clicks in Settings → Rules. **Not applied yet.**
+  the release when it did not come through `preview`. The lock itself is the GitHub
+  ruleset **"main: solo desde preview" (id `20327850`), applied and `active`**: a
+  pull request is required (0 approvals) and both `A PR into main must come from
+  preview` and `Typecheck · Lint · Test` must pass, with force pushes and deletion
+  blocked, so a direct push is rejected rather than reported afterwards. Its payload
+  lives at `.github/rulesets/main-release-path.json` for re-creating or auditing it,
+  and `GET /repos/{repo}/rules/branches/main` reports what is in force (empty array
+  = the lock is gone). Changing it is a GitHub-UI or personal-token job: a Claude
+  Code session cannot, because the sandbox proxy refuses writes to GitHub's
+  administration API paths (403 on `POST /repos/{repo}/rulesets`) and the session
+  token is `admin: false`. Both required contexts are **job names** — rename a job
+  without updating the ruleset and `main` becomes unmergeable, waiting on a check
+  that never reports.
 - Tooling access to Vercel: an API token is exposed as the `VERCEL_TOKEN`
   environment variable (secret — never commit or print it). It is **not
   read-only** — it can write project configuration, and the env var layout below
