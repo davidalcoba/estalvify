@@ -11,6 +11,7 @@ Read these files in order:
 5. `PLAYBOOK_NEW_FEATURE.md`: Execution checklist for implementing features safely and consistently.
 6. `GLOSSARY.md`: Shared domain terminology for product, banking, categorization, budgets, and operations.
 7. `ROADMAP.md`: Product roadmap and phased delivery plan for upcoming features (budgets, recurring expenses, forecasting, reports, notifications, AI recommendations). Read it to pick up the next phase to build; update the phase checklist in the same change.
+8. `AUDIT.md`: Dated codebase audit (design, architecture, coherence, security). A prioritized improvement roadmap grouped by bucket — A (fix now, even single-user), B (gating before opening to the internet / multi-user), C (architecture/data/tests), D (code & UI coherence). A snapshot, not a source-of-truth spec; re-audit or supersede rather than editing in place.
 
 All documents in this folder must be consistent with each other.
 

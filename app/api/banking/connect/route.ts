@@ -94,8 +94,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    // Log the full upstream error server-side, but never return the third-party
+    // body to the client — it can carry provider internals, and it would land in
+    // the browser and any error surface. Return a stable, generic message.
     console.error("Banking connect error:", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not start the bank connection. Please try again." },
+      { status: 500 }
+    );
   }
 }

@@ -3,7 +3,15 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { buildUncategorizedWhere } from "@/lib/categorize";
+import { buildUncategorizedWhere, BULK_CATEGORIZE_CAP } from "@/lib/categorize";
+
+function assertWithinBulkCap(count: number): void {
+  if (count > BULK_CATEGORIZE_CAP) {
+    throw new Error(
+      `Too many matching transactions (> ${BULK_CATEGORIZE_CAP}). Narrow the selection first.`
+    );
+  }
+}
 
 // ─────────────────────────────────────────────
 // Single transaction categorization
@@ -68,7 +76,9 @@ export async function bulkCategorizeByIds(transactionIds: string[], categoryId: 
   const txs = await prisma.transaction.findMany({
     where: { id: { in: transactionIds }, userId },
     select: { id: true },
+    take: BULK_CATEGORIZE_CAP + 1,
   });
+  assertWithinBulkCap(txs.length);
   if (txs.length === 0) return;
 
   const now = new Date();
@@ -105,8 +115,13 @@ export async function bulkCategorize(searchQuery: string, categoryId: string): P
   }
 
   const where = buildUncategorizedWhere(userId, searchQuery);
-  const transactions = await prisma.transaction.findMany({ where, select: { id: true } });
+  const transactions = await prisma.transaction.findMany({
+    where,
+    select: { id: true },
+    take: BULK_CATEGORIZE_CAP + 1,
+  });
 
+  assertWithinBulkCap(transactions.length);
   if (transactions.length === 0) return 0;
 
   const now = new Date();
