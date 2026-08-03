@@ -86,16 +86,25 @@ feature-branch migrations to the shared `preview` branch while the app ran
 against its own ephemeral branch. `DIRECT_URL` exists only where it is scoped to
 the same branch as its `DATABASE_URL`.
 
-**The integration's own `DATABASE_*` vars are `production`-only.** The
+**The integration's own `DATABASE_*` vars are `production`-only, and inert.** The
 Neon–Vercel integration also writes ~15 variables holding production credentials
-in every shape (`DATABASE_URL_UNPOOLED`, `DATABASE_POSTGRES_URL`,
-`DATABASE_PGHOST`, …). No code reads them, but they used to be exposed to
-`preview` and `development` too, so the first person to reach for one from a
-preview would have got production. Their target is now `production` alone. The
-integration may re-add the other targets when it next runs — re-check after any
-integration event with
-`GET /v10/projects/{id}/env` and look for a `DATABASE_*` key whose target is
-wider than `["production"]`.
+in every shape: `DATABASE_URL_UNPOOLED` (Prisma's "direct URL"),
+`DATABASE_POSTGRES_*` (backwards compatibility with the Vercel Postgres SDK) and
+`DATABASE_PG*` (the libpq variables, so a bare `psql` connects). They used to be
+exposed to `preview` and `development` too, so the first person to reach for one
+from a preview would have got production; their target is now `production` alone.
+
+None of them can actually be read by the tools they exist for. A Vercel
+Marketplace integration prefixes its variables with the store name, and this
+store is `DATABASE`, so the compatibility names arrive as
+`DATABASE_POSTGRES_URL` and `DATABASE_PGHOST` — while `@vercel/postgres` looks
+for `POSTGRES_URL` and libpq for `PGHOST`. The project does not depend on
+`@vercel/postgres` anyway; it uses `@neondatabase/serverless` +
+`@prisma/adapter-neon`, both driven by `DATABASE_URL`. Deleting the 15 is safe
+and sticks: routine deploys do not recreate them — only re-syncing or
+reinstalling the integration does. If that happens, re-check with
+`GET /v10/projects/{id}/env` for any `DATABASE_*` key whose target is wider than
+`["production"]`.
 
 **Branch cap.** The Neon org is on the free plan, capped at **10 branches**
 (`GET /api/v2/projects/{id}` → `project.owner.branches_limit`). When the cap is
@@ -110,9 +119,18 @@ branches.
 needs a `NEON_API_KEY` repository secret and, when that is missing, logs and
 exits 0 rather than reddening every closed PR. Deleting is safe — the
 integration recreates the branch from `main` on the next deployment of that git
-branch, so the only thing lost is throwaway preview data. Neon exposes no
-delete-on-git-branch-delete setting through its API, which is why this is a
-workflow and not a checkbox.
+branch, so the only thing lost is throwaway preview data.
+
+The workflow exists because of *which* integration this is. Neon ships two, and
+they clean up differently: the **Neon-Managed** integration has an "Automatically
+delete obsolete Neon branches" toggle that fires when the git branch is deleted,
+but this project uses the **Vercel-Managed** (Marketplace) one, whose cleanup
+instead follows Vercel's deployment-retention policy and so can lag by months —
+long enough to hit the 10-branch cap first, which is exactly what happened. A
+GitHub Action is Neon's own documented answer for this case
+(`neondatabase/delete-branch-action` is the official one; the workflow here is a
+few lines of `curl` instead, to avoid pinning a third-party action and to keep
+the `preview/`-namespace guard).
 
 `scripts/migrate.mjs` logs `[migrate] target: <neon-endpoint-id> (via <var>)` at
 the top of every build. That line is how you confirm from a build log which Neon
