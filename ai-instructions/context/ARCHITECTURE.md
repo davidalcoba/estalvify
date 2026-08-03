@@ -297,9 +297,13 @@ stored hashed.
   control: only an allowed account can ever obtain an MCP token.
 - **Confidential client** (`lib/mcp/clients.ts`): **configured** — both
   `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET` are set on `production` and
-  `preview`, so `isDcrDisabled()` is true there: open Dynamic Client Registration
-  returns 403 and only that one client id is accepted, with the token endpoint
-  authenticating the secret (client_secret_post/basic). This closed the app's only
+  `preview`, so `isDcrDisabled()` is true and open Dynamic Client Registration
+  returns 403, with the token endpoint authenticating the secret
+  (client_secret_post/basic). Only deployments **built after** the variables were
+  created see them — Vercel injects env vars at build time, so an already-running
+  deployment keeps answering `201` until it is redeployed. Verified by `POST`ing to
+  `/api/oauth/register` on a preview built afterwards (403 `access_denied`) versus
+  one built minutes before (201). This closed the app's only
   unauthenticated write path — `POST /api/oauth/register` took anonymous requests
   and wrote an `McpOAuthClient` row per call, with no rate limit. `ALLOWED_EMAILS`
   always bounded the damage to database rows rather than data access, since a
