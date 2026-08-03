@@ -8,10 +8,26 @@
 > como un PR independiente siguiendo `PLAYBOOK_NEW_FEATURE.md`, y **marca la fase como
 > hecha aquí** en el mismo cambio.
 
-**Última actualización:** 2026-08-02 · **Fase en curso:** ninguna ·
+**Última actualización:** 2026-08-03 · **Fase en curso:** ninguna ·
 **Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
+
+> **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
+> `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
+> `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por
+> categoría** del mismo conjunto filtrado: todas las categorías visibles **incluidas las
+> que están a cero**, las borradas que aún retienen transacciones, y el total sin
+> categorizar. Sin esos conteos el árbol no se podía auditar desde un cliente MCP — una
+> categoría vacía o casi vacía solo se ve como ausencia. Un `REJECTED` cuenta como sin
+> categorizar, igual que en `buildUncategorizedWhere`. Y hay `delete_category`: el mismo
+> borrado suave de ajustes (`isActive: false`, categoría + subcategorías) pero **se niega**
+> mientras haya transacciones dentro — quedarían en una categoría borrada, invisibles
+> también para la bandeja de categorizar — salvo que se pase `reassignToCategoryId` (las
+> mueve, MANUAL/APPROVED) o `force: true` (les quita la categorización y vuelven a la
+> bandeja). Las reglas que **apuntan** a la categoría se desactivan, porque `runRules` filtra
+> por el `isActive` de la regla y nunca por su categoría destino: seguirían categorizando
+> dentro de algo borrado.
 
 > **Post-roadmap — `Category.kind` y notificaciones.** Todo importe se deriva ahora de
 > `kind` (`EXPENSE`/`INCOME`/`TRANSFER`), no de listas de nombres: el gasto cuenta solo

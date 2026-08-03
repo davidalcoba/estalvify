@@ -43,6 +43,29 @@ export function depthOf(categoryId: string, parentOf: ParentMap): number {
 }
 
 /**
+ * `categoryId` plus every category below it, the id itself first.
+ *
+ * Two levels is the practical limit (see `hasChildren`) but the walk is generic
+ * and, like `wouldCreateCycle`, survives data that already contains a cycle:
+ * every id is expanded at most once.
+ */
+export function subtreeIds(categoryId: string, parentOf: ParentMap): string[] {
+  const ids = [categoryId];
+  const seen = new Set(ids);
+
+  for (let i = 0; i < ids.length; i++) {
+    for (const [id, parentId] of parentOf) {
+      if (parentId === ids[i] && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    }
+  }
+
+  return ids;
+}
+
+/**
  * Does `categoryId` have children?
  *
  * The schema allows unlimited nesting but the pickers and the settings manager
