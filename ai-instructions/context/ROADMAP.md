@@ -94,7 +94,7 @@ recurrentes, etc.).
 | Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar (confirmar añade la serie al Plan), contador de pendientes en el sidebar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ✅ Estable | Proyección de saldo/gasto + alerta de saldo bajo: `app/(app)/forecast/`, `lib/analytics/forecast.ts`, `components/reports/balance-forecast-chart.tsx` |
 | Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
-| Recomendaciones con IA | ✅ Estable | Wrapper agnóstico de proveedor + página de insights: `lib/ai/`, `app/(app)/insights/`, `components/insights/`. Envía solo agregados anonimizados. Claude por defecto (`AI_PROVIDER`) |
+| Recomendaciones con IA | ✅ Estable (apagada) | Wrapper agnóstico de proveedor + página de insights: `lib/ai/`, `app/(app)/insights/`, `components/insights/`. Envía solo agregados anonimizados. Claude por defecto (`AI_PROVIDER`). **`ANTHROPIC_API_KEY` no está puesta en ningún entorno de Vercel**, así que en producción `/insights` no da recomendaciones: muestra el estado "no configurado" (`app/(app)/insights/actions.ts` → `status: "not_configured"`). Encenderla es solo poner la variable; el código no necesita cambios |
 
 **Convenciones a respetar** (de `ARCHITECTURE.md` / `CODING_RULES.md`): lógica de
 dominio en `lib/`, mutaciones en `actions.ts` (Server Actions) o `app/api/`, UI de

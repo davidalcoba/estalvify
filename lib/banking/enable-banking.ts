@@ -182,9 +182,16 @@ export async function createBankingSession(params: {
   state: string;
   redirectUri?: string;
 }): Promise<EnableBankingAuthResponse> {
-  const redirectUri = params.redirectUri
-    ?? process.env.ENABLE_BANKING_REDIRECT_URI
-    ?? `${process.env.NEXT_PUBLIC_APP_URL}/api/banking/callback`;
+  // Deliberately not derived from the deployment URL: Enable Banking rejects any
+  // redirect_uri that is not an exact match of one registered in the app config
+  // (REDIRECT_URI_NOT_ALLOWED), so a per-deployment origin can never work. Fail
+  // loudly rather than sending the bank a URL built from an undefined value.
+  const redirectUri = params.redirectUri ?? process.env.ENABLE_BANKING_REDIRECT_URI;
+  if (!redirectUri) {
+    throw new Error(
+      "ENABLE_BANKING_REDIRECT_URI environment variable is not set (and no redirectUri was passed)"
+    );
+  }
 
   return request<EnableBankingAuthResponse>("/auth", {
     method: "POST",
