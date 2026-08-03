@@ -194,6 +194,19 @@ exits 0 rather than reddening every closed PR. Deleting is safe — the
 integration recreates the branch from `main` on the next deployment of that git
 branch, so the only thing lost is throwaway preview data.
 
+**It only covers PRs whose branches carry the workflow file.** A closed PR prunes
+nothing if the workflow does not exist in the branches involved, which is not a
+detail: while the file lived only on `preview`, PR #53 was merged with base `main`
+and left `preview/claude/mcp-delete-category-filter-elc9vw` orphaned, whereas
+PR #52 (base `preview`) pruned correctly. So the workflow has to live on `main`
+too, not just on the integration branch — otherwise it silently covers half the
+PRs and the cap creeps up anyway. Do not read more mechanism into that evidence
+than it supports: PR #53's head branch was cut from `main` and so lacked the file
+as well, which means the observation does not settle whether GitHub resolves a
+`pull_request: closed` workflow from the base branch or from the head. Once the
+file is on `main` the distinction stops mattering, because branches cut from
+`main` inherit it.
+
 The workflow exists because of *which* integration this is. Neon ships two, and
 they clean up differently. The **Neon-Managed** integration does it
 git-branch-based: it has an "Automatically delete obsolete Neon branches"
