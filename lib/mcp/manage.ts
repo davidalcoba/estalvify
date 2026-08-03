@@ -8,7 +8,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
 import type { CategoryKind } from "@/app/generated/prisma";
-import { wouldCreateCycle, hasChildren } from "@/lib/categories/hierarchy";
+import { wouldCreateCycle, hasChildren, subtreeIds } from "@/lib/categories/hierarchy";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { runRules } from "@/lib/rules/apply";
 import type { RuleRunReport } from "@/lib/rules/apply";
@@ -22,6 +22,15 @@ async function assertOwnedCategory(userId: string, categoryId: string) {
   if (!cat || (cat.userId !== null && cat.userId !== userId) || !cat.isActive) {
     throw new Error("Category not found");
   }
+}
+
+/** `categoryId → parentId` for every category the user can see. */
+async function loadParentMap(userId: string): Promise<Map<string, string | null>> {
+  const all = await prisma.category.findMany({
+    where: { OR: [{ userId }, { userId: null }] },
+    select: { id: true, parentId: true },
+  });
+  return new Map(all.map((c) => [c.id, c.parentId]));
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────
@@ -118,11 +127,7 @@ async function applyMove(
     throw new Error("A category cannot be its own parent");
   }
 
-  const all = await prisma.category.findMany({
-    where: { OR: [{ userId }, { userId: null }] },
-    select: { id: true, parentId: true },
-  });
-  const parentOf = new Map(all.map((c) => [c.id, c.parentId]));
+  const parentOf = await loadParentMap(userId);
 
   if (wouldCreateCycle(categoryId, newParentId, parentOf)) {
     throw new Error("A category cannot be moved under one of its own subcategories");
@@ -164,6 +169,218 @@ async function applyMove(
     select: { sortOrder: true },
   });
   data.sortOrder = (last?.sortOrder ?? -1) + 1;
+}
+
+/**
+ * Resolve the category ids a `list_transactions` filter should match: the
+ * category itself plus, unless the caller opts out, everything below it.
+ *
+ * Accepts an **inactive** category on purpose. `delete_category` is a soft
+ * delete, so transactions keep pointing at a deleted category and are invisible
+ * to the categorize inbox — filtering by it is the only way to find them again.
+ */
+export async function resolveCategoryFilter(
+  userId: string,
+  categoryId: string,
+  includeSubcategories: boolean,
+): Promise<{ ids: string[]; name: string; isActive: boolean }> {
+  const cat = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: { id: true, name: true, userId: true, isActive: true },
+  });
+  // Own category or a system default (userId null).
+  if (!cat || (cat.userId !== null && cat.userId !== userId)) {
+    throw new Error("Category not found");
+  }
+
+  const ids = includeSubcategories
+    ? subtreeIds(cat.id, await loadParentMap(userId))
+    : [cat.id];
+
+  return { ids, name: cat.name, isActive: cat.isActive };
+}
+
+/**
+ * Per-category transaction counts over the same set `list_transactions` returns,
+ * which is what makes the category tree auditable: an agent can see the empty
+ * categories, the ones holding three rows that should be merged away, and any
+ * soft-deleted category still holding transactions.
+ *
+ * Every visible category is listed, including those with a count of 0 — an empty
+ * category is a finding, and it cannot be one if it is missing from the answer.
+ */
+export async function categoryCountsForUser(
+  userId: string,
+  transactionWhere: Prisma.TransactionWhereInput,
+) {
+  const [grouped, cats] = await Promise.all([
+    prisma.transactionCategorization.groupBy({
+      by: ["categoryId"],
+      // A REJECTED categorization is one the user threw back, and the rest of
+      // the app reads such a row as uncategorized (buildUncategorizedWhere), so
+      // it must not be counted under its category here either.
+      where: { transaction: transactionWhere, status: { not: "REJECTED" } },
+      _count: { _all: true },
+    }),
+    prisma.category.findMany({
+      where: { OR: [{ userId }, { userId: null }] },
+      select: { id: true, name: true, parentId: true, kind: true, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+  ]);
+
+  const countOf = new Map(grouped.map((g) => [g.categoryId, g._count._all]));
+  const nameOf = new Map(cats.map((c) => [c.id, c.name]));
+
+  // An inactive category is listed only while it still holds rows — that is the
+  // stranded-transactions case worth seeing, not general noise.
+  const rows = cats
+    .filter((c) => c.isActive || countOf.has(c.id))
+    .map((c) => ({
+      categoryId: c.id,
+      category: c.name,
+      parentId: c.parentId,
+      parent: c.parentId ? (nameOf.get(c.parentId) ?? null) : null,
+      kind: c.kind,
+      count: countOf.get(c.id) ?? 0,
+      deleted: c.isActive ? undefined : true,
+    }));
+
+  rows.sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+  return rows;
+}
+
+/**
+ * Soft-delete one of the user's own categories and its subcategories, the same
+ * way the settings UI does (`isActive: false`, rows keep their foreign keys).
+ *
+ * Two things the UI leaves dangling are handled here, because an agent deleting
+ * a category cannot see the consequences the way a person clicking Delete can:
+ *
+ * - **Categorized transactions.** A soft-deleted category still holds them, and
+ *   they are invisible in the app: the categorize inbox only shows rows with no
+ *   categorization (or a REJECTED one). Deleting with transactions attached is
+ *   therefore refused unless the caller says what should happen to them —
+ *   `reassignToCategoryId` to move them, or `force` to strip the categorization
+ *   so they return to the inbox.
+ * - **Rules targeting it.** `runRules` filters on the rule's own `isActive`, not
+ *   on its target category, so a rule pointing at a deleted category would keep
+ *   quietly categorizing into it. Those rules are deactivated (reversible with
+ *   `update_rule`).
+ */
+export async function deleteCategoryForUser(
+  userId: string,
+  categoryId: string,
+  options: { reassignToCategoryId?: string; force?: boolean } = {},
+) {
+  const cat = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: { userId: true, name: true, isActive: true },
+  });
+  // Only the user's own categories are deletable (system defaults are shared).
+  if (!cat || cat.userId !== userId) throw new Error("Category not found");
+  if (!cat.isActive) throw new Error(`Category "${cat.name}" is already deleted`);
+
+  const ids = subtreeIds(categoryId, await loadParentMap(userId));
+
+  const { reassignToCategoryId, force } = options;
+  if (reassignToCategoryId !== undefined) {
+    if (ids.includes(reassignToCategoryId)) {
+      throw new Error(
+        "reassignToCategoryId is the category being deleted (or one of its subcategories)",
+      );
+    }
+    await assertOwnedCategory(userId, reassignToCategoryId);
+  }
+
+  const categorizationWhere = {
+    categoryId: { in: ids },
+    transaction: { userId },
+  } as const;
+
+  const [categorized, targetingRules, sourceRules, planItems, recurringSeries, budgetItems] =
+    await Promise.all([
+      prisma.transactionCategorization.count({ where: categorizationWhere }),
+      prisma.categoryRule.findMany({
+        where: { userId, categoryId: { in: ids }, isActive: true },
+        select: { id: true, name: true },
+      }),
+      prisma.categoryRule.count({
+        where: { userId, sourceCategoryId: { in: ids }, isActive: true },
+      }),
+      prisma.planItem.count({ where: { userId, categoryId: { in: ids } } }),
+      prisma.recurringSeries.count({ where: { userId, categoryId: { in: ids } } }),
+      prisma.budgetItem.count({ where: { categoryId: { in: ids }, budget: { userId } } }),
+    ]);
+
+  if (categorized > 0 && reassignToCategoryId === undefined && !force) {
+    throw new Error(
+      `${categorized} transaction(s) are categorized under "${cat.name}"` +
+        `${ids.length > 1 ? ` or its ${ids.length - 1} subcategory(ies)` : ""}. ` +
+        "Deleting would leave them in a deleted category, where the app cannot show " +
+        "them. Pass reassignToCategoryId to move them to another category, or " +
+        "force: true to uncategorize them (they go back to the categorize inbox).",
+    );
+  }
+
+  const moved = await prisma.$transaction(async (tx) => {
+    let count = 0;
+    if (categorized > 0 && reassignToCategoryId !== undefined) {
+      // Same MANUAL/APPROVED semantics as bulkCategorizeForUser — the move is a
+      // deliberate user decision, not a suggestion waiting for approval. The old
+      // rule link would now point at a rule targeting a different category, so
+      // it goes too (with the undo trail), the way deleteRuleForUser detaches.
+      ({ count } = await tx.transactionCategorization.updateMany({
+        where: categorizationWhere,
+        data: {
+          categoryId: reassignToCategoryId,
+          source: "MANUAL",
+          status: "APPROVED",
+          approvedAt: new Date(),
+          rejectedAt: null,
+          categoryRuleId: null,
+          previousCategoryId: null,
+          previousSource: null,
+        },
+      }));
+    } else if (categorized > 0) {
+      ({ count } = await tx.transactionCategorization.deleteMany({
+        where: categorizationWhere,
+      }));
+    }
+
+    if (targetingRules.length > 0) {
+      await tx.categoryRule.updateMany({
+        where: { id: { in: targetingRules.map((r) => r.id) } },
+        data: { isActive: false },
+      });
+    }
+
+    // Scoped by userId as well: a child of an own category is always own, but
+    // this keeps the write unable to touch a shared system category.
+    await tx.category.updateMany({
+      where: { id: { in: ids }, userId },
+      data: { isActive: false },
+    });
+
+    return count;
+  });
+
+  return {
+    id: categoryId,
+    name: cat.name,
+    deletedCategories: ids.length,
+    deletedSubcategories: ids.length - 1,
+    transactions:
+      reassignToCategoryId !== undefined
+        ? { reassignedTo: reassignToCategoryId, count: moved }
+        : { uncategorized: moved },
+    deactivatedRules: targetingRules,
+    // Left alone: these keep referencing the deleted category, and a rule whose
+    // source category is gone can no longer match anything (list_rules flags it
+    // as neverMatched after its next run).
+    stillReferencing: { rulesUsingAsSource: sourceRules, planItems, recurringSeries, budgetItems },
+  };
 }
 
 // ── Rules ─────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { wouldCreateCycle, depthOf, hasChildren } from "./hierarchy";
+import { wouldCreateCycle, depthOf, hasChildren, subtreeIds } from "./hierarchy";
 
 // transport
 //   └── car-insurance
@@ -65,6 +65,39 @@ describe("depthOf", () => {
 
   it("treats an unknown id as a root", () => {
     expect(depthOf("nope", tree)).toBe(0);
+  });
+});
+
+describe("subtreeIds", () => {
+  it("returns the category first, then its children", () => {
+    expect(subtreeIds("insurance", tree)).toEqual([
+      "insurance",
+      "home-insurance",
+      "life-insurance",
+    ]);
+  });
+
+  it("returns just the id for a leaf, and for an unknown id", () => {
+    expect(subtreeIds("car-insurance", tree)).toEqual(["car-insurance"]);
+    expect(subtreeIds("nope", tree)).toEqual(["nope"]);
+  });
+
+  it("walks deeper than two levels", () => {
+    const deep = new Map<string, string | null>([
+      ["a", null],
+      ["b", "a"],
+      ["c", "b"],
+      ["other", null],
+    ]);
+    expect(subtreeIds("a", deep)).toEqual(["a", "b", "c"]);
+  });
+
+  it("terminates on data that already contains a cycle", () => {
+    const broken = new Map<string, string | null>([
+      ["x", "y"],
+      ["y", "x"],
+    ]);
+    expect(subtreeIds("x", broken)).toEqual(["x", "y"]);
   });
 });
 

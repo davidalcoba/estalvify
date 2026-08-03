@@ -60,7 +60,6 @@ const navItems = [
         title: "Categorize",
         url: "/categorize",
         icon: Tag,
-        // Badge count will come from props in the future
       },
       {
         title: "Insights",
@@ -128,12 +127,25 @@ interface AppSidebarProps {
     image?: string | null;
   };
   pendingCategorizations?: number;
+  recurringToReview?: number;
   onSignOut: () => void;
 }
 
-export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppSidebarProps) {
+export function AppSidebar({
+  user,
+  pendingCategorizations = 0,
+  recurringToReview = 0,
+  onSignOut,
+}: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
+
+  // Outstanding work per route: transactions left to categorize, detected series
+  // left to review. Rendered as a count badge on that nav item.
+  const pendingByUrl: Record<string, number> = {
+    "/categorize": pendingCategorizations,
+    "/recurring": recurringToReview,
+  };
 
   const initials = user.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -185,6 +197,7 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                   const isActive =
                     pathname === item.url ||
                     (item.url !== "/dashboard" && pathname.startsWith(item.url));
+                  const pending = pendingByUrl[item.url] ?? 0;
 
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -200,12 +213,12 @@ export function AppSidebar({ user, pendingCategorizations = 0, onSignOut }: AppS
                               clicked item acknowledges the click immediately. */}
                           <NavItemIcon icon={item.icon} />
                           <span>{item.title}</span>
-                          {item.url === "/categorize" && pendingCategorizations > 0 && (
+                          {pending > 0 && (
                             <Badge
                               variant="brand"
                               className="ml-auto h-5 min-w-5 px-1 text-xs"
                             >
-                              {pendingCategorizations > 99 ? "99+" : pendingCategorizations}
+                              {pending > 99 ? "99+" : pending}
                             </Badge>
                           )}
                         </Link>

@@ -9,11 +9,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/app/generated/prisma";
 import { buildUncategorizedWhere } from "@/lib/categorize";
 import { bulkCategorizeForUser } from "@/lib/mcp/categorize";
 import {
   createCategoryForUser,
   updateCategoryForUser,
+  deleteCategoryForUser,
+  resolveCategoryFilter,
+  categoryCountsForUser,
   listRulesForUser,
   createRuleForUser,
   updateRuleForUser,
@@ -134,6 +138,16 @@ export function registerTools(server: McpServer): void {
         "supports uncategorized-only and a description search. For large ranges, " +
         "page with `offset` (skip N rows). The result includes a `pageInfo` with " +
         "the total matching count so you know whether to page.\n" +
+        "`categoryId` returns only what is filed under that category, INCLUDING its " +
+        "subcategories (set includeSubcategories: false for the category alone). It " +
+        "also accepts a deleted category, which is the only way to reach transactions " +
+        "stranded in one. Use it with limit: 1 to read a count off `pageInfo.total` " +
+        "without pulling rows.\n" +
+        "`categoryCounts: true` adds `categoryCounts`, the per-category count over the " +
+        "same filtered set — every visible category including those at 0, plus deleted " +
+        "categories that still hold rows (`deleted: true`), plus `uncategorized`. That " +
+        "is the audit view of the tree: empty categories, near-empty ones worth merging, " +
+        "and where a rule actually landed. Counts are not affected by limit/offset.\n" +
         "Each row returns both text fields, which matters when writing rules: " +
         "`description` holds the merchant, while `remittanceInfo` holds the bank's own " +
         "label — for BBVA card payments a merchant category such as \"PAGO CON TARJETA EN " +
@@ -142,6 +156,9 @@ export function registerTools(server: McpServer): void {
         "hand — run_rule will not overwrite MANUAL.",
       inputSchema: {
         uncategorizedOnly: z.boolean().optional(),
+        categoryId: z.string().optional(),
+        includeSubcategories: z.boolean().optional(),
+        categoryCounts: z.boolean().optional(),
         search: z.string().optional(),
         dateFrom: z
           .string()
@@ -156,10 +173,36 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (
-      { uncategorizedOnly, search, dateFrom, dateTo, limit, offset },
+      {
+        uncategorizedOnly,
+        categoryId,
+        includeSubcategories,
+        categoryCounts,
+        search,
+        dateFrom,
+        dateTo,
+        limit,
+        offset,
+      },
       extra,
     ) => {
       const userId = requireUserId(extra as ToolExtra);
+
+      let scope: { ids: string[]; name: string; isActive: boolean } | null = null;
+      try {
+        if (categoryId && uncategorizedOnly) {
+          throw new Error(
+            "categoryId and uncategorizedOnly are mutually exclusive — a transaction " +
+              "filed under a category is not uncategorized.",
+          );
+        }
+        if (categoryId) {
+          scope = await resolveCategoryFilter(userId, categoryId, includeSubcategories !== false);
+        }
+      } catch (err) {
+        return errorResult(err, "list_transactions failed");
+      }
+
       const base = uncategorizedOnly
         ? buildUncategorizedWhere(userId, search)
         : {
@@ -173,13 +216,19 @@ export function registerTools(server: McpServer): void {
       const valueDate: { gte?: Date; lte?: Date } = {};
       if (dateFrom) valueDate.gte = new Date(dateFrom);
       if (dateTo) valueDate.lte = new Date(dateTo);
-      const where =
-        dateFrom || dateTo ? { ...base, valueDate } : base;
+
+      // Sibling keys are ANDed by Prisma, so this composes with the { AND: [...] }
+      // that buildUncategorizedWhere returns.
+      const where = {
+        ...base,
+        ...(dateFrom || dateTo ? { valueDate } : {}),
+        ...(scope ? { categorization: { categoryId: { in: scope.ids } } } : {}),
+      };
 
       const take = limit ?? 50;
       const skip = offset ?? 0;
 
-      const [total, txs] = await Promise.all([
+      const [total, txs, counts] = await Promise.all([
         prisma.transaction.count({ where }),
         prisma.transaction.findMany({
           where,
@@ -191,6 +240,9 @@ export function registerTools(server: McpServer): void {
             bankAccount: { select: { name: true } },
           },
         }),
+        categoryCounts
+          ? categoryCountsForUser(userId, where as Prisma.TransactionWhereInput)
+          : null,
       ]);
 
       return json({
@@ -200,6 +252,23 @@ export function registerTools(server: McpServer): void {
           offset: skip,
           hasMore: skip + txs.length < total,
         },
+        ...(scope
+          ? {
+              filter: {
+                category: scope.name,
+                categoryIds: scope.ids,
+                ...(scope.isActive ? {} : { categoryDeleted: true }),
+              },
+            }
+          : {}),
+        ...(counts
+          ? {
+              categoryCounts: counts,
+              // Anything in the filtered set that no category claims: no
+              // categorization at all, or a REJECTED one.
+              uncategorized: total - counts.reduce((sum, c) => sum + c.count, 0),
+            }
+          : {}),
         transactions: txs.map((t) => ({
           id: t.id,
           date: t.valueDate.toISOString().slice(0, 10),
@@ -448,6 +517,48 @@ export function registerTools(server: McpServer): void {
         );
       } catch (err) {
         return errorResult(err, "update_category failed");
+      }
+    },
+  );
+
+  // ── delete_category ─────────────────────────────────────────────────────────
+  server.registerTool(
+    "delete_category",
+    {
+      description:
+        "Delete one of the user's own categories (system defaults can't be deleted). Its " +
+        "subcategories go with it. This is a soft delete: the category stops appearing " +
+        "everywhere in the app, but historical rows keep referencing it.\n" +
+        "If transactions are filed under it, the call is REFUSED unless you say what " +
+        "happens to them — otherwise they would sit in a deleted category where the app " +
+        "cannot show them (the categorize inbox only picks up transactions with no " +
+        "category). Either pass `reassignToCategoryId` to move them to another category " +
+        "(they become MANUAL/APPROVED and lose their rule link, so a rule run won't undo the " +
+        "move), " +
+        "or `force: true` to strip their categorization and send them back to the " +
+        "categorize inbox. Check the count first with " +
+        "list_transactions({categoryId, limit: 1}).\n" +
+        "Rules TARGETING the category are deactivated, because a rule keeps running off its " +
+        "own isActive flag and would otherwise go on categorizing into a deleted category — " +
+        "the response lists them and update_rule can re-enable them against another " +
+        "category. Rules using it as `sourceCategoryId`, plan items, recurring series and " +
+        "budget items are left untouched and only reported.\n" +
+        "To retire a category without deleting anything, rename it or move its " +
+        "transactions with bulk_categorize instead.",
+      inputSchema: {
+        categoryId: z.string(),
+        reassignToCategoryId: z.string().optional(),
+        force: z.boolean().optional(),
+      },
+    },
+    async ({ categoryId, reassignToCategoryId, force }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await deleteCategoryForUser(userId, categoryId, { reassignToCategoryId, force }),
+        );
+      } catch (err) {
+        return errorResult(err, "delete_category failed");
       }
     },
   );

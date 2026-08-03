@@ -8,10 +8,26 @@
 > como un PR independiente siguiendo `PLAYBOOK_NEW_FEATURE.md`, y **marca la fase como
 > hecha aquí** en el mismo cambio.
 
-**Última actualización:** 2026-08-02 · **Fase en curso:** ninguna ·
+**Última actualización:** 2026-08-03 · **Fase en curso:** ninguna ·
 **Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
+
+> **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
+> `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
+> `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por
+> categoría** del mismo conjunto filtrado: todas las categorías visibles **incluidas las
+> que están a cero**, las borradas que aún retienen transacciones, y el total sin
+> categorizar. Sin esos conteos el árbol no se podía auditar desde un cliente MCP — una
+> categoría vacía o casi vacía solo se ve como ausencia. Un `REJECTED` cuenta como sin
+> categorizar, igual que en `buildUncategorizedWhere`. Y hay `delete_category`: el mismo
+> borrado suave de ajustes (`isActive: false`, categoría + subcategorías) pero **se niega**
+> mientras haya transacciones dentro — quedarían en una categoría borrada, invisibles
+> también para la bandeja de categorizar — salvo que se pase `reassignToCategoryId` (las
+> mueve, MANUAL/APPROVED) o `force: true` (les quita la categorización y vuelven a la
+> bandeja). Las reglas que **apuntan** a la categoría se desactivan, porque `runRules` filtra
+> por el `isActive` de la regla y nunca por su categoría destino: seguirían categorizando
+> dentro de algo borrado.
 
 > **Post-roadmap — `Category.kind` y notificaciones.** Todo importe se deriva ahora de
 > `kind` (`EXPENSE`/`INCOME`/`TRANSFER`), no de listas de nombres: el gasto cuenta solo
@@ -49,11 +65,13 @@ recurrentes, etc.).
 > **Post-roadmap — Plan (planificador manual de flujo de caja).** El antiguo *Budget*
 > (un importe por categoría y mes) se ha sustituido por **Plan** (`/plan`): el usuario
 > declara a mano ingresos y gastos previstos, **varios por categoría** y con **cadencias**
-> (semanal/mensual/trimestral/anual/puntual). El total mensual estable de una categoría es
+> (semanal/mensual/trimestral/anual/puntual) y **fecha de fin opcional** (`endDate`,
+> inclusiva del mes: un préstamo o contrato deja de contar a partir de ahí, pero la
+> entrada sigue visible como "ended"). El total mensual estable de una categoría es
 > su **límite** (barras real-vs-previsto reutilizando `lib/budget/budget-progress`). El
 > **Forecast** proyecta el saldo desde el Plan (`projectBalancesVariable` + `plannedForMonth`),
-> con fallback a la media histórica si no hay Plan. Los recurrentes confirmados tienen
-> **"Add to Plan"**. Modelo `PlanItem` + enum `PlanCadence`; lógica pura en `lib/plan/`.
+> con fallback a la media histórica si no hay Plan. Confirmar un recurrente lo añade al
+> Plan automáticamente. Modelo `PlanItem` + enum `PlanCadence`; lógica pura en `lib/plan/`.
 > `/budget` redirige a `/plan` (tablas `budgets`/`budget_items` intactas pero sin uso).
 
 ---
@@ -73,7 +91,7 @@ recurrentes, etc.).
 | **Dashboard** | ✅ Estable | KPIs reales (patrimonio, ingresos/gastos del mes, por categorizar) + gráfica 6 meses + top categorías: `app/(app)/dashboard/page.tsx`, `lib/analytics/trends.ts`, `components/reports/` |
 | **Presupuestos** | ✅ Estable | Presupuesto mensual por categoría vs gasto real: `app/(app)/budget/`, `lib/budget/`, `lib/analytics/spending.ts`, `components/budget/` |
 | **Reports** | ✅ Estable | Tendencia 12 meses (ingresos vs gastos), donut por categoría y top comercios con **Recharts**: `app/(app)/reports/page.tsx`, `components/reports/` |
-| Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
+| Gastos recurrentes / suscripciones | ✅ Estable | Detección automática desde el histórico + confirmar/ignorar (confirmar añade la serie al Plan), contador de pendientes en el sidebar: `app/(app)/recurring/`, `lib/recurring/`, `components/recurring/`, modelo `RecurringSeries` |
 | Previsión (forecast) | ✅ Estable | Proyección de saldo/gasto + alerta de saldo bajo: `app/(app)/forecast/`, `lib/analytics/forecast.ts`, `components/reports/balance-forecast-chart.tsx` |
 | Notificaciones | ✅ Estable (in-app) | Centro in-app: campana en el header + generación idempotente por cron: `lib/notifications/`, `components/notifications/`, `app/(app)/notifications/`, modelo `Notification`. Push/email pendientes |
 | Recomendaciones con IA | ✅ Estable (apagada) | Wrapper agnóstico de proveedor + página de insights: `lib/ai/`, `app/(app)/insights/`, `components/insights/`. Envía solo agregados anonimizados. Claude por defecto (`AI_PROVIDER`). **`ANTHROPIC_API_KEY` no está puesta en ningún entorno de Vercel**, así que en producción `/insights` no da recomendaciones: muestra el estado "no configurado" (`app/(app)/insights/actions.ts` → `status: "not_configured"`). Encenderla es solo poner la variable; el código no necesita cambios |
@@ -145,8 +163,10 @@ cambio). Marca el estado aquí al terminar.
 - [x] **Fase 2 — Recurrentes + suscripciones** ✅ — modelo `RecurringSeries`, detector puro
   en `lib/recurring/` (normalización de comercio, clasificación de cadencia con check de
   consistencia) con tests, y `/recurring` con detección en vivo + confirmar/ignorar y
-  resumen de coste mensual. Falta (fases futuras): asignar categoría a una serie desde la
-  UI y persistir snapshots de forma proactiva en el sync.
+  resumen de coste mensual. Confirmar una serie la añade al Plan automáticamente
+  (`PlanItem.recurringMerchantKey`, enlace 1:1; ignorar/deshacer la retira). Falta (fases
+  futuras): asignar categoría a una serie desde la UI —hoy un gasto sin categoría no se
+  planifica— y persistir snapshots de forma proactiva en el sync.
 - [x] **Fase 3 — Centro de notificaciones in-app** ✅ — modelo `Notification`, campana en
   el header con badge de no leídas, generadores puros (presupuesto excedido/cercano y
   cargo recurrente próximo) idempotentes por `(userId, dedupeKey)`, ejecutados en el cron

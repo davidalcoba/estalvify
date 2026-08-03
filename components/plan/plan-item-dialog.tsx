@@ -82,12 +82,14 @@ function PlanForm({
   const [cadence, setCadence] = useState<PlanCadence>(item?.cadence ?? "MONTHLY");
   const [dayOfMonth, setDayOfMonth] = useState(item?.dayOfMonth != null ? String(item.dayOfMonth) : "");
   const [onDate, setOnDate] = useState(item?.onDate ?? "");
+  const [endDate, setEndDate] = useState(item?.endDate ?? "");
 
   const parsedAmount = Number(amount);
   const amountOk = amount !== "" && Number.isFinite(parsedAmount) && parsedAmount >= 0;
   const categoryOk = isIncome || categoryId !== "";
   const dateOk = cadence !== "ONE_OFF" || /^\d{4}-\d{2}-\d{2}$/.test(onDate);
-  const canSave = amountOk && categoryOk && dateOk;
+  const endDateOk = endDate === "" || /^\d{4}-\d{2}-\d{2}$/.test(endDate);
+  const canSave = amountOk && categoryOk && dateOk && endDateOk;
 
   const showDayAnchor = DAY_ANCHOR_CADENCES.includes(cadence);
   const noun = isIncome ? "income" : "expense";
@@ -103,6 +105,7 @@ function PlanForm({
       cadence,
       dayOfMonth: cadence === "ONE_OFF" ? null : Number.isFinite(day as number) ? day : null,
       onDate: cadence === "ONE_OFF" ? onDate : null,
+      endDate: cadence === "ONE_OFF" || endDate === "" ? null : endDate,
     });
   }
 
@@ -183,21 +186,34 @@ function PlanForm({
             />
           </div>
         ) : (
-          showDayAnchor && (
+          <div className="grid grid-cols-2 gap-3">
+            {showDayAnchor && (
+              <div className="space-y-1.5">
+                <Label>Day of month (optional)</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={31}
+                  value={dayOfMonth}
+                  onChange={(e) => setDayOfMonth(e.target.value)}
+                  placeholder="e.g. 1"
+                  aria-label="Day of month"
+                />
+              </div>
+            )}
+            {/* Open-ended unless the user sets a last date — a loan's final
+                payment, a contract that expires. */}
             <div className="space-y-1.5">
-              <Label>Day of month (optional)</Label>
+              <Label>Ends on (optional)</Label>
               <Input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={31}
-                value={dayOfMonth}
-                onChange={(e) => setDayOfMonth(e.target.value)}
-                placeholder="e.g. 1"
-                aria-label="Day of month"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                aria-label="End date"
               />
             </div>
-          )
+          </div>
         )}
       </div>
 

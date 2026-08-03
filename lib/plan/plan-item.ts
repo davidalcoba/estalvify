@@ -18,6 +18,18 @@ export interface PlanItemInput {
   cadence: PlanCadence;
   /** ISO date "YYYY-MM-DD" for ONE_OFF items; null otherwise. */
   onDate?: string | null;
+  /**
+   * ISO date "YYYY-MM-DD" the item stops applying (a loan's last payment, a
+   * contract that expires), or null/absent for open-ended. Inclusive of its own
+   * month — the item counts in the month the date falls in, and nothing after.
+   */
+  endDate?: string | null;
+}
+
+/** A calendar month, used as the reference point for "is this still current?". */
+export interface YearMonth {
+  year: number;
+  month: number;
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -41,12 +53,26 @@ function isoYearMonth(iso: string | null | undefined): { year: number; month: nu
 }
 
 /**
+ * Whether the item still applies in a given month: true when it is open-ended,
+ * or its `endDate` falls in that month or later. An item that ended in the past
+ * stays in the Plan as a record but stops counting anywhere.
+ */
+export function isActiveInMonth(item: PlanItemInput, year: number, month: number): boolean {
+  const end = isoYearMonth(item.endDate);
+  if (!end) return true;
+  return end.year > year || (end.year === year && end.month >= month);
+}
+
+/**
  * Signed amount a plan item contributes to a specific calendar month's net
  * (income positive, expense negative). Periodic items contribute their monthly
- * equivalent every month; a ONE_OFF contributes its full amount only in the month
- * of its `onDate`. Used to build the Forecast's per-month net.
+ * equivalent every month up to their `endDate`; a ONE_OFF contributes its full
+ * amount only in the month of its `onDate`. Used to build the Forecast's
+ * per-month net.
  */
 export function plannedForMonth(item: PlanItemInput, year: number, month: number): number {
+  if (!isActiveInMonth(item, year, month)) return 0;
+
   let amount: number;
   if (item.cadence === "ONE_OFF") {
     const ym = isoYearMonth(item.onDate);
@@ -60,13 +86,18 @@ export function plannedForMonth(item: PlanItemInput, year: number, month: number
 
 /**
  * Steady monthly expense total per category (DEBIT, periodic items with a
- * category). This is each category's planned limit; ONE_OFF items are excluded
- * because a one-off is not a recurring monthly cap.
+ * category) as of the reference month `ref`. This is each category's planned
+ * limit; ONE_OFF items are excluded because a one-off is not a recurring monthly
+ * cap, and so are items that ended before `ref`.
  */
-export function plannedMonthlyByCategory(items: PlanItemInput[]): Record<string, number> {
+export function plannedMonthlyByCategory(
+  items: PlanItemInput[],
+  ref: YearMonth
+): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const item of items) {
     if (item.direction !== "DEBIT" || item.cadence === "ONE_OFF" || !item.categoryId) continue;
+    if (!isActiveInMonth(item, ref.year, ref.month)) continue;
     const monthly = planMonthlyEquivalent(item.amount, item.cadence);
     totals[item.categoryId] = round((totals[item.categoryId] ?? 0) + monthly);
   }
@@ -80,14 +111,16 @@ export interface PlanTotals {
 }
 
 /**
- * Steady monthly income / expenses / net over periodic items (the "am I planning
- * to save?" figure). ONE_OFF items are excluded from the steady monthly view.
+ * Steady monthly income / expenses / net over the periodic items in force in the
+ * reference month `ref` (the "am I planning to save?" figure). ONE_OFF items are
+ * excluded from the steady monthly view, as are items that already ended.
  */
-export function planTotals(items: PlanItemInput[]): PlanTotals {
+export function planTotals(items: PlanItemInput[], ref: YearMonth): PlanTotals {
   let monthlyIncome = 0;
   let monthlyExpenses = 0;
   for (const item of items) {
     if (item.cadence === "ONE_OFF") continue;
+    if (!isActiveInMonth(item, ref.year, ref.month)) continue;
     const monthly = planMonthlyEquivalent(item.amount, item.cadence);
     if (item.direction === "CREDIT") monthlyIncome += monthly;
     else monthlyExpenses += monthly;

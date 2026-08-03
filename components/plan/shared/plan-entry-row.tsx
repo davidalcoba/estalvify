@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import type { PlanEntryVM } from "@/lib/plan/plan-dto";
@@ -41,11 +41,27 @@ export function PlanEntryRow({
   if (entry.cadence !== "MONTHLY" && entry.cadence !== "ONE_OFF") {
     metaParts.push(`≈ ${formatCurrency(entry.monthly, currency, locale)}/mo`);
   }
+  if (entry.endDate) {
+    const until = formatDate(entry.endDate, dateLocale, "UTC", {
+      month: "short",
+      year: "numeric",
+    });
+    metaParts.push(entry.ended ? `ended ${until}` : `until ${until}`);
+  }
 
   return (
-    <div className="flex items-center gap-3 py-2">
+    // An ended item is kept as a record but counts nowhere, so it reads as inactive.
+    <div className={`flex items-center gap-3 py-2 ${entry.ended ? "opacity-60" : ""}`}>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{primary}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          {entry.fromRecurring && (
+            <Repeat
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="From a confirmed recurring series"
+            />
+          )}
+          <span className="truncate">{primary}</span>
+        </p>
         <p className="truncate text-xs text-muted-foreground">{metaParts.join(" · ")}</p>
       </div>
       <span

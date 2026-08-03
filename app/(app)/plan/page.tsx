@@ -37,6 +37,8 @@ export default async function PlanPage() {
         cadence: true,
         dayOfMonth: true,
         onDate: true,
+        endDate: true,
+        recurringMerchantKey: true,
       },
     }),
     prisma.transaction.findMany({
@@ -56,6 +58,7 @@ export default async function PlanPage() {
     items: planItems,
     spendingByCategory,
     categories,
+    ref: { year, month },
   });
 
   return (

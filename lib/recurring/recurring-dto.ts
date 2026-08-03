@@ -13,17 +13,26 @@ export interface StoredRecurring {
 
 export interface RecurringItem extends RecurringCandidate {
   status: RecurringDecision;
+  /** A Plan item is linked to this series (confirming adds one automatically). */
+  inPlan: boolean;
 }
 
-/** Overlay stored confirm/ignore decisions onto detected candidates by key. */
+/**
+ * Overlay stored confirm/ignore decisions onto detected candidates by key, plus
+ * which series already mirror a Plan item (`plannedKeys` = the linked plan items'
+ * `recurringMerchantKey`s).
+ */
 export function mergeRecurring(
   candidates: RecurringCandidate[],
-  stored: StoredRecurring[]
+  stored: StoredRecurring[],
+  plannedKeys: string[] = []
 ): RecurringItem[] {
   const byKey = new Map(stored.map((s) => [s.merchantKey, s.status]));
+  const planned = new Set(plannedKeys);
   return candidates.map((candidate) => ({
     ...candidate,
     status: byKey.get(candidate.merchantKey) ?? "SUGGESTED",
+    inPlan: planned.has(candidate.merchantKey),
   }));
 }
 

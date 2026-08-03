@@ -24,7 +24,7 @@ export default async function RecurringPage() {
   cutoff.setUTCMonth(cutoff.getUTCMonth() - LOOKBACK_MONTHS);
   cutoff.setUTCHours(0, 0, 0, 0);
 
-  const [transactions, stored] = await Promise.all([
+  const [transactions, stored, plannedItems] = await Promise.all([
     prisma.transaction.findMany({
       where: { userId, valueDate: { gte: cutoff } },
       select: {
@@ -46,6 +46,11 @@ export default async function RecurringPage() {
       where: { userId },
       select: { merchantKey: true, status: true },
     }),
+    // Plan items created from a series — tells each row whether it is in the Plan.
+    prisma.planItem.findMany({
+      where: { userId, recurringMerchantKey: { not: null } },
+      select: { recurringMerchantKey: true },
+    }),
   ]);
 
   const rows: DetectionInput[] = transactions.map((tx) => ({
@@ -59,8 +64,12 @@ export default async function RecurringPage() {
     categoryColor: tx.categorization?.category?.color ?? null,
   }));
 
+  const plannedKeys = plannedItems.flatMap((p) =>
+    p.recurringMerchantKey ? [p.recurringMerchantKey] : []
+  );
+
   const candidates = detectRecurringSeries(rows);
-  const items = mergeRecurring(candidates, stored);
+  const items = mergeRecurring(candidates, stored, plannedKeys);
   const summary = summarizeRecurring(items);
 
   return (

@@ -363,14 +363,34 @@ stored hashed.
 - `lib/mcp/tools.ts` — tool registry. **Every tool derives `userId` from the
   token and scopes all access to it** (same multi-user rule as the rest of the
   app). Tools reuse `lib/*` logic. Reads: `list_transactions` (date-range +
-  pagination — returns both `description` and `remittanceInfo` plus the
-  categorization source, which is what makes a misfiring rule debuggable),
-  `list_categories`, `list_accounts`, `get_budgets`, `list_rules` (with run
-  metrics), `test_rule` (evaluate conditions without saving). Writes:
-  `bulk_categorize` (`lib/mcp/categorize.ts`, capped), category create/edit and
-  rule create/edit via `lib/mcp/manage.ts` (parameterized by userId), `run_rule`
-  (supports `dryRun` and `force`), `undo_rule_run` and `delete_rule` via
-  `lib/rules/apply.ts`, `sync_connections` (enqueues).
+  pagination + **category filter and per-category counts** — returns both
+  `description` and `remittanceInfo` plus the categorization source, which is what
+  makes a misfiring rule debuggable), `list_categories`, `list_accounts`,
+  `get_budgets`, `list_rules` (with run metrics), `test_rule` (evaluate conditions
+  without saving). Writes: `bulk_categorize` (`lib/mcp/categorize.ts`, capped),
+  category create/edit/delete and rule create/edit via `lib/mcp/manage.ts`
+  (parameterized by userId), `run_rule` (supports `dryRun` and `force`),
+  `undo_rule_run` and `delete_rule` via `lib/rules/apply.ts`, `sync_connections`
+  (enqueues).
+- **Auditing the category tree from MCP.** `list_transactions` takes a
+  `categoryId` (subcategories included by default, via the pure `subtreeIds` in
+  `lib/categories/hierarchy.ts`) and `categoryCounts: true`, which adds the count
+  per category over the same filtered set — every visible category *including
+  those at zero*, deleted categories that still hold rows, and an `uncategorized`
+  total. Without those counts the tree can't be audited from a client at all: an
+  empty or near-empty category is only visible as an absence. `REJECTED`
+  categorizations count as uncategorized, matching `buildUncategorizedWhere`.
+- **`delete_category`** (`deleteCategoryForUser`) is the settings soft delete
+  (`isActive: false`, category + subcategories) plus the two things a client can't
+  see for itself. It **refuses** while transactions are filed under the category —
+  a soft-deleted category still holds them and the categorize inbox never picks
+  them up, so they would be stranded — unless the caller passes
+  `reassignToCategoryId` (moved, MANUAL/APPROVED, rule link dropped) or
+  `force: true` (categorization deleted, so they return to the inbox). Rules
+  *targeting* the category are **deactivated**, because `runRules` filters on the
+  rule's own `isActive` and never on its target category, so they would otherwise
+  keep categorizing into a deleted category. Plan items, recurring series, budget
+  items and rules using it as `sourceCategoryId` are only reported.
 
 ### Access control
 
@@ -418,6 +438,23 @@ Rules:
 - Keep UI responsive while jobs run in background
 - Reflect processing state to users
 - Ensure retries are safe and idempotent where possible
+
+## Cached Reads
+
+Pages read live from Prisma. The one exception is a value the **app shell**
+needs on every navigation but is too expensive to recompute there: the Recurring
+"to review" count, which requires running detection over ~13 months of
+transactions (`lib/recurring/review-count.ts`).
+
+Rules for that kind of value:
+
+- Wrap the computation in `unstable_cache` with the `userId` in the key parts —
+  never cache anything user-scoped without it.
+- Tag the entry (`recurring-review-count:<userId>`) and expire it from the server
+  action that invalidates it, via `updateTag` (immediate, read-your-own-writes).
+  `revalidateTag` in Next 16 needs a cache-life profile as its second argument.
+- Give it a TTL as well, for the paths that change the value without going
+  through an action (a sync importing new transactions).
 
 ## Server to Client DTO Boundary
 
