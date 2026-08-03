@@ -60,6 +60,13 @@ export async function POST(request: NextRequest) {
     // (ts-<hash>.vercel.app) that will never be registered, so prefer a fixed
     // ENABLE_BANKING_REDIRECT_URI when set and only fall back to the request
     // origin (e.g. localhost in dev, where that origin is the registered one).
+    //
+    // The flow can therefore only *complete* where the deployment's own origin is
+    // the registered URI: the callback looks the `state` up in its own database,
+    // and production and preview are different Neon branches. Hence a per-branch
+    // value for `preview` (see .env.example) — and hence a reconnect started on a
+    // feature-branch preview lands on production and dies there with
+    // `connection_not_found`.
     const redirectUri =
       process.env.ENABLE_BANKING_REDIRECT_URI ??
       `${request.nextUrl.origin}/api/banking/callback`;

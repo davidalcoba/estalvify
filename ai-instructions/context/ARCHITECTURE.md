@@ -85,6 +85,19 @@ migrations — `prisma.config.ts`):
 | `DATABASE_URL` | `development` | —           | Neon `development`, pooled          |
 | `DIRECT_URL`   | `development` | —           | Neon `development`, direct          |
 
+One more var is branch-scoped for the same reason:
+`ENABLE_BANKING_REDIRECT_URI` on target `preview` with `gitBranch: preview` points
+at `https://estalvify-preview.vercel.app/api/banking/callback`, while the unscoped
+entry keeps the production callback. PSD2 requires the redirect URI to match a
+registered value exactly, so the bank flow can only complete on a deployment whose
+origin *is* that registered URI: without the branch-scoped value, a reconnect
+started on preview stores its `PENDING_REAUTH` row in Neon `preview`, the bank
+returns the user to production, and production looks the `state` up in its own
+database and answers `connection_not_found` — the "session expired" that never
+expired. Both URLs must stay registered on the Enable Banking side; the Vercel
+value alone fails earlier, at session creation. Feature-branch previews still send
+the production callback, since a per-deploy origin can never be registered.
+
 Every target is paired: a `DIRECT_URL` always names the same Neon branch as the
 `DATABASE_URL` next to it, so the database a build migrates is the one the app
 then reads.
