@@ -13,6 +13,18 @@
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
 
+> **Post-roadmap — Alertas de series recurrentes (cambio de importe y serie ausente).**
+> Las alertas se calculan con **detección en vivo** en el cron de notificaciones, no desde
+> los snapshots de `recurringSeries` (que solo se escribían al confirmar y quedaban
+> obsoletos): `RECURRING_AMOUNT_CHANGE` cuando el último cargo de una serie confirmada se
+> desvía >15% de la mediana de los cargos anteriores (`lib/recurring/alerts.ts`, puro), y
+> `RECURRING_MISSED` cuando el cargo esperado no llega pasados 4 días de gracia. El cron
+> además **refresca los snapshots** (importe medio, lastSeenAt, nextExpectedDate, cadencia)
+> y los plan items espejados (`recurringMerchantKey`), así el Forecast sigue la realidad
+> (una subida de alquiler incluida) y `RECURRING_UPCOMING` deja de clavarse en la fecha del
+> día de la confirmación. `RecurringCandidate` lleva ahora `history` (fecha+importe por
+> ocurrencia), que alimenta la desviación y la ventana de días de la previsión de caja.
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

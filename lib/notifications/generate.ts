@@ -5,7 +5,6 @@ import type { Prisma } from "@/app/generated/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import {
   currentYearMonth,
-  monthRange,
   buildMonthlySpendingWhere,
   aggregateSpendingByCategory,
 } from "@/lib/analytics/spending";
@@ -26,15 +25,31 @@ import {
   type PlanItemInput,
 } from "@/lib/plan/plan-item";
 import {
+  detectRecurringSeries,
+  type DetectionInput,
+  type RecurringCandidate,
+} from "@/lib/recurring/detect";
+import {
+  detectAmountDeviation,
+  detectMissedSeries,
+} from "@/lib/recurring/alerts";
+import {
   budgetNotifications,
   upcomingRecurringNotifications,
+  recurringAmountChangeNotifications,
+  missedRecurringNotifications,
   lowBalanceNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
+  type AmountChangeInput,
+  type MissedSeriesInput,
   type NotificationSpec,
 } from "./generators";
 
 const FORECAST_MONTHS = 6;
+
+// Keep in sync with the Recurring page / review-count detection window.
+const DETECTION_LOOKBACK_MONTHS = 13;
 
 /** Today's date (YYYY-MM-DD) in a given IANA timezone. */
 function todayInTimezone(timezone: string, now: Date = new Date()): string {
@@ -63,7 +78,11 @@ export async function generateNotificationsForUser(
   const prevMonth =
     month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const fullMonths = lastNMonths(prevMonth.year, prevMonth.month, 6);
-  const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
+
+  // Longer window for recurring detection (see DETECTION_LOOKBACK_MONTHS).
+  const detectionStart = new Date();
+  detectionStart.setUTCMonth(detectionStart.getUTCMonth() - DETECTION_LOOKBACK_MONTHS);
+  detectionStart.setUTCHours(0, 0, 0, 0);
 
   const [
     planItems,
@@ -98,13 +117,14 @@ export async function generateNotificationsForUser(
       select: { id: true, name: true, color: true, parentId: true },
     }),
     prisma.recurringSeries.findMany({
-      where: { userId, status: "CONFIRMED", nextExpectedDate: { not: null } },
+      where: { userId, status: "CONFIRMED" },
       select: {
         merchantKey: true,
         displayName: true,
         direction: true,
         averageAmount: true,
         nextExpectedDate: true,
+        lastSeenAt: true,
       },
     }),
     prisma.bankAccount.findMany({
@@ -120,14 +140,20 @@ export async function generateNotificationsForUser(
       },
     }),
     prisma.transaction.findMany({
-      where: { userId, valueDate: { gte: trendStart } },
+      // One scan covers both consumers: the income/expense trend (last 6 full
+      // months) and recurring detection, which wants the longer window so a
+      // quarterly/yearly series still has enough occurrences.
+      where: { userId, valueDate: { gte: detectionStart } },
       select: {
         amount: true,
         direction: true,
         valueDate: true,
+        description: true,
+        remittanceInfo: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
       },
+      orderBy: { valueDate: "asc" },
     }),
     prisma.bankConnection.findMany({
       // Every status: a lapsed consent is exactly the case worth reporting.
@@ -185,6 +211,96 @@ export async function generateNotificationsForUser(
 
   const today = todayInTimezone(prefs.timezone);
 
+  // ── Recurring series: live detection ────────────────────────────────────
+  // Stored rows are snapshots from the moment the user confirmed; their dates
+  // and amounts go stale as charges keep arriving. Alerts are computed from a
+  // fresh detection pass, and the stored snapshots (plus their mirrored plan
+  // items) are refreshed on the way so the rest of the app stays accurate.
+  const detectionRows: DetectionInput[] = trendTx.map((t) => ({
+    amount: Number(t.amount.toString()),
+    direction: t.direction,
+    valueDate: t.valueDate.toISOString(),
+    description: t.description,
+    remittanceInfo: t.remittanceInfo,
+  }));
+  const candidates = detectRecurringSeries(detectionRows);
+  const liveByKey = new Map<string, RecurringCandidate>(
+    candidates.map((c) => [c.merchantKey, c]),
+  );
+
+  const storedByKey = new Map(recurring.map((r) => [r.merchantKey, r]));
+  const liveConfirmed = candidates.filter((c) => storedByKey.has(c.merchantKey));
+
+  const snapshotUpdates = liveConfirmed.filter((c) => {
+    const stored = storedByKey.get(c.merchantKey)!;
+    return (
+      Number(stored.averageAmount.toString()) !== c.averageAmount ||
+      (stored.lastSeenAt?.toISOString().slice(0, 10) ?? null) !== c.lastSeen ||
+      (stored.nextExpectedDate?.toISOString().slice(0, 10) ?? null) !==
+        c.nextExpected
+    );
+  });
+  if (snapshotUpdates.length > 0) {
+    await prisma.$transaction(
+      snapshotUpdates.flatMap((c) => [
+        prisma.recurringSeries.update({
+          where: { userId_merchantKey: { userId, merchantKey: c.merchantKey } },
+          data: {
+            averageAmount: c.averageAmount,
+            cadence: c.cadence,
+            lastSeenAt: new Date(`${c.lastSeen}T00:00:00Z`),
+            nextExpectedDate: new Date(`${c.nextExpected}T00:00:00Z`),
+          },
+        }),
+        // Auto-linked plan items mirror the series; keep the mirror true so the
+        // forecast and category limits track reality (a rent raise included).
+        prisma.planItem.updateMany({
+          where: { userId, recurringMerchantKey: c.merchantKey },
+          data: { amount: c.averageAmount, cadence: c.cadence },
+        }),
+      ]),
+    );
+  }
+
+  const amountChanges: AmountChangeInput[] = [];
+  const missedSeries: MissedSeriesInput[] = [];
+  for (const c of liveConfirmed) {
+    const deviation = detectAmountDeviation(c.history);
+    if (deviation) {
+      amountChanges.push({
+        merchantKey: c.merchantKey,
+        displayName: c.displayName,
+        ...deviation,
+      });
+    }
+    const missed = detectMissedSeries(c.nextExpected, today);
+    if (missed) {
+      missedSeries.push({
+        merchantKey: c.merchantKey,
+        displayName: c.displayName,
+        direction: c.direction,
+        averageAmount: c.averageAmount,
+        ...missed,
+      });
+    }
+  }
+
+  // Upcoming charges: live dates where detection still sees the series, stored
+  // snapshot as fallback (a yearly series may not have enough occurrences in
+  // the detection window to re-detect, but its stored date is still real).
+  const upcomingInputs = recurring.map((r) => {
+    const live = liveByKey.get(r.merchantKey);
+    return {
+      merchantKey: r.merchantKey,
+      displayName: r.displayName,
+      direction: r.direction,
+      averageAmount: live?.averageAmount ?? Number(r.averageAmount.toString()),
+      nextExpectedDate:
+        live?.nextExpected ??
+        (r.nextExpectedDate ? r.nextExpectedDate.toISOString().slice(0, 10) : null),
+    };
+  });
+
   // Project the balance forward and alert if it dips below zero. Plan-driven when
   // there is a Plan; otherwise the historical average.
   const netWorth = accounts.reduce(
@@ -229,19 +345,17 @@ export async function generateNotificationsForUser(
       prefs.locale,
     ),
     ...upcomingRecurringNotifications(
-      recurring.map((r) => ({
-        merchantKey: r.merchantKey,
-        displayName: r.displayName,
-        direction: r.direction,
-        averageAmount: Number(r.averageAmount.toString()),
-        nextExpectedDate: r.nextExpectedDate
-          ? r.nextExpectedDate.toISOString().slice(0, 10)
-          : null,
-      })),
+      upcomingInputs,
       today,
       prefs.currency,
       prefs.locale,
     ),
+    ...recurringAmountChangeNotifications(
+      amountChanges,
+      prefs.currency,
+      prefs.locale,
+    ),
+    ...missedRecurringNotifications(missedSeries, prefs.currency, prefs.locale),
     ...lowBalanceNotifications(
       projected,
       0,

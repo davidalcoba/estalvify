@@ -98,6 +98,75 @@ export function upcomingRecurringNotifications(
   return specs;
 }
 
+export interface AmountChangeInput {
+  merchantKey: string;
+  displayName: string;
+  latestAmount: number;
+  latestDate: string; // YYYY-MM-DD
+  baselineAmount: number;
+  relativeChange: number; // signed fraction, +0.17 = up 17%
+}
+
+/**
+ * A recurring charge came in noticeably above/below its usual amount (an
+ * insurance premium silently raised, a promo price expiring). One alert per
+ * deviating charge: the key embeds the charge date, so the same deviation never
+ * re-alerts but next month's charge gets a fresh look.
+ */
+export function recurringAmountChangeNotifications(
+  deviations: AmountChangeInput[],
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return deviations.map((d) => {
+    const pct = Math.round(Math.abs(d.relativeChange) * 100);
+    const rose = d.relativeChange > 0;
+    return {
+      type: "RECURRING_AMOUNT_CHANGE" as NotificationType,
+      severity: (rose ? "WARNING" : "INFO") as NotificationSeverity,
+      title: `${d.displayName} ${rose ? "went up" : "went down"} ${pct}%`,
+      body: `The latest charge was ${formatCurrency(d.latestAmount, currency, locale)}, against a usual ${formatCurrency(
+        d.baselineAmount,
+        currency,
+        locale
+      )}.`,
+      dedupeKey: `recurring-amount:${d.merchantKey}:${d.latestDate}`,
+      metadata: { merchantKey: d.merchantKey, date: d.latestDate },
+    };
+  });
+}
+
+export interface MissedSeriesInput {
+  merchantKey: string;
+  displayName: string;
+  direction: "DEBIT" | "CREDIT";
+  averageAmount: number;
+  expectedDate: string; // YYYY-MM-DD
+  daysOverdue: number;
+}
+
+/**
+ * A confirmed series' expected charge never arrived — an unpaid bill, a
+ * cancelled subscription still confirmed, or a sync quietly broken. One alert
+ * per missed occurrence (the key embeds the expected date).
+ */
+export function missedRecurringNotifications(
+  missed: MissedSeriesInput[],
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return missed.map((m) => ({
+    type: "RECURRING_MISSED" as NotificationType,
+    severity: "WARNING" as NotificationSeverity,
+    title: `Missing: ${m.displayName}`,
+    body: `${
+      m.direction === "CREDIT" ? "An expected income of" : "An expected charge of"
+    } ${formatCurrency(m.averageAmount, currency, locale)} was due on ${m.expectedDate} and hasn't arrived (${m.daysOverdue} days). Check the bill — or the bank sync.`,
+    dedupeKey: `recurring-missed:${m.merchantKey}:${m.expectedDate}`,
+    metadata: { merchantKey: m.merchantKey, expectedDate: m.expectedDate },
+  }));
+}
+
 export interface ConsentInput {
   connectionId: string;
   bankName: string;

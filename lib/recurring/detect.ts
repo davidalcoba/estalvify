@@ -32,6 +32,17 @@ export interface RecurringCandidate {
   categoryId: string | null;
   categoryName: string | null;
   categoryColor: string | null;
+  /**
+   * Chronological occurrences (absolute amounts). Feeds the amount-deviation
+   * alert (baseline = the charges before the latest one) and the day-of-month
+   * window the cash-flow projection schedules charges in.
+   */
+  history: SeriesOccurrence[];
+}
+
+export interface SeriesOccurrence {
+  date: string; // YYYY-MM-DD
+  amount: number; // absolute value
 }
 
 // Minimum repeats before something counts as a series.
@@ -228,6 +239,10 @@ export function detectRecurringSeries(rows: DetectionInput[]): RecurringCandidat
       categoryId: cat.id,
       categoryName: cat.name,
       categoryColor: cat.color,
+      history: sorted.map((r) => ({
+        date: toDateOnly(r.valueDate),
+        amount: Math.abs(r.amount),
+      })),
     });
   }
 

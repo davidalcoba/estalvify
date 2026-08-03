@@ -551,6 +551,8 @@ enum NotificationType {
   BUDGET_OVER
   BUDGET_NEAR
   RECURRING_UPCOMING
+  RECURRING_AMOUNT_CHANGE // A recurring charge deviated from its usual amount
+  RECURRING_MISSED // An expected recurring charge never arrived
   LOW_BALANCE_PROJECTED
   CONSENT_EXPIRING // PSD2 consent about to lapse — warn before syncing stops
   NO_TRANSACTIONS // Nothing new for days; the sync may have died quietly
