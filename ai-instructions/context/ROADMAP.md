@@ -113,7 +113,11 @@ recurrentes, etc.).
 > deprecado a favor del Plan): tools `list_plan_items` / `create_plan_item` /
 > `update_plan_item` / `delete_plan_item` (`lib/mcp/manage.ts`, misma validación que las
 > Server Actions; los items espejados de una serie confirmada se rechazan — los gestiona la
-> serie). `get_budgets` queda marcado LEGACY en su descripción. (4) La renumeración de
+> serie). `get_budgets` queda marcado LEGACY en su descripción. (3b) `update_category`
+> acepta `isActive: true` — el undo de `delete_category` que no existía; es el paso previo
+> para reactivar `Hogar y decoración` con reglas de descripción (Xina Center, Central
+> Garden, Natura, Fes Mes) cuando este código esté desplegado, en vez de dejarla apagada.
+> (4) La renumeración de
 > prioridades 0..N es **diseño**, no bug: el número nunca se muestra, el orden se cambia con
 > `reorder_rules`/drag — insertar entre dos reglas es reordenar, no numerar. (5) La alerta
 > de >72 h sin transacciones ya existía (`NO_TRANSACTIONS`, umbral 3 días).
