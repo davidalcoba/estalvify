@@ -81,6 +81,15 @@ generator — keep the four in sync.
   category's own hex when the series maps to a category. Axis/grid/tooltip use semantic
   tokens (`--muted-foreground`, `--border`, `--popover`) so charts read in light **and**
   dark. Format values with `lib/formatters` (`formatCurrency`).
+- **Selecting a slice of the donut is legend-first** (`category-breakdown-chart`).
+  A 1 % category is a sliver no finger can hit and a floating tooltip lands on
+  top of the very chart you tapped, so: the legend rows are buttons (hover
+  previews, click pins, click again releases), the selected sector reaches out
+  while the others dim, and the reading happens in the donut's hole — no
+  tooltip over the chart. When a text control already carries the same numbers,
+  take the chart's `<svg>` out of the tab order (`tabIndex={-1}`) and suppress
+  the two artifacts a tap leaves behind: `-webkit-tap-highlight-color` and the
+  focus ring on `.recharts-surface`.
 
 ## A card must never outgrow its column
 
