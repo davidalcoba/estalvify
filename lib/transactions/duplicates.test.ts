@@ -100,13 +100,24 @@ describe("findDuplicateGroups", () => {
     expect(groups).toEqual([]);
   });
 
-  it("ignores charges below the minimum amount", () => {
+  it("ignores charges below the noise floor", () => {
     const rows = [
-      tx({ id: "a", amount: 2.5, valueDate: "2026-08-01" }),
-      tx({ id: "b", amount: 2.5, valueDate: "2026-08-01" }),
+      tx({ id: "a", amount: 1.5, valueDate: "2026-08-01" }),
+      tx({ id: "b", amount: 1.5, valueDate: "2026-08-01" }),
     ];
     expect(findDuplicateGroups(rows)).toEqual([]);
     expect(findDuplicateGroups(rows, { minAmount: 1 })).toHaveLength(1);
+  });
+
+  it("reports a small duplicate — the floor is cents, not euros", () => {
+    // The whole point of a low floor: a €4 charge taken twice is as wrong as a
+    // €40 one, and a comfortable threshold hid it with nothing saying so.
+    const groups = findDuplicateGroups([
+      tx({ id: "a", amount: 4, valueDate: "2026-08-01" }),
+      tx({ id: "b", amount: 4, valueDate: "2026-08-01" }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ amount: 4, count: 2 });
   });
 
   it("uses the magnitude, so a bank that signs its debits still clusters", () => {

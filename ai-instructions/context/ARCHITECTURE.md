@@ -349,9 +349,16 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     only while recent. A cluster needs the same account, direction, amount **to
     the cent** and normalized merchant key, within 3 days (`DUPLICATE_WINDOW_DAYS`,
     below the weekly minimum cadence in `recurring/detect.ts`, so a subscription
-    can never be mistaken for a double charge) and over
-    `DUPLICATE_MIN_AMOUNT` (€10 — small identical amounts repeat honestly all the
-    time). Generation scans the last 21 days only: a full-history scan would dump
+    can never be mistaken for a double charge) and over `DUPLICATE_MIN_AMOUNT`.
+    That floor is **2**, and is a noise filter rather than part of the definition:
+    a €4 charge taken twice is as wrong as a €40 one, and a comfortable threshold
+    silently turned "no duplicates" into "no duplicates over €10". Below ~2,
+    identical repeats are dominated by transport/vending/coffee, where buying the
+    same thing twice in an afternoon is routine. The principled version of that
+    test is per-merchant precedent ("has this merchant at this amount ever repeated
+    inside the window before?"), which needs no floor but a much wider history load
+    per cron pass — the floor is the cheap approximation, kept low on purpose.
+    Generation scans the last 21 days only: a full-history scan would dump
     every historical coincidence into the bell on the first run. The count is part
     of the `dedupeKey` because generation upserts with `update: {}` — a pair that
     grows to three charges must be able to say so.

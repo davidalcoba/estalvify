@@ -83,8 +83,15 @@ recurrentes, etc.).
 > informe. Detección pura en `lib/transactions/duplicates.ts`: mismo importe **al céntimo**,
 > misma cuenta, misma dirección y misma clave de comercio normalizada, dentro de 3 días
 > (por debajo de la cadencia semanal mínima de `lib/recurring/detect.ts`, así que una
-> suscripción nunca se confunde con un duplicado) y por encima de 10 € (los importes
-> pequeños idénticos se repiten a diario de forma legítima). Solo cargos: que te paguen dos
+> suscripción nunca se confunde con un duplicado) y por encima de **2 €**. Ese suelo es un
+> filtro de ruido, **no** parte de la definición: un cargo de 4 € cobrado dos veces está
+> igual de mal que uno de 40, y un umbral cómodo (10 €) convertía "no tienes duplicados" en
+> "no tienes duplicados de más de 10 €" sin que nada lo dijera. Por debajo de ~2 € las
+> repeticiones idénticas son sobre todo transporte, vending y café, donde comprar lo mismo
+> dos veces en una tarde es rutina. La versión correcta de ese test no es un umbral de dinero
+> sino el **precedente por comercio** ("¿ha repetido este comercio con este importe dentro de
+> la ventana alguna vez antes?"), que no necesita suelo pero exige cargar mucho más histórico
+> en cada pasada del cron; el suelo es la aproximación barata, deliberadamente baja. Solo cargos: que te paguen dos
 > veces no es este aviso. Se mira solo la ventana de 21 días más reciente — escanear todo el
 > histórico volcaría cada coincidencia antigua en la campana en la primera ejecución.
 

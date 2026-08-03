@@ -58,11 +58,24 @@ export interface DuplicateGroup {
 export const DUPLICATE_WINDOW_DAYS = 3;
 
 /**
- * Charges below this are not reported. Small identical amounts repeat honestly
- * all the time — two metro tickets, two coffees, two identical bread runs — and
- * at that size the notification costs more attention than the money it protects.
+ * Charges below this are not reported. This is a noise floor, **not** part of what
+ * makes something a duplicate — the definition is the grouping key below, and this
+ * only decides which rows are worth looking at.
+ *
+ * It sits at 2, not 10. A €4 charge taken twice is exactly as wrong as a €40 one,
+ * and a threshold high enough to be comfortable turned "you have no duplicates"
+ * into "you have no duplicates over €10" with nothing in the UI saying so. Below
+ * ~2 the picture flips: identical repeats are dominated by transport, vending and
+ * coffee, where buying the same thing twice in an afternoon is routine rather than
+ * a mistake, so alerting there would spend the feature's credibility on cents.
+ *
+ * The honest version of this test is not a money threshold at all — it is "has
+ * this merchant, at this amount, ever repeated inside the window before in your
+ * history?", which learns each merchant's normal behaviour and needs no floor.
+ * That costs a much wider history load per cron pass; the floor is the cheap
+ * approximation, kept deliberately low so it approximates as little as possible.
  */
-export const DUPLICATE_MIN_AMOUNT = 10;
+export const DUPLICATE_MIN_AMOUNT = 2;
 
 /** Cents, so 24.99 groups by an integer instead of a float. */
 function cents(amount: number): number {
