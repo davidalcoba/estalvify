@@ -24,8 +24,11 @@
   deployment; merges to `main` promote to production. Vercel-native features in
   use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
   (`/api/queues/sync-connection`).
-- Tooling access to Vercel: a read-scoped API token is exposed as the
-  `VERCEL_TOKEN` environment variable (secret — never commit or print it). Use it
+- Tooling access to Vercel: an API token is exposed as the `VERCEL_TOKEN`
+  environment variable (secret — never commit or print it). It is **not
+  read-only** — it can write project configuration, and the env var layout below
+  was built with it (creating `DIRECT_URL`, re-targeting 17 vars, deleting 15).
+  Use it
   with the REST API at `https://api.vercel.com` to look up deployment URLs,
   status, and logs. After a branch push or PR, report the preview URL: query
   `/v6/deployments?projectId=…&target=preview` and match `meta.githubCommitRef`
@@ -116,10 +119,20 @@ separator" (`PGHOST` → `DB1_PGHOST`). Neon documents the same thing from its s
 `PGHOST`, `POSTGRES_*`) and "you can add a prefix if you have multiple databases
 in the same project". So do not expect the prefix to reappear by itself if the
 integration is ever reinstalled: check the actual names rather than assuming
-either shape. (The store name behind the prefix could not be read back to
-confirm — `GET /v1/storage/stores` needs more than the read-scoped
-`VERCEL_TOKEN` and returns 403 — but the observed names are consistent only with
-a `DATABASE` prefix.) The project does not depend on `@vercel/postgres`
+either shape.
+
+**Open question — the naming does not fully add up, so do not treat "prefix
+`DATABASE`" as settled.** A uniform `DATABASE` prefix over Neon's documented
+default set would have produced `DATABASE_DATABASE_URL`, because `DATABASE_URL`
+is itself one of the defaults. What was actually observed is `DATABASE_URL` and
+`DATABASE_PGHOST` side by side — i.e. the prefix appears to sit on *mixed* base
+names (`URL` in one case, `PGHOST` in the other), which no single documented rule
+explains. This cannot be closed from inside the project: resolving the store
+behind it needs endpoints `VERCEL_TOKEN` cannot reach (`GET /v1/storage/stores`
+→ 403; `GET /v1/storage/stores/{storeId}` → 404 "Integration Resource not
+found"). Settle it from the Vercel dashboard — the resource's **Projects** tab
+shows the connection's actual Custom Prefix — before relying on any predicted
+name. The project does not depend on `@vercel/postgres`
 regardless; it uses
 `@neondatabase/serverless` + `@prisma/adapter-neon`, both driven by
 `DATABASE_URL`. Until they were deleted they were also exposed to `preview` and
@@ -130,6 +143,41 @@ The deletion sticks — routine deploys do not recreate them; only re-syncing or
 reinstalling the integration does. If that happens, delete them again rather than
 narrowing their targets, and check `GET /v10/projects/{id}/env` for any
 `DATABASE_*` key that is not `DATABASE_URL`.
+
+**Production `DATABASE_URL` is still owned by the integration, not by us.** This
+is the sharp edge of the paragraph above, and it is easy to get backwards. Of the
+seven database vars, six were created by hand and carry `contentHint: null`. The
+seventh — `DATABASE_URL` on `production` (env id `ue3mIm16Bn8yvTCN`) — is the
+integration's own variable, never replaced, and `GET /v10/projects/{id}/env`
+reports it as:
+
+```json
+"contentHint": { "type": "integration-store-secret",
+                 "storeId": "store_w3Yl5Q1q6j5juAgh",
+                 "integrationConfigurationId": "icfg_iw9I9X2qRGUjuj1sxJLkKOOm" }
+```
+
+So production's database URL is **not** hand-managed; it is a live store secret
+still linked to the Neon resource. The unresolved question that follows: **would
+re-syncing or reinstalling the integration overwrite it?** A store secret is
+exactly the kind of value a re-sync is expected to rewrite, and unlike the 15
+deleted vars there is nothing to simply delete again — production would silently
+start pointing wherever the integration decided. Treat this as **unverified and
+load-bearing**:
+
+- Do not re-sync or reinstall the Neon integration without first capturing
+  production's current `DATABASE_URL` value, so it can be restored.
+- After any integration change, re-read the `production` `DATABASE_URL` and
+  confirm the build log still reports the expected Neon endpoint (see
+  `scripts/migrate.mjs` below).
+- The durable fix, if this turns out to be real, is to replace it with a
+  hand-created var (`contentHint: null`) like the other six, so no integration
+  action can rewrite production. That is a deliberate trade: it also means Neon
+  credential rotations stop propagating automatically.
+
+`GET /v1/storage/stores/{storeId}` returns 404 for `VERCEL_TOKEN`, so neither the
+store's current state nor the answer to this question can be settled from inside
+the project — check the Vercel dashboard.
 
 **Branch cap.** The Neon org is on the free plan, capped at **10 branches**
 (`GET /api/v2/projects/{id}` → `project.owner.branches_limit`). When the cap is

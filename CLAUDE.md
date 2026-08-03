@@ -19,9 +19,19 @@ This project deploys on **Vercel** — project `estalvify`
 `https://estalvify.vercel.app`. Every push to a branch produces a preview
 deployment; merges to `main` deploy to production.
 
-A read-scoped Vercel API token is provided as the `VERCEL_TOKEN` environment
-variable in the Claude Code environment (it is a secret — never commit it or
-print its value). Use it against the Vercel REST API at `https://api.vercel.com`.
+A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
+Claude Code environment (it is a secret — never commit it or print its value).
+Use it against the Vercel REST API at `https://api.vercel.com`.
+
+**It is not read-only.** It has write access to this project's configuration: it
+has been used to create env vars (`DIRECT_URL` on `production` and
+`development`), `PATCH` the targets of 17 of them, and delete 15. Treat writes as
+real and confirm before making them. Its limits are elsewhere — some
+Marketplace/storage endpoints refuse it (`GET /v1/storage/stores` → 403,
+`GET /v1/storage/stores/{id}` → 404), so a failure there is not evidence of the
+token being read-scoped. And a missing secret is usually a missing *value*, not a
+missing permission: `ANTHROPIC_API_KEY` is unset because nobody has supplied the
+key, and no token scope changes that.
 
 **After pushing commits to a branch or opening a PR, report the resulting Vercel
 preview URL to the user.** Look it up from the API instead of guessing — the
@@ -87,9 +97,11 @@ skips the `.sha256` fetch, then the `.gz` download fails on the same blocked hos
 The stub is fine for `generate`/`typecheck`/`lint`/`test`; anything that really
 drives the schema engine (`prisma migrate`) still needs the host unblocked.
 
-When running the gate, do not pipe each step into `tail` — a pipeline returns
-`tail`'s status, so `npm run typecheck | tail` reports success over a failing
-typecheck. Redirect to a file and check `$?` instead.
+A trap when shortening the gate's output, which has already produced one false
+"gate passed": run the commands as written above. If you pipe a step into `tail`
+to trim its output, the pipeline returns `tail`'s status, not the step's, so
+`npm run typecheck | tail` reports success over a failing typecheck. Redirect to
+a file and check `$?` instead.
 
 ## Databases (Neon)
 
