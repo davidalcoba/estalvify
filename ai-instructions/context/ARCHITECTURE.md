@@ -355,8 +355,12 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     validation helpers, `priority` stores the 0-based position and is renumbered
     contiguously by `reorderRulesForUser` (one transaction, and it rejects an order
     that isn't exactly the user's full rule set); the /rules list reorders by
-    drag-and-drop (pointer events, so it works on touch; arrow keys on the handle
-    move a rule too) and `reorder_rules` does the same over MCP. The number is
+    drag-and-drop (pointer events, so touch works too; arrow keys on the handle
+    move a rule as well) and `reorder_rules` does the same over MCP. On mobile the
+    primary control is the up/down buttons next to the handle, not the drag: a card
+    is ~90px tall, so a touch drag has to travel about that far before the list
+    reacts (measured in a Playwright touch harness — the mechanics work, the
+    ergonomics do not), and the handle is a small target beside it. The number is
     never exposed in the UI, and a new rule is appended **last**
     (`nextRulePriority`) so it can't outrank existing ones. **First match wins**,
     `createdAt` breaks a tie, and a `MANUAL` categorization is never

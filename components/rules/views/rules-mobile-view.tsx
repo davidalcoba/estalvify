@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Play, Trash2, Undo2, GripVertical } from "lucide-react";
+import {
+  Pencil,
+  Play,
+  Trash2,
+  Undo2,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -24,7 +32,7 @@ interface RulesMobileViewProps {
 }
 
 export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
-  const { orderedRules, containerRef, handleProps, draggingId, error } =
+  const { orderedRules, containerRef, handleProps, moveBy, draggingId, error } =
     useRuleOrder(rules);
 
   if (rules.length === 0) {
@@ -40,13 +48,17 @@ export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
   return (
     <div className="space-y-2">
       <div className="space-y-3" ref={containerRef}>
-        {orderedRules.map((rule) => (
+        {orderedRules.map((rule, index) => (
           <RulesMobileCard
             key={rule.id}
             rule={rule}
             categories={categories}
             handleProps={handleProps(rule.id)}
             isDragging={draggingId === rule.id}
+            onMoveUp={index === 0 ? null : () => moveBy(rule.id, -1)}
+            onMoveDown={
+              index === orderedRules.length - 1 ? null : () => moveBy(rule.id, 1)
+            }
           />
         ))}
       </div>
@@ -60,11 +72,16 @@ function RulesMobileCard({
   categories,
   handleProps,
   isDragging,
+  onMoveUp,
+  onMoveDown,
 }: {
   rule: CategoryRuleDTO;
   categories: Category[];
   handleProps: RuleOrderHandleProps;
   isDragging: boolean;
+  /** Null at the ends of the list. */
+  onMoveUp: (() => void) | null;
+  onMoveDown: (() => void) | null;
 }) {
   const {
     isPending,
@@ -126,12 +143,38 @@ function RulesMobileCard({
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-2">
-          <span
-            {...handleProps}
-            className="mt-0.5 flex h-6 w-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <GripVertical className="h-4 w-4" />
-          </span>
+          {/* Order column. The buttons are the primary control here: a phone card
+              is ~90px tall, so a drag has to travel about that far before the
+              list reacts, and the handle is a small target next to it. Dragging
+              still works for anyone who reaches for it. */}
+          <div className="-ml-1.5 flex shrink-0 flex-col items-center">
+            <button
+              type="button"
+              onClick={onMoveUp ?? undefined}
+              disabled={!onMoveUp || isPending}
+              className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground disabled:opacity-30"
+              aria-label="Move rule up"
+              title="Move up — earlier rules win"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <span
+              {...handleProps}
+              className="flex h-11 w-9 select-none items-center justify-center rounded text-muted-foreground/70 cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <GripVertical className="h-4 w-4" />
+            </span>
+            <button
+              type="button"
+              onClick={onMoveDown ?? undefined}
+              disabled={!onMoveDown || isPending}
+              className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground disabled:opacity-30"
+              aria-label="Move rule down"
+              title="Move down"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
 
           <div className="flex-1 min-w-0 space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">

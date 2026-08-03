@@ -143,7 +143,7 @@ function RulesDesktopRow({
       <td className="px-2 py-3">
         <span
           {...handleProps}
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-8 w-6 select-none items-center justify-center rounded text-muted-foreground/60 hover:text-foreground cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <GripVertical className="h-4 w-4" />
         </span>
