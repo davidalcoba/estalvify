@@ -52,7 +52,14 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
     return Promise.all(
       selected.map((account) =>
         tx.bankAccount.upsert({
-          where: { externalAccountId: account.uid },
+          // Scoped to this user: the uid is unique per user, so this can never
+          // retarget a row that belongs to someone else.
+          where: {
+            userId_externalAccountId: {
+              userId: session.user.id,
+              externalAccountId: account.uid,
+            },
+          },
           create: {
             userId: session.user.id,
             bankConnectionId: connectionId,

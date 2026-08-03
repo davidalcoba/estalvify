@@ -14,6 +14,7 @@
 //     After completing, checks whether all accounts are done and closes out
 //     the connection status.
 
+import { z } from "zod";
 import { handleCallback, send } from "@vercel/queue";
 import { prisma } from "@/lib/prisma";
 import { syncAccount, toDateString } from "@/lib/banking/sync";
@@ -21,21 +22,40 @@ import { AUTH_ERROR_PREFIX } from "@/lib/banking/sync-errors";
 import { runRules } from "@/lib/rules/apply";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
+// Validate the message shape. The payload is our own, but a consumer endpoint
+// must never trust its body blindly: every lookup below is additionally scoped
+// so the message's `userId` only ever reaches rows that actually belong to it.
+const messageSchema = z.object({
+  connectionId: z.string().min(1),
+  userId: z.string().min(1),
+  accountId: z.string().min(1).optional(),
+  syncStartedAt: z.string().optional(),
+  totalAccounts: z.number().int().positive().optional(),
+});
+
 export const POST = handleCallback<SyncConnectionMessage>(
-  async (message) => {
-    const { connectionId, userId, accountId, syncStartedAt, totalAccounts } = message;
+  async (rawMessage) => {
+    const parsed = messageSchema.safeParse(rawMessage);
+    if (!parsed.success) {
+      console.warn("[queue/sync-connection] Rejected malformed message");
+      return; // ack — retrying a malformed message is pointless
+    }
+    const { connectionId, userId, accountId, syncStartedAt, totalAccounts } = parsed.data;
 
     // ── Phase 1: Fan-out ──────────────────────────────────────────────────────
     if (!accountId) {
+      // Scope by userId: a forged connectionId for another user resolves to null
+      // and the fan-out simply does nothing.
       const connection = await prisma.bankConnection.findFirst({
         where: {
           id: connectionId,
+          userId,
           status: { in: ["ACTIVE", "SYNCING"] },
         },
         include: { bankAccounts: { where: { isActive: true } } },
       });
 
-      if (!connection) return; // deleted or revoked
+      if (!connection) return; // deleted, revoked, or not this user's
 
       await prisma.bankConnection.update({
         where: { id: connectionId },
@@ -61,22 +81,16 @@ export const POST = handleCallback<SyncConnectionMessage>(
     }
 
     // ── Phase 2: Per-account sync ─────────────────────────────────────────────
+    // Scope the account to the message's userId AND connection. This is the
+    // ownership check: a forged message can only ever touch rows that genuinely
+    // belong to (userId, connectionId), so it cannot write into another user's
+    // account or run another user's rules.
     const account = await prisma.bankAccount.findFirst({
-      where: { id: accountId, isActive: true },
+      where: { id: accountId, userId, bankConnectionId: connectionId, isActive: true },
     });
 
     if (!account) {
-      console.warn(`[queue/sync-connection] Phase 2 skipped: account ${accountId} not found or inactive (connectionId=${connectionId})`);
-      return;
-    }
-
-    const connectionExists = await prisma.bankConnection.findFirst({
-      where: { id: connectionId },
-      select: { id: true },
-    });
-
-    if (!connectionExists) {
-      console.warn(`[queue/sync-connection] Phase 2 skipped: connection ${connectionId} not found (accountId=${accountId})`);
+      console.warn(`[queue/sync-connection] Phase 2 skipped: account ${accountId} not found for this user/connection (connectionId=${connectionId})`);
       return;
     }
 

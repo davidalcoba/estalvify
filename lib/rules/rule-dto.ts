@@ -138,6 +138,159 @@ export function flattenConditions(node: ConditionNode): RuleCondition[] {
   return node.children.flatMap(flattenConditions);
 }
 
+// ─────────────────────────────────────────────
+// Safety validation (ReDoS + unbounded structures)
+// ─────────────────────────────────────────────
+
+/**
+ * The one-level editor produces depth 1. This cap is generous headroom, and its
+ * only job is to stop a hand-crafted deeply-nested `conditions` JSON from
+ * blowing the stack in the recursive matcher (`matchesNode`). Reachable from the
+ * UI (`saveRule`) and over MCP (`create_rule`).
+ */
+export const MAX_CONDITION_DEPTH = 6;
+/** Ceiling on total nodes so a giant flat array can't exhaust memory per match. */
+export const MAX_CONDITION_NODES = 200;
+
+/** Depth of the tree: a leaf is 0, a group is 1 + max child depth. */
+export function conditionTreeDepth(node: ConditionNode): number {
+  if (!isConditionGroup(node)) return 0;
+  if (node.children.length === 0) return 1;
+  return 1 + Math.max(...node.children.map(conditionTreeDepth));
+}
+
+/** Total number of nodes (groups + leaves) in the tree. */
+export function countConditionNodes(node: ConditionNode): number {
+  if (!isConditionGroup(node)) return 1;
+  return 1 + node.children.reduce((sum, c) => sum + countConditionNodes(c), 0);
+}
+
+/**
+ * Conservative guard against catastrophic backtracking (ReDoS). Node offers no
+ * regex timeout, and the `matches` operator runs a user-authored pattern in
+ * memory over every transaction, so an exponential pattern hangs the whole
+ * serverless invocation. We reject the classic trigger: an unbounded quantifier
+ * (`*`, `+`, `{n,}`) applied to a group that itself already contains an
+ * unbounded quantifier — `(a+)+`, `(a*)*`, `((x)+)*`, etc.
+ *
+ * This does not prove a pattern safe (e.g. `(a|a)+` slips through), but it
+ * catches the exponential cases while leaving ordinary rule patterns untouched.
+ * Escapes and character classes are skipped so `\(`, `\+` and `[a+]` are literal.
+ */
+export function hasNestedUnboundedQuantifier(source: string): boolean {
+  // Each open group pushes a frame tracking whether it directly contains an
+  // unbounded quantifier. On close, if the group had one AND is itself followed
+  // by an unbounded quantifier, that is nesting → unsafe.
+  const stack: { unbounded: boolean }[] = [];
+  let topHadUnbounded = false; // for quantifiers at the current level
+  let inClass = false;
+
+  const isUnboundedAt = (i: number): boolean => {
+    const ch = source[i];
+    if (ch === "*" || ch === "+") return true;
+    if (ch === "{") {
+      // {n,}  → unbounded ;  {n} / {n,m} → bounded
+      const close = source.indexOf("}", i);
+      if (close === -1) return false;
+      const body = source.slice(i + 1, close);
+      return /^\d*,\s*$/.test(body) || /^,\s*$/.test(body);
+    }
+    return false;
+  };
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "\\") {
+      i++; // skip the escaped char
+      continue;
+    }
+    if (inClass) {
+      if (ch === "]") inClass = false;
+      continue;
+    }
+    if (ch === "[") {
+      inClass = true;
+      continue;
+    }
+    if (ch === "(") {
+      stack.push({ unbounded: false });
+      continue;
+    }
+    if (ch === ")") {
+      const frame = stack.pop();
+      const groupHadUnbounded = frame?.unbounded ?? false;
+      // Is the group quantified, and unboundedly so?
+      let j = i + 1;
+      if (source[j] === "?") j++; // lazy/greedy marker doesn't change the base op
+      if (isUnboundedAt(j) && groupHadUnbounded) return true;
+      // Propagate: a quantified group counts as a repetition in its parent.
+      if (isUnboundedAt(j)) {
+        if (stack.length > 0) stack[stack.length - 1].unbounded = true;
+        else topHadUnbounded = true;
+      }
+      continue;
+    }
+    if (isUnboundedAt(i)) {
+      if (stack.length > 0) stack[stack.length - 1].unbounded = true;
+      else topHadUnbounded = true;
+    }
+  }
+
+  void topHadUnbounded;
+  return false;
+}
+
+/** A regex source is acceptable when it is short enough, compiles, and has no
+ * nested unbounded quantifier. Used both to refuse a bad rule at save time and
+ * to skip a bad pattern at match time. */
+export function isSafeRegexSource(source: string): boolean {
+  if (source.length > MAX_CONDITION_VALUE_LENGTH) return false;
+  if (hasNestedUnboundedQuantifier(source)) return false;
+  try {
+    new RegExp(source, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate a condition tree before it is stored. Pure and unit-tested so the one
+ * place that decides what a rule may contain is not buried in a server action.
+ * The UI action and the MCP path both go through this.
+ */
+export function validateConditionTree(
+  group: ConditionGroup
+): { ok: true } | { ok: false; error: string } {
+  if (conditionTreeDepth(group) > MAX_CONDITION_DEPTH) {
+    return { ok: false, error: "Rule conditions are nested too deeply." };
+  }
+  if (countConditionNodes(group) > MAX_CONDITION_NODES) {
+    return { ok: false, error: "Rule has too many conditions." };
+  }
+  for (const leaf of flattenConditions(group)) {
+    const { value, operator } = leaf;
+    if (typeof value === "string" && value.length > MAX_CONDITION_VALUE_LENGTH) {
+      return { ok: false, error: "A condition value is too long." };
+    }
+    if (operator === "matches" && typeof value === "string") {
+      if (!isSafeRegexSource(value)) {
+        return {
+          ok: false,
+          error: "A regex condition is invalid or too expensive to run.",
+        };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/** Throwing wrapper for the server-action path, which propagates plain errors. */
+export function assertValidConditionTree(group: ConditionGroup): void {
+  const result = validateConditionTree(group);
+  if (!result.ok) throw new Error(result.error);
+}
+
 /** True when the tree has a nested group — i.e. the one-level editor can't represent it. */
 export function isNestedTree(group: ConditionGroup): boolean {
   return group.children.some(isConditionGroup);

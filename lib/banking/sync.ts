@@ -135,7 +135,12 @@ export async function syncAccount(
           const externalId = buildExternalId(tx);
           if (!externalId) {
             transactionsSkipped++;
-            console.warn("[sync] Skipping transaction with no stable ID:", JSON.stringify(tx));
+            // Never log the raw transaction — it carries counterparty IBANs and
+            // names (the fields we deliberately truncate before storing). A
+            // non-identifying hint is enough to debug a dedupe gap.
+            console.warn(
+              `[sync] Skipping transaction with no stable ID (${tx.transaction_amount?.currency ?? "?"}, booking ${tx.booking_date ?? "?"})`
+            );
             continue;
           }
           validTxs.push({ externalId, tx });
