@@ -194,6 +194,19 @@ exits 0 rather than reddening every closed PR. Deleting is safe — the
 integration recreates the branch from `main` on the next deployment of that git
 branch, so the only thing lost is throwaway preview data.
 
+**It only covers PRs whose branches carry the workflow file.** A closed PR prunes
+nothing if the workflow does not exist in the branches involved, which is not a
+detail: while the file lived only on `preview`, PR #53 was merged with base `main`
+and left `preview/claude/mcp-delete-category-filter-elc9vw` orphaned, whereas
+PR #52 (base `preview`) pruned correctly. So the workflow has to live on `main`
+too, not just on the integration branch — otherwise it silently covers half the
+PRs and the cap creeps up anyway. Do not read more mechanism into that evidence
+than it supports: PR #53's head branch was cut from `main` and so lacked the file
+as well, which means the observation does not settle whether GitHub resolves a
+`pull_request: closed` workflow from the base branch or from the head. Once the
+file is on `main` the distinction stops mattering, because branches cut from
+`main` inherit it.
+
 The workflow exists because of *which* integration this is. Neon ships two, and
 they clean up differently. The **Neon-Managed** integration does it
 git-branch-based: it has an "Automatically delete obsolete Neon branches"
@@ -365,12 +378,26 @@ stored hashed.
   callback (`auth.ts`) only lets those Google accounts in — locking both the app
   and the MCP (which shares the login) to the owner. This is the decisive
   control: only an allowed account can ever obtain an MCP token.
-- **Confidential client** (`lib/mcp/clients.ts`): when `MCP_OAUTH_CLIENT_ID` is
-  set, open Dynamic Client Registration is disabled and only that client id is
-  accepted; with `MCP_OAUTH_CLIENT_SECRET` set, the token endpoint authenticates
-  the client (client_secret_post/basic). Redirect URIs are validated against
-  `MCP_OAUTH_REDIRECT_URIS` (Anthropic hosts also trusted for the static client).
-  PKCE (S256) is always required.
+- **Confidential client** (`lib/mcp/clients.ts`): **configured** — both
+  `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET` are set on `production` and
+  `preview`, so `isDcrDisabled()` is true and open Dynamic Client Registration
+  returns 403, with the token endpoint authenticating the secret
+  (client_secret_post/basic). Only deployments **built after** the variables were
+  created see them — Vercel injects env vars at build time, so an already-running
+  deployment keeps answering `201` until it is redeployed. Verified by `POST`ing to
+  `/api/oauth/register` on a preview built afterwards (403 `access_denied`) versus
+  one built minutes before (201). This closed the app's only
+  unauthenticated write path — `POST /api/oauth/register` took anonymous requests
+  and wrote an `McpOAuthClient` row per call, with no rate limit. `ALLOWED_EMAILS`
+  always bounded the damage to database rows rather than data access, since a
+  token still requires an allowed Google account, but the endpoint had no business
+  being open on a single-user deployment.
+  Neither var is on `development`, so local runs keep DCR enabled and need no
+  client configuration.
+  `MCP_OAUTH_REDIRECT_URIS` is deliberately **unset**: with the list empty,
+  `isAllowedRedirectUri` falls back to a host rule that accepts any redirect on
+  `claude.ai` / `claude.com`, which survives Anthropic changing its callback path.
+  Pin the variable only for a non-Anthropic client. PKCE (S256) is always required.
 
 ## Multi-User Data Isolation
 
