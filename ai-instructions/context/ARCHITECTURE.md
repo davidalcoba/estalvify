@@ -295,12 +295,22 @@ stored hashed.
   callback (`auth.ts`) only lets those Google accounts in — locking both the app
   and the MCP (which shares the login) to the owner. This is the decisive
   control: only an allowed account can ever obtain an MCP token.
-- **Confidential client** (`lib/mcp/clients.ts`): when `MCP_OAUTH_CLIENT_ID` is
-  set, open Dynamic Client Registration is disabled and only that client id is
-  accepted; with `MCP_OAUTH_CLIENT_SECRET` set, the token endpoint authenticates
-  the client (client_secret_post/basic). Redirect URIs are validated against
-  `MCP_OAUTH_REDIRECT_URIS` (Anthropic hosts also trusted for the static client).
-  PKCE (S256) is always required.
+- **Confidential client** (`lib/mcp/clients.ts`): **configured** — both
+  `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET` are set on `production` and
+  `preview`, so `isDcrDisabled()` is true there: open Dynamic Client Registration
+  returns 403 and only that one client id is accepted, with the token endpoint
+  authenticating the secret (client_secret_post/basic). This closed the app's only
+  unauthenticated write path — `POST /api/oauth/register` took anonymous requests
+  and wrote an `McpOAuthClient` row per call, with no rate limit. `ALLOWED_EMAILS`
+  always bounded the damage to database rows rather than data access, since a
+  token still requires an allowed Google account, but the endpoint had no business
+  being open on a single-user deployment.
+  Neither var is on `development`, so local runs keep DCR enabled and need no
+  client configuration.
+  `MCP_OAUTH_REDIRECT_URIS` is deliberately **unset**: with the list empty,
+  `isAllowedRedirectUri` falls back to a host rule that accepts any redirect on
+  `claude.ai` / `claude.com`, which survives Anthropic changing its callback path.
+  Pin the variable only for a non-Anthropic client. PKCE (S256) is always required.
 
 ## Multi-User Data Isolation
 
