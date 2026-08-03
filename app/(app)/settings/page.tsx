@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
 import { seedDefaultCategories } from "./actions";
 
@@ -15,7 +16,7 @@ export default async function SettingsPage() {
   const [user, categories] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, timezone: true, currency: true, locale: true, language: true },
+      select: { name: true, email: true, timezone: true, currency: true, locale: true, language: true, lowBalanceThreshold: true },
     }),
     prisma.category.findMany({
       where: { userId, parentId: null, isActive: true },
@@ -57,6 +58,7 @@ function SettingsLayout({
     currency?: string | null;
     locale?: string | null;
     language?: string | null;
+    lowBalanceThreshold?: { toString(): string } | null;
   } | null;
   categories: {
     id: string;
@@ -75,6 +77,11 @@ function SettingsLayout({
           currency={user?.currency ?? "EUR"}
           locale={user?.locale ?? "es-ES"}
           language={user?.language ?? "en-GB"}
+        />
+
+        <PlanningForm
+          lowBalanceThreshold={Number(user?.lowBalanceThreshold?.toString() ?? "0")}
+          currency={user?.currency ?? "EUR"}
         />
 
         <CategoryManager initialCategories={categories} />

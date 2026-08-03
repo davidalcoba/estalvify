@@ -36,6 +36,25 @@ export async function updatePreferences(data: {
   revalidatePath("/accounts");
 }
 
+// Threshold under which a projected account balance triggers the daily
+// cash-flow alert (0 = "don't go negative").
+export async function updateAlertThreshold(threshold: number) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  if (!Number.isFinite(threshold) || Math.abs(threshold) > 1_000_000) {
+    throw new Error("Invalid threshold");
+  }
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { lowBalanceThreshold: threshold },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/forecast");
+}
+
 // ─────────────────────────────────────────────
 // CATEGORY MANAGEMENT
 // ─────────────────────────────────────────────

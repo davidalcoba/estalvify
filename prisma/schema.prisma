@@ -32,6 +32,10 @@ model User {
   // Language used for date rendering (formatDate) — decoupled from number format.
   language String @default("en-GB")
 
+  // Daily cash-flow alert: warn when a projected account balance dips below
+  // this. 0 = "don't go negative"; raise it to keep a cushion.
+  lowBalanceThreshold Decimal @default(0) @db.Decimal(15, 2)
+
   accounts         Account[]
   sessions         Session[]
   bankConnections  BankConnection[]

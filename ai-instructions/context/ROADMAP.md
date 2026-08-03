@@ -25,6 +25,19 @@ recurrentes, etc.).
 > día de la confirmación. `RecurringCandidate` lleva ahora `history` (fecha+importe por
 > ocurrencia), que alimenta la desviación y la ventana de días de la previsión de caja.
 
+> **Post-roadmap — Previsión de caja diaria (30/60 días, por cuenta).** El forecast
+> mensual no ve el descuadre de calendario (el alquiler sale el día 1–6 y la nómina entra
+> el ~28): `lib/analytics/cashflow.ts` (puro, con tests) proyecta el saldo **día a día y
+> por cuenta** desde las series confirmadas — con anclaje a fin de mes para cargos tipo
+> hipoteca (31 mar, 30 abr…) y día mediano para ventanas tipo alquiler — más una tasa de
+> gasto variable diaria (90 días, excluyendo TRANSFER y lo ya programado como serie).
+> `lib/analytics/cashflow-data.ts` (server-only) ensambla los datos y lo comparten la
+> página /forecast (tarjetas de cobertura por cuenta + curva diaria consolidada + próximos
+> cargos con fecha real) y el cron de notificaciones (aviso `LOW_BALANCE_PROJECTED` por
+> cuenta, re-alerta semanal, con el traspaso sugerido para cubrirlo). El umbral es
+> configurable en Settings (`User.lowBalanceThreshold`). Un cargo vencido y no llegado se
+> proyecta "mañana" en vez de desaparecer de la curva.
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

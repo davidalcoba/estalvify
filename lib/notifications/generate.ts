@@ -33,12 +33,14 @@ import {
   detectAmountDeviation,
   detectMissedSeries,
 } from "@/lib/recurring/alerts";
+import { buildCashflowData } from "@/lib/analytics/cashflow-data";
 import {
   budgetNotifications,
   upcomingRecurringNotifications,
   recurringAmountChangeNotifications,
   missedRecurringNotifications,
   lowBalanceNotifications,
+  cashflowBreachNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
   type AmountChangeInput,
@@ -211,6 +213,10 @@ export async function generateNotificationsForUser(
 
   const today = todayInTimezone(prefs.timezone);
 
+  // Day-level cash-flow projection per account (the "will rent clear before
+  // the salary lands" alert). Shares its math with the Forecast page.
+  const cashflow = await buildCashflowData(userId, prefs.timezone, 60);
+
   // ── Recurring series: live detection ────────────────────────────────────
   // Stored rows are snapshots from the moment the user confirmed; their dates
   // and amounts go stale as charges keep arriving. Alerts are computed from a
@@ -362,6 +368,22 @@ export async function generateNotificationsForUser(
       prefs.currency,
       prefs.locale,
       prefs.language,
+    ),
+    ...cashflowBreachNotifications(
+      cashflow.accounts
+        .filter((a) => a.breach !== null)
+        .map((a) => ({
+          accountId: a.accountId,
+          accountName: a.accountName,
+          breachDate: a.breach!.date,
+          breachBalance: a.breach!.balance,
+          daysAway: a.breach!.daysAway,
+          minBalance: a.minBalance,
+        })),
+      cashflow.threshold,
+      today,
+      prefs.currency,
+      prefs.locale,
     ),
     ...consentExpiringNotifications(
       connections

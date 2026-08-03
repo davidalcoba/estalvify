@@ -27,6 +27,7 @@ function candidate(overrides: Partial<RecurringCandidate>): RecurringCandidate {
       { date: "2026-02-05", amount: 13.99 },
       { date: "2026-03-05", amount: 13.99 },
     ],
+    bankAccountId: null,
     ...overrides,
   };
 }

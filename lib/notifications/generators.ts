@@ -281,6 +281,56 @@ export function staleTransactionNotifications(
   return specs;
 }
 
+export interface CashflowBreachInput {
+  accountId: string;
+  accountName: string;
+  breachDate: string; // YYYY-MM-DD
+  breachBalance: number;
+  daysAway: number;
+  /** Lowest projected balance over the horizon — sizes the top-up that fixes it. */
+  minBalance: number;
+}
+
+/**
+ * Day-level low-balance warning for one account: the daily cash-flow projection
+ * says an upcoming charge (rent leaving before the salary lands) will push the
+ * account under the user's threshold. Re-alerts weekly while the squeeze
+ * persists — the key embeds the ISO week, not the shifting breach date.
+ */
+export function cashflowBreachNotifications(
+  breaches: CashflowBreachInput[],
+  threshold: number,
+  today: string,
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return breaches.map((b) => {
+    const topUp = Math.ceil(threshold - b.minBalance);
+    const when =
+      b.daysAway === 1 ? "tomorrow" : `in ${b.daysAway} days (${b.breachDate})`;
+    return {
+      type: "LOW_BALANCE_PROJECTED" as NotificationType,
+      severity: (b.daysAway <= 7 ? "ALERT" : "WARNING") as NotificationSeverity,
+      title: `${b.accountName} won't cover upcoming charges`,
+      body: `${b.accountName} is projected to fall to ${formatCurrency(
+        b.breachBalance,
+        currency,
+        locale
+      )} ${when}, below your ${formatCurrency(threshold, currency, locale)} threshold. A transfer of ${formatCurrency(
+        topUp,
+        currency,
+        locale
+      )} would keep it covered.`,
+      dedupeKey: `cashflow-low:${b.accountId}:${isoYearWeek(today)}`,
+      metadata: {
+        accountId: b.accountId,
+        breachDate: b.breachDate,
+        daysAway: String(b.daysAway),
+      },
+    };
+  });
+}
+
 // Alert when the projected balance is set to fall below a threshold (default 0)
 // within the forecast horizon. One alert for the earliest breaching month.
 export function lowBalanceNotifications(
