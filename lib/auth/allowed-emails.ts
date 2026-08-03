@@ -47,13 +47,14 @@ function parseEntry(raw: string): AllowedEntry | null {
   // Split on the last "@" so a stray one in the local part cannot shift the
   // domain — `a@b@example.com` is malformed input, not a domain of `example.com`.
   const at = value.lastIndexOf("@");
-  const local = at === -1 ? "*" : value.slice(0, at);
+  // No "@" at all is a bare domain; a leading "@" is the `@example.com` spelling.
+  // Both mean "any local part", same as `*@example.com`.
+  const local = at <= 0 ? "*" : value.slice(0, at);
   const domainPart = at === -1 ? value : value.slice(at + 1);
 
   // An entry with no domain can only ever be a typo (`user@`, `@`). Dropping it
   // is safer than treating it as a catch-all.
   if (!domainPart || domainPart.includes("@")) return null;
-  if (!local) return null;
 
   if (domainPart === "*") {
     return { local: local === "*" ? null : local, domain: null, subdomainOf: null };
@@ -99,6 +100,11 @@ function matches(entry: AllowedEntry, local: string, domain: string): boolean {
   return true; // domain was `*`
 }
 
+/** Does the raw value contain anything at all between the commas? */
+function hasAnyEntry(raw: string | null | undefined): boolean {
+  return (raw ?? "").split(",").some((part) => part.trim() !== "");
+}
+
 /**
  * May this address sign in?
  *
@@ -106,13 +112,21 @@ function matches(entry: AllowedEntry, local: string, domain: string): boolean {
  * accepted. That is the historical behaviour and stays for compatibility, but
  * `*` is the explicit way to say it: an allowlist that is empty by accident and
  * one that is empty on purpose look identical otherwise.
+ *
+ * A value that contains entries but no *usable* ones (`ALLOWED_EMAILS="@"`)
+ * denies everyone rather than falling through to open. Without that distinction
+ * the promise that a malformed entry cannot open sign-in would only hold while
+ * some other entry happened to parse — a typo in the only entry would swing the
+ * allowlist from one address to the whole world, which is the worst possible
+ * direction for a mistake to resolve. Locking the owner out is recoverable; the
+ * other way round is not.
  */
 export function isEmailAllowed(
   email: string | null | undefined,
   raw: string | null | undefined,
 ): boolean {
   const entries = parseAllowedEmails(raw);
-  if (entries.length === 0) return true;
+  if (entries.length === 0) return !hasAnyEntry(raw);
   if (!email) return false;
   const parts = splitEmail(email);
   if (!parts) return false;

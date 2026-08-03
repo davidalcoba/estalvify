@@ -106,11 +106,21 @@ describe("isEmailAllowed", () => {
     });
 
     it("drops malformed entries instead of treating them as catch-alls", () => {
-      // "@" and "user@" carry no domain; if either were read as "anything goes"
-      // a typo in the env var would silently open sign-in to the world.
-      expect(isEmailAllowed("anyone@anywhere.com", "@,david@example.com")).toBe(false);
+      // "user@" carries no domain; if it were read as "anything goes" a typo in
+      // the env var would silently open sign-in to the world.
       expect(isEmailAllowed("anyone@anywhere.com", "user@,david@example.com")).toBe(false);
-      expect(isEmailAllowed("david@example.com", "@,david@example.com")).toBe(true);
+      expect(isEmailAllowed("david@example.com", "user@,david@example.com")).toBe(true);
+    });
+
+    it("denies everyone when entries exist but none are usable", () => {
+      // The dangerous case: if an all-malformed list fell through to the
+      // "empty means open" rule, a typo in the ONLY entry would swing the
+      // allowlist from one address to the whole world. Fail closed instead —
+      // being locked out is recoverable, the opposite is not.
+      for (const raw of ["@", "user@", "a@b@c.com", "@ , user@"]) {
+        expect(isEmailAllowed("anyone@anywhere.com", raw)).toBe(false);
+        expect(isEmailAllowed("david@example.com", raw)).toBe(false);
+      }
     });
 
     it("does not let a multi-@ entry act as a domain entry", () => {
@@ -121,7 +131,8 @@ describe("isEmailAllowed", () => {
 
 describe("parseAllowedEmails", () => {
   it("keeps only usable entries", () => {
-    expect(parseAllowedEmails("a@x.com, , @y.com, @, bad@, *.z.com")).toHaveLength(4);
+    // Kept: a@x.com, @y.com, *.z.com. Dropped: the blank, "@" and "bad@".
+    expect(parseAllowedEmails("a@x.com, , @y.com, @, bad@, *.z.com")).toHaveLength(3);
   });
 
   it("returns nothing for an absent list", () => {

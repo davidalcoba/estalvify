@@ -410,9 +410,14 @@ stored hashed.
   indistinguishable. Two properties are load-bearing and have tests naming them:
   a domain entry never matches a domain that merely *ends with* it
   (`example.com` must not admit `notexample.com`), and a malformed entry (`@`,
-  `user@`) is discarded rather than treated as a catch-all — otherwise a typo in
-  the env var would silently open sign-in to the world. An empty list still means
-  open, for compatibility; `*` is the way to say so on purpose.
+  `user@`) is discarded rather than treated as a catch-all. An empty list still
+  means open, for compatibility; `*` is the way to say so on purpose. But a value
+  that has entries and no *usable* ones denies everyone rather than falling
+  through to open — otherwise a typo in the only entry would swing the allowlist
+  from one address to the whole world, and the "malformed entries are discarded"
+  guarantee would only hold while some other entry happened to parse. Being
+  locked out is recoverable; the opposite is not. That case was a real bug caught
+  by these tests, not a hypothetical.
 - **Confidential client** (`lib/mcp/clients.ts`): **configured** — both
   `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET` are set on `production` and
   `preview`, so `isDcrDisabled()` is true and open Dynamic Client Registration
