@@ -19,13 +19,16 @@ import {
   monthlyIncomeExpenses,
   topCategories,
 } from "@/lib/analytics/trends";
+import { buildMonthStatus } from "@/lib/plan/month-status";
+import { incomeConcentration } from "@/lib/analytics/household";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IncomeExpensesChart } from "@/components/reports/income-expenses-chart";
 import { CategoryBars } from "@/components/reports/category-bars";
-import { TrendingUp, TrendingDown, Wallet, Tag } from "lucide-react";
+import { AvailableCard } from "@/components/plan/available-card";
+import { TrendingUp, Wallet, Tag } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -40,11 +43,15 @@ export default async function DashboardPage() {
   const months = lastNMonths(year, month, TREND_MONTHS);
   const rangeStart = monthRange(months[0].year, months[0].month).start;
 
+  const monthStatusPromise = buildMonthStatus(userId, timezone);
   const [accounts, trendTx, spendRows, categories, toCategorize] =
     await Promise.all([
       prisma.bankAccount.findMany({
         where: { userId, isActive: true },
         select: {
+          id: true,
+          name: true,
+          ownerName: true,
           balances: {
             orderBy: { date: "desc" },
             take: 1,
@@ -58,8 +65,14 @@ export default async function DashboardPage() {
           amount: true,
           direction: true,
           valueDate: true,
+          bankAccountId: true,
           // Category kind so transfers can be excluded from income/expense totals.
           categorization: { select: { category: { select: { kind: true } } } },
+          // Extraordinary split lines are subtracted from income averages.
+          splits: {
+            where: { isExtraordinary: true },
+            select: { amount: true },
+          },
         },
       }),
       prisma.transaction.findMany({
@@ -67,6 +80,7 @@ export default async function DashboardPage() {
         select: {
           amount: true,
           categorization: { select: { categoryId: true } },
+          splits: { select: { amount: true, categoryId: true } },
         },
       }),
       prisma.category.findMany({
@@ -97,6 +111,10 @@ export default async function DashboardPage() {
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
       categoryKind: t.categorization?.category?.kind ?? null,
+      extraordinaryAmount: t.splits.reduce(
+        (sum, s) => sum + Number(s.amount.toString()),
+        0,
+      ),
     })),
     months,
   );
@@ -104,6 +122,29 @@ export default async function DashboardPage() {
 
   const spendingByCategory = aggregateSpendingByCategory(spendRows);
   const topCats = topCategories(spendingByCategory, categories, 6);
+
+  // Income concentration: how much of the household's income (trend window,
+  // extraordinary excluded) arrives via a single holder. The consolidated view
+  // stays the default — this is the one structural-risk number worth a line.
+  const holderByAccount = new Map(
+    accounts.map((a) => [a.id, a.ownerName ?? a.name]),
+  );
+  const concentration = incomeConcentration(
+    trendTx
+      .filter(
+        (t) =>
+          t.direction === "CREDIT" &&
+          t.categorization?.category?.kind !== "TRANSFER",
+      )
+      .map((t) => ({
+        holder: holderByAccount.get(t.bankAccountId) ?? "",
+        income: Math.max(
+          0,
+          Math.abs(Number(t.amount.toString())) -
+            t.splits.reduce((sum, s) => sum + Number(s.amount.toString()), 0),
+        ),
+      })),
+  );
 
   const monthLabel = (y: number, m: number) =>
     formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", {
@@ -116,13 +157,20 @@ export default async function DashboardPage() {
   }));
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const monthStatus = await monthStatusPromise;
 
   return (
     <div className="space-y-6">
       <PageHeader title={`Good morning, ${firstName} 👋`} />
 
-      {/* KPI Cards */}
+      {/* KPI Cards — available-to-spend first: it is THE number. */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <AvailableCard
+          status={monthStatus}
+          currency={currency}
+          locale={locale}
+        />
+
         <Kpi
           title="Net Worth"
           icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
@@ -140,17 +188,11 @@ export default async function DashboardPage() {
           <div className="text-2xl font-bold text-success">
             +{formatCurrency(thisMonth.income, currency, locale)}
           </div>
-          <p className="text-xs text-muted-foreground">Money in this month</p>
-        </Kpi>
-
-        <Kpi
-          title="Expenses this month"
-          icon={<TrendingDown className="h-4 w-4 text-destructive" />}
-        >
-          <div className="text-2xl font-bold text-destructive">
-            −{formatCurrency(thisMonth.expenses, currency, locale)}
-          </div>
-          <p className="text-xs text-muted-foreground">Money out this month</p>
+          <p className="text-xs text-muted-foreground">
+            {concentration
+              ? `${Math.round(concentration.share * 100)}% of household income arrives via ${concentration.holder}`
+              : "Money in this month"}
+          </p>
         </Kpi>
 
         <Kpi

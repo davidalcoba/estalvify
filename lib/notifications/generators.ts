@@ -98,6 +98,75 @@ export function upcomingRecurringNotifications(
   return specs;
 }
 
+export interface AmountChangeInput {
+  merchantKey: string;
+  displayName: string;
+  latestAmount: number;
+  latestDate: string; // YYYY-MM-DD
+  baselineAmount: number;
+  relativeChange: number; // signed fraction, +0.17 = up 17%
+}
+
+/**
+ * A recurring charge came in noticeably above/below its usual amount (an
+ * insurance premium silently raised, a promo price expiring). One alert per
+ * deviating charge: the key embeds the charge date, so the same deviation never
+ * re-alerts but next month's charge gets a fresh look.
+ */
+export function recurringAmountChangeNotifications(
+  deviations: AmountChangeInput[],
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return deviations.map((d) => {
+    const pct = Math.round(Math.abs(d.relativeChange) * 100);
+    const rose = d.relativeChange > 0;
+    return {
+      type: "RECURRING_AMOUNT_CHANGE" as NotificationType,
+      severity: (rose ? "WARNING" : "INFO") as NotificationSeverity,
+      title: `${d.displayName} ${rose ? "went up" : "went down"} ${pct}%`,
+      body: `The latest charge was ${formatCurrency(d.latestAmount, currency, locale)}, against a usual ${formatCurrency(
+        d.baselineAmount,
+        currency,
+        locale
+      )}.`,
+      dedupeKey: `recurring-amount:${d.merchantKey}:${d.latestDate}`,
+      metadata: { merchantKey: d.merchantKey, date: d.latestDate },
+    };
+  });
+}
+
+export interface MissedSeriesInput {
+  merchantKey: string;
+  displayName: string;
+  direction: "DEBIT" | "CREDIT";
+  averageAmount: number;
+  expectedDate: string; // YYYY-MM-DD
+  daysOverdue: number;
+}
+
+/**
+ * A confirmed series' expected charge never arrived — an unpaid bill, a
+ * cancelled subscription still confirmed, or a sync quietly broken. One alert
+ * per missed occurrence (the key embeds the expected date).
+ */
+export function missedRecurringNotifications(
+  missed: MissedSeriesInput[],
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return missed.map((m) => ({
+    type: "RECURRING_MISSED" as NotificationType,
+    severity: "WARNING" as NotificationSeverity,
+    title: `Missing: ${m.displayName}`,
+    body: `${
+      m.direction === "CREDIT" ? "An expected income of" : "An expected charge of"
+    } ${formatCurrency(m.averageAmount, currency, locale)} was due on ${m.expectedDate} and hasn't arrived (${m.daysOverdue} days). Check the bill — or the bank sync.`,
+    dedupeKey: `recurring-missed:${m.merchantKey}:${m.expectedDate}`,
+    metadata: { merchantKey: m.merchantKey, expectedDate: m.expectedDate },
+  }));
+}
+
 export interface ConsentInput {
   connectionId: string;
   bankName: string;
@@ -210,6 +279,133 @@ export function staleTransactionNotifications(
     });
   }
   return specs;
+}
+
+export interface ExtraordinaryIncomeInput {
+  merchantKey: string;
+  displayName: string;
+  latestAmount: number;
+  latestDate: string; // YYYY-MM-DD
+  baselineAmount: number;
+  excess: number;
+}
+
+/**
+ * An income arrived far above its usual amount — a bonus or annual variable
+ * riding inside the salary row. The ask is explicit: split it and assign it,
+ * because an unassigned windfall is absorbed by the month (April's 14.5k
+ * changed that month's spending by nothing). One alert per arrival.
+ */
+export function extraordinaryIncomeNotifications(
+  inputs: ExtraordinaryIncomeInput[],
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return inputs.map((i) => ({
+    type: "EXTRAORDINARY_INCOME" as NotificationType,
+    severity: "INFO" as NotificationSeverity,
+    title: `Extraordinary income: ${i.displayName}`,
+    body: `${formatCurrency(i.latestAmount, currency, locale)} arrived against a usual ${formatCurrency(
+      i.baselineAmount,
+      currency,
+      locale
+    )} — about ${formatCurrency(i.excess, currency, locale)} extra. Split the transaction (base + extraordinary) and assign the excess to savings or a fund; money left unassigned gets spent by the month.`,
+    dedupeKey: `extra-income:${i.merchantKey}:${i.latestDate}`,
+    metadata: { merchantKey: i.merchantKey, date: i.latestDate },
+  }));
+}
+
+export interface SavingsExecutionInput {
+  savingsGoal: number; // resolved €, > 0 means a goal is set
+  /** Whether an inbound transfer landed on the savings account this month. */
+  executed: boolean;
+  /** False when no savings account is designated — nothing to measure. */
+  tracked: boolean;
+  year: number;
+  month: number;
+  dayOfMonth: number;
+  daysInMonth: number;
+}
+
+/** Days before month end at which an unexecuted savings transfer is flagged. */
+export const SAVINGS_WARNING_WINDOW_DAYS = 5;
+
+/**
+ * The savings goal is set but no transfer into the savings account has landed
+ * and the month is nearly over. The app cannot move money — the standing order
+ * lives at the bank — so noticing it didn't run IS the feature. Once per month.
+ */
+export function savingsNotExecutedNotifications(
+  input: SavingsExecutionInput,
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  if (input.savingsGoal <= 0 || !input.tracked || input.executed) return [];
+  const daysLeft = input.daysInMonth - input.dayOfMonth;
+  if (daysLeft > SAVINGS_WARNING_WINDOW_DAYS) return [];
+
+  return [
+    {
+      type: "SAVINGS_NOT_EXECUTED" as NotificationType,
+      severity: "WARNING" as NotificationSeverity,
+      title: "This month's savings transfer hasn't run",
+      body: `Your goal is ${formatCurrency(input.savingsGoal, currency, locale)} and no transfer into your savings account has arrived this month, with ${
+        daysLeft === 0 ? "the month ending today" : `${daysLeft} days left`
+      }. If it isn't automatic at the bank, make the move now — unmoved money gets spent.`,
+      dedupeKey: `savings-missing:${input.year}-${input.month}`,
+      metadata: { year: String(input.year), month: String(input.month) },
+    },
+  ];
+}
+
+export interface CashflowBreachInput {
+  accountId: string;
+  accountName: string;
+  breachDate: string; // YYYY-MM-DD
+  breachBalance: number;
+  daysAway: number;
+  /** Lowest projected balance over the horizon — sizes the top-up that fixes it. */
+  minBalance: number;
+}
+
+/**
+ * Day-level low-balance warning for one account: the daily cash-flow projection
+ * says an upcoming charge (rent leaving before the salary lands) will push the
+ * account under the user's threshold. Re-alerts weekly while the squeeze
+ * persists — the key embeds the ISO week, not the shifting breach date.
+ */
+export function cashflowBreachNotifications(
+  breaches: CashflowBreachInput[],
+  threshold: number,
+  today: string,
+  currency: string,
+  locale: string
+): NotificationSpec[] {
+  return breaches.map((b) => {
+    const topUp = Math.ceil(threshold - b.minBalance);
+    const when =
+      b.daysAway === 1 ? "tomorrow" : `in ${b.daysAway} days (${b.breachDate})`;
+    return {
+      type: "LOW_BALANCE_PROJECTED" as NotificationType,
+      severity: (b.daysAway <= 7 ? "ALERT" : "WARNING") as NotificationSeverity,
+      title: `${b.accountName} won't cover upcoming charges`,
+      body: `${b.accountName} is projected to fall to ${formatCurrency(
+        b.breachBalance,
+        currency,
+        locale
+      )} ${when}, below your ${formatCurrency(threshold, currency, locale)} threshold. A transfer of ${formatCurrency(
+        topUp,
+        currency,
+        locale
+      )} would keep it covered.`,
+      dedupeKey: `cashflow-low:${b.accountId}:${isoYearWeek(today)}`,
+      metadata: {
+        accountId: b.accountId,
+        breachDate: b.breachDate,
+        daysAway: String(b.daysAway),
+      },
+    };
+  });
 }
 
 // Alert when the projected balance is set to fall below a threshold (default 0)

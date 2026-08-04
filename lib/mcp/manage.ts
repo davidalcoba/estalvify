@@ -81,11 +81,19 @@ export async function updateCategoryForUser(
     kind?: CategoryKind;
     /** `null` promotes the category to the top level. Omit to leave it where it is. */
     parentId?: string | null;
+    /**
+     * `true` restores a soft-deleted category — the undo `delete_category`
+     * never had. Restoring does NOT reactivate the rules that were deactivated
+     * when it was deleted, and a deactivated category (`false`) follows the
+     * delete_category path semantics minus its transaction guard, so prefer
+     * delete_category for turning things off.
+     */
+    isActive?: boolean;
   },
 ) {
   const cat = await prisma.category.findUnique({
     where: { id: categoryId },
-    select: { userId: true },
+    select: { userId: true, parentId: true },
   });
   // Only the user's own categories are editable (system categories are shared).
   if (!cat || cat.userId !== userId) throw new Error("Category not found");
@@ -99,6 +107,21 @@ export async function updateCategoryForUser(
   if (input.color !== undefined) data.color = input.color;
   if (input.kind !== undefined) data.kind = input.kind;
 
+  if (input.isActive !== undefined) {
+    if (input.isActive && cat.parentId) {
+      // A subcategory only renders under an active parent; restoring it below
+      // a deleted one would make it exist and stay invisible.
+      const parent = await prisma.category.findUnique({
+        where: { id: cat.parentId },
+        select: { isActive: true },
+      });
+      if (parent && !parent.isActive) {
+        throw new Error("Restore the parent category first");
+      }
+    }
+    data.isActive = input.isActive;
+  }
+
   if (input.parentId !== undefined) {
     await applyMove(userId, categoryId, input.parentId, data);
   }
@@ -106,7 +129,7 @@ export async function updateCategoryForUser(
   return prisma.category.update({
     where: { id: categoryId },
     data,
-    select: { id: true, name: true, color: true, parentId: true, kind: true },
+    select: { id: true, name: true, color: true, parentId: true, kind: true, isActive: true },
   });
 }
 
@@ -418,8 +441,11 @@ export async function listRulesForUser(userId: string) {
     matchCount: r.matchCount,
     lastRunAt: r.lastRunAt?.toISOString() ?? null,
     lastMatchAt: r.lastMatchAt?.toISOString() ?? null,
-    // Surfaces the rule that quietly does nothing.
-    neverMatched: r.lastRunAt !== null && r.matchCount === 0,
+    // Surfaces the rule that quietly does nothing. matchCount alone can't say
+    // it: it holds only the MOST RECENT run's matches, so a healthy rule with
+    // simply nothing new to claim would be flagged. Has-ever-matched is what
+    // lastMatchAt records.
+    neverMatched: r.lastRunAt !== null && r.lastMatchAt === null,
   }));
 }
 
@@ -508,4 +534,159 @@ export async function runAllRulesForUser(
   options: { dryRun?: boolean; force?: boolean } = {},
 ): Promise<RuleRunReport> {
   return runRules(userId, options);
+}
+
+// ── Plan items ────────────────────────────────────────────────────────────────
+// The Plan replaced Budget as the planning surface (see ROADMAP "Plan"), so
+// this is the write path an MCP client gets for planning. Same rules as the
+// UI actions in app/(app)/plan/actions.ts: expenses need a category, a one-off
+// needs its date, and an item mirrored from a recurring series
+// (recurringMerchantKey) is owned by the series — edit the series instead.
+
+export type PlanDirectionInput = "DEBIT" | "CREDIT";
+export type PlanCadenceInput = "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY" | "ONE_OFF";
+
+export interface PlanItemInputFields {
+  direction: PlanDirectionInput;
+  categoryId?: string | null;
+  label?: string | null;
+  amount: number;
+  cadence: PlanCadenceInput;
+  dayOfMonth?: number | null;
+  onDate?: string | null; // YYYY-MM-DD, required for ONE_OFF
+  endDate?: string | null; // YYYY-MM-DD, periodic items only
+}
+
+async function normalizePlanFields(
+  userId: string,
+  fields: PlanItemInputFields,
+  currency: string,
+) {
+  if (!Number.isFinite(fields.amount) || fields.amount < 0) {
+    throw new Error("Invalid amount");
+  }
+  const categoryId = fields.categoryId || null;
+  if (fields.direction === "DEBIT" && !categoryId) {
+    throw new Error("Category required for an expense");
+  }
+  if (categoryId) await assertOwnedCategory(userId, categoryId);
+
+  let dayOfMonth: number | null = null;
+  let onDate: Date | null = null;
+  if (fields.cadence === "ONE_OFF") {
+    if (!fields.onDate || !/^\d{4}-\d{2}-\d{2}$/.test(fields.onDate)) {
+      throw new Error("A date (YYYY-MM-DD) is required for a one-off item");
+    }
+    onDate = new Date(`${fields.onDate}T00:00:00.000Z`);
+    if (Number.isNaN(onDate.getTime())) throw new Error("Invalid date");
+  } else if (fields.dayOfMonth != null) {
+    const d = Math.trunc(fields.dayOfMonth);
+    if (d < 1 || d > 31) throw new Error("Invalid day of month");
+    dayOfMonth = d;
+  }
+
+  let endDate: Date | null = null;
+  if (fields.endDate && fields.cadence !== "ONE_OFF") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.endDate)) throw new Error("Invalid end date");
+    endDate = new Date(`${fields.endDate}T00:00:00.000Z`);
+    if (Number.isNaN(endDate.getTime())) throw new Error("Invalid end date");
+  }
+
+  return {
+    direction: fields.direction,
+    categoryId,
+    label: fields.label?.trim() ? fields.label.trim().slice(0, 60) : null,
+    amount: fields.amount,
+    currency,
+    cadence: fields.cadence,
+    dayOfMonth,
+    onDate,
+    endDate,
+  };
+}
+
+export async function listPlanItemsForUser(userId: string) {
+  const items = await prisma.planItem.findMany({
+    where: { userId },
+    orderBy: [{ direction: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      label: true,
+      direction: true,
+      categoryId: true,
+      amount: true,
+      currency: true,
+      cadence: true,
+      dayOfMonth: true,
+      onDate: true,
+      endDate: true,
+      recurringMerchantKey: true,
+      active: true,
+      category: { select: { name: true } },
+    },
+  });
+  return items.map((item) => ({
+    id: item.id,
+    label: item.label,
+    direction: item.direction,
+    categoryId: item.categoryId,
+    category: item.category?.name ?? null,
+    amount: Number(item.amount.toString()),
+    currency: item.currency,
+    cadence: item.cadence,
+    dayOfMonth: item.dayOfMonth,
+    onDate: item.onDate?.toISOString().slice(0, 10) ?? null,
+    endDate: item.endDate?.toISOString().slice(0, 10) ?? null,
+    // Non-null = mirrored from a confirmed recurring series; the series owns it.
+    recurringMerchantKey: item.recurringMerchantKey,
+    active: item.active,
+  }));
+}
+
+export async function createPlanItemForUser(
+  userId: string,
+  fields: PlanItemInputFields,
+  currency = "EUR",
+) {
+  const data = await normalizePlanFields(userId, fields, currency);
+  const created = await prisma.planItem.create({
+    data: { ...data, userId },
+    select: { id: true },
+  });
+  return { id: created.id };
+}
+
+export async function updatePlanItemForUser(
+  userId: string,
+  planItemId: string,
+  fields: PlanItemInputFields,
+) {
+  const existing = await prisma.planItem.findFirst({
+    where: { id: planItemId, userId },
+    select: { currency: true, recurringMerchantKey: true },
+  });
+  if (!existing) throw new Error("Plan item not found");
+  if (existing.recurringMerchantKey) {
+    throw new Error(
+      "This item mirrors a confirmed recurring series; adjust the series on /recurring instead",
+    );
+  }
+  const data = await normalizePlanFields(userId, fields, existing.currency);
+  await prisma.planItem.update({ where: { id: planItemId }, data });
+  return { id: planItemId };
+}
+
+export async function deletePlanItemForUser(userId: string, planItemId: string) {
+  const existing = await prisma.planItem.findFirst({
+    where: { id: planItemId, userId },
+    select: { recurringMerchantKey: true },
+  });
+  if (!existing) throw new Error("Plan item not found");
+  if (existing.recurringMerchantKey) {
+    throw new Error(
+      "This item mirrors a confirmed recurring series; ignore the series on /recurring instead",
+    );
+  }
+  await prisma.planItem.delete({ where: { id: planItemId } });
+  return { deleted: planItemId };
 }

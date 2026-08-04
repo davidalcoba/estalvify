@@ -28,6 +28,7 @@ import {
   selectableMonths,
 } from "@/lib/analytics/report-filters";
 import { merchantDisplayName } from "@/lib/recurring/detect";
+import { traceabilityForMonth } from "@/lib/analytics/traceability";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -55,6 +56,9 @@ function ReportsBodySkeleton() {
         <ListCardSkeleton rows={6} titleWidth="w-56" />
         <ListCardSkeleton rows={6} titleWidth="w-48" />
       </div>
+
+      {/* Untracked spending */}
+      <ListCardSkeleton rows={3} titleWidth="w-64" />
     </div>
   );
 }
@@ -83,6 +87,11 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
         valueDate: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
+        // Extraordinary split lines are subtracted from income averages.
+        splits: {
+          where: { isExtraordinary: true },
+          select: { amount: true },
+        },
       },
     }),
     prisma.transaction.findMany({
@@ -90,6 +99,7 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       select: {
         amount: true,
         categorization: { select: { categoryId: true } },
+        splits: { select: { amount: true, categoryId: true } },
       },
     }),
     prisma.category.findMany({
@@ -103,7 +113,13 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
         valueDate: { gte: monthStart, lt: monthEnd },
         ...accountWhere,
       },
-      select: { amount: true, description: true, remittanceInfo: true },
+      select: {
+        amount: true,
+        description: true,
+        remittanceInfo: true,
+        categorization: { select: { category: { select: { kind: true } } } },
+        splits: { select: { amount: true, categoryId: true } },
+      },
     }),
   ]);
 
@@ -123,6 +139,10 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
       categoryKind: t.categorization?.category?.kind ?? null,
+      extraordinaryAmount: t.splits.reduce(
+        (sum, s) => sum + Number(s.amount.toString()),
+        0,
+      ),
     })),
     months,
   );
@@ -157,6 +177,23 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
     .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, TOP_MERCHANTS);
+
+  // Untracked share of the month: cash withdrawals + card settlements, minus
+  // what splits have explained. Transfers are not spending and stay out.
+  const traceability = traceabilityForMonth(
+    monthDebits
+      .filter((tx) => tx.categorization?.category?.kind !== "TRANSFER")
+      .map((tx) => ({
+        amount: Math.abs(Number(tx.amount.toString())),
+        description: tx.description,
+        remittanceInfo: tx.remittanceInfo,
+        categorizedSplitTotal: tx.splits.reduce(
+          (sum, split) =>
+            split.categoryId ? sum + Number(split.amount.toString()) : sum,
+          0,
+        ),
+      })),
+  );
 
   const selectedMonthLabel = formatDate(
     new Date(Date.UTC(month.year, month.month - 1, 1)),
@@ -239,6 +276,55 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Untracked spending · {selectedMonthLabel}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span
+              className={`text-2xl font-bold tabular-nums ${
+                traceability.untrackedRatio > 0.05 ? "text-warning" : ""
+              }`}
+            >
+              {(traceability.untrackedRatio * 100).toFixed(1)}%
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {formatCurrency(traceability.untracked, currency, locale)} of{" "}
+              {formatCurrency(traceability.totalSpend, currency, locale)} spent
+              with no trace of what it bought
+            </span>
+          </div>
+          <dl className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-3">
+            <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-start">
+              <dt className="text-muted-foreground">ATM cash</dt>
+              <dd className="tabular-nums">
+                {formatCurrency(traceability.cashWithdrawn, currency, locale)}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-start">
+              <dt className="text-muted-foreground">Card settlements</dt>
+              <dd className="tabular-nums">
+                {formatCurrency(traceability.cardSettled, currency, locale)}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-start">
+              <dt className="text-muted-foreground">Explained by splits</dt>
+              <dd className="tabular-nums text-success">
+                {formatCurrency(traceability.explained, currency, locale)}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-xs text-muted-foreground">
+            While this share is dark, every budget can look met while
+            overspending. Shrink it by splitting a withdrawal into what the
+            cash actually bought — open the transaction and hit Split.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

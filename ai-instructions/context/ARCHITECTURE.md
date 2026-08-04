@@ -435,12 +435,18 @@ stored hashed.
   pagination + **category filter and per-category counts** — returns both
   `description` and `remittanceInfo` plus the categorization source, which is what
   makes a misfiring rule debuggable), `list_categories`, `list_accounts`,
-  `get_budgets`, `list_rules` (with run metrics), `test_rule` (evaluate conditions
+  `get_budgets` (LEGACY — budgets were replaced by the Plan; read-only), `list_plan_items`,
+  `list_rules` (with run metrics — `neverMatched` means `lastMatchAt === null` after at
+  least one run, never "zero matches in the last run"), `test_rule` (evaluate conditions
   without saving). Writes: `bulk_categorize` (`lib/mcp/categorize.ts`, capped),
-  category create/edit/delete and rule create/edit via `lib/mcp/manage.ts`
-  (parameterized by userId), `run_rule` (supports `dryRun` and `force`),
-  `undo_rule_run` and `delete_rule` via `lib/rules/apply.ts`, `sync_connections`
-  (enqueues).
+  category create/edit/delete, rule create/edit and **plan item create/edit/delete**
+  via `lib/mcp/manage.ts` (parameterized by userId; plan items mirrored from a
+  confirmed recurring series are refused — the series owns them), `run_rule`
+  (supports `dryRun` and `force`), `undo_rule_run` and `delete_rule` via
+  `lib/rules/apply.ts`, `sync_connections` (enqueues).
+  `lib/mcp/tools-schema.test.ts` parses the registry and fails the build when a
+  handler reads a parameter its declared inputSchema doesn't carry (or declares one
+  it never reads) — that drift shipped three times before the test existed.
 - **Auditing the category tree from MCP.** `list_transactions` takes a
   `categoryId` (subcategories included by default, via the pure `subtreeIds` in
   `lib/categories/hierarchy.ts`) and `categoryCounts: true`, which adds the count

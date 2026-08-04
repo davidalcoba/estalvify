@@ -36,6 +36,81 @@ export async function updatePreferences(data: {
   revalidatePath("/accounts");
 }
 
+export interface PlanningSettingsInput {
+  /** Cash-flow alert threshold (0 = "don't go negative"). */
+  lowBalanceThreshold: number;
+  /** Savings goal: a fixed monthly amount, a percent of fixed income, or none. */
+  savingsGoalType: "none" | "amount" | "percent";
+  savingsGoalValue: number | null;
+  /** Account whose net balance change measures real savings; null = untracked. */
+  savingsAccountId: string | null;
+}
+
+// Planning & alert settings: cash-flow threshold plus the savings-first goal.
+export async function updatePlanningSettings(input: PlanningSettingsInput) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const { lowBalanceThreshold, savingsGoalType, savingsGoalValue } = input;
+  if (
+    !Number.isFinite(lowBalanceThreshold) ||
+    Math.abs(lowBalanceThreshold) > 1_000_000
+  ) {
+    throw new Error("Invalid threshold");
+  }
+
+  let savingsGoalAmount: number | null = null;
+  let savingsGoalPercent: number | null = null;
+  if (savingsGoalType === "amount") {
+    if (
+      savingsGoalValue == null ||
+      !Number.isFinite(savingsGoalValue) ||
+      savingsGoalValue <= 0 ||
+      savingsGoalValue > 1_000_000
+    ) {
+      throw new Error("Invalid savings amount");
+    }
+    savingsGoalAmount = savingsGoalValue;
+  } else if (savingsGoalType === "percent") {
+    if (
+      savingsGoalValue == null ||
+      !Number.isFinite(savingsGoalValue) ||
+      savingsGoalValue <= 0 ||
+      savingsGoalValue > 100
+    ) {
+      throw new Error("Invalid savings percent");
+    }
+    savingsGoalPercent = savingsGoalValue;
+  }
+
+  // The account must be the user's own; an unknown id turns tracking off.
+  let savingsAccountId: string | null = null;
+  if (input.savingsAccountId) {
+    const account = await prisma.bankAccount.findFirst({
+      where: { id: input.savingsAccountId, userId },
+      select: { id: true },
+    });
+    if (!account) throw new Error("Account not found");
+    savingsAccountId = account.id;
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      lowBalanceThreshold,
+      savingsGoalAmount,
+      savingsGoalPercent,
+      savingsAccountId,
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/forecast");
+  revalidatePath("/plan");
+  revalidatePath("/dashboard");
+}
+
 // ─────────────────────────────────────────────
 // CATEGORY MANAGEMENT
 // ─────────────────────────────────────────────
