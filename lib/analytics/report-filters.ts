@@ -64,6 +64,15 @@ export function selectableMonths(current: MonthBucket): MonthBucket[] {
 export function parseReportFilters(
   params: { month?: string; trend?: string; accountId?: string },
   current: MonthBucket,
+  /**
+   * The user's own account ids. An id that is not among them — a bookmarked URL
+   * for an account since deleted or deactivated, or someone else's — falls back
+   * to all accounts. Required rather than optional so a caller cannot skip the
+   * check by forgetting it: without it the filter bar would show a blank
+   * selector (no option matches) above an empty report, with nothing saying why.
+   * The queries never leaked, since they all scope by `userId` too.
+   */
+  accountIds: readonly string[],
 ): ReportFilters {
   const requested = parseYearMonth(params.month);
   const allowed = selectableMonths(current);
@@ -77,8 +86,9 @@ export function parseReportFilters(
     ? (trend as TrendWindow)
     : DEFAULT_TREND_WINDOW;
 
-  const accountId =
+  const requestedAccount =
     params.accountId && params.accountId !== ALL_ACCOUNTS ? params.accountId : "";
+  const accountId = accountIds.includes(requestedAccount) ? requestedAccount : "";
 
   return { month, trendMonths, accountId };
 }

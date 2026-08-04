@@ -188,6 +188,7 @@ in the same change**, and a new route ships one from the start. Build them from
 - `./ai-instructions/context/PLAYBOOK_NEW_FEATURE.md`
 - `./ai-instructions/context/GLOSSARY.md`
 - `./ai-instructions/context/ROADMAP.md`
+- `./ai-instructions/context/AUDIT.md`
 
 ## Skills
 - `./ai-instructions/skills/frontend-design/SKILL.md`

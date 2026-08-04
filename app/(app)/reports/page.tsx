@@ -336,10 +336,10 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const { language, timezone } = await getUserPrefs(userId);
 
   const current = currentYearMonth(timezone);
-  const { month, trendMonths, accountId } = parseReportFilters(params, current);
 
   // Fetched at page level so the filter bar renders without a skeleton and
-  // stays usable while the cards below reload.
+  // stays usable while the cards below reload — and before the filters are
+  // parsed, because the account filter is validated against this list.
   const [accounts, anyTransaction] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { userId, isActive: true },
@@ -348,6 +348,12 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     }),
     prisma.transaction.findFirst({ where: { userId }, select: { id: true } }),
   ]);
+
+  const { month, trendMonths, accountId } = parseReportFilters(
+    params,
+    current,
+    accounts.map((a) => a.id),
+  );
 
   const monthOptions = selectableMonths(current).map((m) => ({
     value: formatYearMonth(m),

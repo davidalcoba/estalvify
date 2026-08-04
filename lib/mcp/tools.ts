@@ -34,9 +34,12 @@ import {
   testConditions,
   undoRuleRun,
 } from "@/lib/rules/apply";
-import { parseConditions, MAX_CONDITION_VALUE_LENGTH } from "@/lib/rules/rule-dto";
+import {
+  parseConditions,
+  assertValidConditionTree,
+  MAX_CONDITION_VALUE_LENGTH,
+} from "@/lib/rules/rule-dto";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
-import { isValidRegex } from "@/lib/rules/rule-matcher";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 
@@ -91,25 +94,15 @@ const conditionsSchema = z.union([
 ]);
 
 /**
- * Reject a rule whose regex would never compile, at save time rather than
- * silently never matching at run time.
+ * Reject a rule that is nested too deeply, has too many conditions, or carries a
+ * regex that won't compile or is expensive to run — at save time rather than
+ * silently never matching (or hanging) at run time. Shares the exact validation
+ * the UI server actions use (`assertValidConditionTree`), so the two entry
+ * points into the rule engine cannot drift.
  */
 function normalizeConditions(input: unknown): ConditionGroup {
   const group = parseConditions(input);
-
-  const check = (node: unknown): void => {
-    if (typeof node !== "object" || node === null) return;
-    const n = node as Record<string, unknown>;
-    if (Array.isArray(n.children)) {
-      n.children.forEach(check);
-      return;
-    }
-    if (n.operator === "matches" && typeof n.value === "string" && !isValidRegex(n.value)) {
-      throw new Error(`Invalid regex in condition: ${n.value}`);
-    }
-  };
-  check(group);
-
+  assertValidConditionTree(group);
   return group;
 }
 

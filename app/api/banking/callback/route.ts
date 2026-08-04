@@ -55,10 +55,9 @@ export async function GET(request: NextRequest) {
   try {
     const { session_id, accounts, access } = await exchangeCodeForSession(code);
 
-    console.log("[callback] accounts from API:", JSON.stringify(
-      accounts.map((a) => ({ uid: a.uid, name: a.name, product: a.product, details: a.details, ibanSuffix: a.account_id?.iban?.slice(-4) })),
-      null, 2
-    ));
+    // Do not log account names, products, details or IBANs — that is personal
+    // data and Vercel retains logs. A count is enough to confirm the exchange.
+    console.log(`[callback] session exchanged, ${accounts.length} account(s) returned`);
 
     const consentExpiresAt = access?.valid_until ? new Date(access.valid_until) : null;
 
@@ -174,15 +173,15 @@ export async function GET(request: NextRequest) {
       `${appUrl}/accounts/setup?connectionId=${bankConnection.id}`
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    // Log the full upstream error server-side; never put its body in the redirect
+    // URL (it would leak provider internals into the browser, history and
+    // referrers). Redirect with a stable code the accounts page maps to copy.
     console.error("Banking callback processing error:", error);
 
     await prisma.bankConnection
       .delete({ where: { id: bankConnection.id } })
       .catch(() => {});
 
-    return NextResponse.redirect(
-      `${appUrl}/accounts?error=${encodeURIComponent(message)}`
-    );
+    return NextResponse.redirect(`${appUrl}/accounts?error=connection_failed`);
   }
 }

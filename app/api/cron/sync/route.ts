@@ -7,15 +7,29 @@
 // status transitions. The cron's only job is to fan out queue messages.
 
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { send } from "@vercel/queue";
 import { expireStaleConsents } from "@/lib/banking/connection-status";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 import { generateNotificationsForUser } from "@/lib/notifications/generate";
 
+/** Constant-time bearer check that fails closed when the secret is unset. An
+ * absent CRON_SECRET must never authenticate — otherwise the header
+ * `Bearer undefined` would open the endpoint to anyone. */
+function isAuthorized(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const header = request.headers.get("authorization") ?? "";
+  const expected = `Bearer ${secret}`;
+  const a = Buffer.from(header);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

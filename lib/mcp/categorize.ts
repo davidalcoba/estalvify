@@ -5,10 +5,10 @@
 // Mirrors the upsert semantics of those actions: MANUAL source, APPROVED status.
 
 import { prisma } from "@/lib/prisma";
-import { buildUncategorizedWhere } from "@/lib/categorize";
+import { buildUncategorizedWhere, BULK_CATEGORIZE_CAP } from "@/lib/categorize";
 
-/** Safety cap so a single bulk call can't rewrite an unbounded number of rows. */
-export const BULK_CATEGORIZE_CAP = 1000;
+// Re-exported for compatibility with existing importers.
+export { BULK_CATEGORIZE_CAP };
 
 async function assertOwnedCategory(userId: string, categoryId: string) {
   const cat = await prisma.category.findUnique({
