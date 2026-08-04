@@ -5,6 +5,10 @@
 // elapsed, never alone. A rollover fund has INVERTED polarity: assigning is
 // accumulation, so its bar fills green as the quota is set aside — same
 // widget, opposite meaning, visually distinct (piggy icon + balance).
+//
+// Editing and deleting go through a bottom sheet on mobile (same pattern as
+// Transactions) and a dialog on desktop; autofocus is suppressed so the
+// numeric keyboard doesn't cover the form the instant it opens.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -12,9 +16,11 @@ import { Loader2, PiggyBank, Plus, Target, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency } from "@/lib/formatters";
@@ -40,6 +46,48 @@ interface Draft {
   existing: boolean;
 }
 
+/** Bottom sheet on mobile, dialog on desktop; never autofocuses. */
+function ResponsiveModal({
+  open,
+  onOpenChange,
+  title,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-xl pb-6"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <SheetHeader className="pb-1">
+            <SheetTitle className="text-base">{title}</SheetTitle>
+          </SheetHeader>
+          <div className="px-4">{children}</div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="w-[min(96vw,420px)] pt-8 px-6 pb-6"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <DialogTitle>{title}</DialogTitle>
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ObjectivesCard({
   objectives,
   monthElapsed,
@@ -52,6 +100,7 @@ export function ObjectivesCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [confirm, setConfirm] = useState<{ categoryId: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
   const elapsedPct = Math.round(monthElapsed * 100);
@@ -78,13 +127,17 @@ export function ObjectivesCard({
     });
   }
 
-  function remove(categoryId: string) {
+  function confirmedRemove() {
+    if (!confirm) return;
+    const { categoryId } = confirm;
     startTransition(async () => {
       try {
         await removeBudgetObjective(categoryId, year, month);
+        setConfirm(null);
         router.refresh();
       } catch {
-        // refresh restores truth
+        setConfirm(null); // refresh restores truth
+        router.refresh();
       }
     });
   }
@@ -171,7 +224,9 @@ export function ObjectivesCard({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 shrink-0 text-muted-foreground"
-                          onClick={() => remove(o.categoryId)}
+                          onClick={() =>
+                            setConfirm({ categoryId: o.categoryId, name: o.categoryName })
+                          }
                           disabled={isPending}
                           title="Remove objective (this month onward)"
                         >
@@ -243,7 +298,9 @@ export function ObjectivesCard({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 shrink-0 text-muted-foreground"
-                          onClick={() => remove(o.categoryId)}
+                          onClick={() =>
+                            setConfirm({ categoryId: o.categoryId, name: o.categoryName })
+                          }
                           disabled={isPending}
                           title="Remove fund (this month onward)"
                         >
@@ -271,63 +328,96 @@ export function ObjectivesCard({
         )}
       </CardContent>
 
-      <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
-        <DialogContent className="w-[min(96vw,420px)] pt-8 px-6 pb-6">
-          <DialogTitle>{draft?.rollover ? "Rollover fund" : "Category objective"}</DialogTitle>
-          {draft && (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <CategorySelect
-                  defaultValue={draft.categoryId ?? undefined}
-                  onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
-                  categories={categories}
-                  ariaLabel="Objective category"
-                  className="w-full"
-                  disabled={draft.existing}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="objective-amount">Monthly amount ({currency})</Label>
-                <Input
-                  id="objective-amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={draft.assigned}
-                  onChange={(e) => setDraft({ ...draft, assigned: e.target.value })}
-                />
+      <ResponsiveModal
+        open={draft !== null}
+        onOpenChange={(o) => {
+          if (!o) setDraft(null);
+        }}
+        title={draft?.rollover ? "Rollover fund" : "Category objective"}
+      >
+        {draft && (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <CategorySelect
+                defaultValue={draft.categoryId ?? undefined}
+                onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
+                categories={categories}
+                ariaLabel="Objective category"
+                className="w-full"
+                disabled={draft.existing}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="objective-amount">Monthly amount ({currency})</Label>
+              <Input
+                id="objective-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={draft.assigned}
+                onChange={(e) => setDraft({ ...draft, assigned: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Copied forward automatically each month.
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="objective-rollover">Rollover</Label>
                 <p className="text-xs text-muted-foreground">
-                  Copied forward automatically each month.
+                  The unspent remainder accumulates month over month.
                 </p>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <Label htmlFor="objective-rollover">Rollover</Label>
-                  <p className="text-xs text-muted-foreground">
-                    The unspent remainder accumulates month over month.
-                  </p>
-                </div>
-                <Switch
-                  id="objective-rollover"
-                  checked={draft.rollover}
-                  onCheckedChange={(v) => setDraft({ ...draft, rollover: v })}
-                />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="outline" onClick={() => setDraft(null)} disabled={isPending}>
-                  Cancel
-                </Button>
-                <Button onClick={save} disabled={isPending}>
-                  {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Save
-                </Button>
-              </div>
+              <Switch
+                id="objective-rollover"
+                checked={draft.rollover}
+                onCheckedChange={(v) => setDraft({ ...draft, rollover: v })}
+              />
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setDraft(null)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button onClick={save} disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        open={confirm !== null}
+        onOpenChange={(o) => {
+          if (!o && !isPending) setConfirm(null);
+        }}
+        title="Remove objective?"
+      >
+        {confirm && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{confirm.name}</span>{" "}
+              stops counting from this month on. Past months keep it.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setConfirm(null)}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmedRemove} disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Remove
+              </Button>
+            </div>
+          </div>
+        )}
+      </ResponsiveModal>
     </Card>
   );
 }
