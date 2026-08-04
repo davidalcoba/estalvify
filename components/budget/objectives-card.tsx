@@ -133,8 +133,15 @@ export function ObjectivesCard({
                     o.assigned > 0 ? Math.round((o.consumed / o.assigned) * 100) : 0;
                   const over = o.consumed > o.assigned;
                   const ahead = consumedPct > elapsedPct;
+                  const pctTone = over
+                    ? "text-destructive"
+                    : ahead
+                      ? "text-warning"
+                      : "text-muted-foreground";
                   return (
                     <li key={o.categoryId} className="text-sm">
+                      {/* One line on desktop; on mobile the amounts wrap to
+                          their own line so the name never crushes them. */}
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
@@ -154,17 +161,11 @@ export function ObjectivesCard({
                           />
                           {o.categoryName}
                         </button>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                        <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
                           {fmt(o.consumed)} / {fmt(o.assigned)}
                         </span>
                         <span
-                          className={`w-20 shrink-0 text-right text-xs tabular-nums ${
-                            over
-                              ? "text-destructive"
-                              : ahead
-                                ? "text-warning"
-                                : "text-muted-foreground"
-                          }`}
+                          className={`hidden w-20 shrink-0 text-right text-xs tabular-nums sm:inline ${pctTone}`}
                         >
                           {consumedPct}% · {elapsedPct}%
                         </span>
@@ -178,6 +179,14 @@ export function ObjectivesCard({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between gap-2 text-xs sm:hidden">
+                        <span className="tabular-nums text-muted-foreground">
+                          {fmt(o.consumed)} / {fmt(o.assigned)}
+                        </span>
+                        <span className={`tabular-nums ${pctTone}`}>
+                          {consumedPct}% · {elapsedPct}%
+                        </span>
                       </div>
                       <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
@@ -206,42 +215,56 @@ export function ObjectivesCard({
                 </p>
                 <ul className="space-y-2">
                   {funds.map((o) => (
-                    <li key={o.categoryId} className="flex items-center gap-3 text-sm">
-                      <PiggyBank className="h-3.5 w-3.5 shrink-0 text-success" />
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
-                        onClick={() =>
-                          setDraft({
-                            categoryId: o.categoryId,
-                            assigned: String(o.assigned),
-                            rollover: true,
-                            existing: true,
-                          })
-                        }
-                      >
-                        {o.categoryName}
-                      </button>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {fmt(o.assigned)}/mo
-                      </span>
-                      <span
-                        className={`w-24 shrink-0 text-right tabular-nums ${
-                          (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
-                        }`}
-                      >
-                        {fmt(o.balance ?? 0)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-muted-foreground"
-                        onClick={() => remove(o.categoryId)}
-                        disabled={isPending}
-                        title="Remove fund (this month onward)"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                    <li key={o.categoryId} className="text-sm">
+                      <div className="flex items-center gap-3">
+                        <PiggyBank className="h-3.5 w-3.5 shrink-0 text-success" />
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+                          onClick={() =>
+                            setDraft({
+                              categoryId: o.categoryId,
+                              assigned: String(o.assigned),
+                              rollover: true,
+                              existing: true,
+                            })
+                          }
+                        >
+                          {o.categoryName}
+                        </button>
+                        <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">
+                          {fmt(o.assigned)}/mo
+                        </span>
+                        <span
+                          className={`hidden w-24 shrink-0 text-right tabular-nums sm:inline ${
+                            (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
+                          }`}
+                        >
+                          {fmt(o.balance ?? 0)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-muted-foreground"
+                          onClick={() => remove(o.categoryId)}
+                          disabled={isPending}
+                          title="Remove fund (this month onward)"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between gap-2 pl-6 text-xs sm:hidden">
+                        <span className="tabular-nums text-muted-foreground">
+                          {fmt(o.assigned)}/mo
+                        </span>
+                        <span
+                          className={`tabular-nums ${
+                            (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
+                          }`}
+                        >
+                          {fmt(o.balance ?? 0)}
+                        </span>
+                      </div>
                     </li>
                   ))}
                 </ul>

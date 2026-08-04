@@ -157,12 +157,32 @@ export async function ensureBudgetPropagation(
   }
 }
 
+/** Months between two (year, month) pairs: positive when b is after a. */
+function monthDiff(a: { year: number; month: number }, b: { year: number; month: number }): number {
+  return (b.year - a.year) * 12 + (b.month - a.month);
+}
+
 export async function buildMonthStatus(
   userId: string,
-  timezone: string
+  timezone: string,
+  /** Month to view; defaults to the current one. Navigation never mutates the past. */
+  target?: { year: number; month: number }
 ): Promise<MonthStatus> {
-  const { year, month } = currentYearMonth(timezone);
-  await ensureBudgetPropagation(userId, year, month);
+  const current = currentYearMonth(timezone);
+  const { year, month } = target ?? current;
+  // Propagate assignments from the current month forward to the viewed month
+  // (chain of one-month-back copies), never into the past — materializing
+  // rows in a closed month would falsify its history. Bounded so a deep link
+  // can't mass-create budgets.
+  const ahead = monthDiff(current, { year, month });
+  for (let i = 0; i <= Math.min(Math.max(ahead, 0), 12); i++) {
+    const m0 = current.month - 1 + i;
+    await ensureBudgetPropagation(
+      userId,
+      current.year + Math.floor(m0 / 12),
+      (m0 % 12) + 1
+    );
+  }
   const today = todayInTimezone(timezone);
   const { start, end } = monthRange(year, month);
   const opsStart = new Date(start);
@@ -234,10 +254,7 @@ export async function buildMonthStatus(
       }),
       prisma.bankAccount.findMany({
         where: { userId, isActive: true },
-        select: {
-          id: true,
-          balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } },
-        },
+        select: { id: true },
       }),
     ]);
 
@@ -321,11 +338,13 @@ export async function buildMonthStatus(
     }
   }
 
-  // Consumed this month per category, from the variable set (by date — the
-  // variable spend never carries accrual, plan §4.5).
+  // Consumed in the VIEWED month per category, from the variable set (by date
+  // — the variable spend never carries accrual, plan §4.5).
+  const monthStartStr = `${year}-${String(month).padStart(2, "0")}-01`;
+  const monthEndStr = end.toISOString().slice(0, 10);
   const consumedByCategory = new Map<string, number>();
   for (const tx of variableTx) {
-    if (!tx.categoryId || tx.date < today.slice(0, 8) + "01") continue;
+    if (!tx.categoryId || tx.date < monthStartStr || tx.date >= monthEndStr) continue;
     consumedByCategory.set(
       tx.categoryId,
       (consumedByCategory.get(tx.categoryId) ?? 0) + tx.amount
@@ -407,25 +426,39 @@ export async function buildMonthStatus(
     unmatchedDebit,
   });
 
-  // Consolidated balance now and entering the month (accounts have no
-  // semantics — always the sum of all of them).
-  const consolidatedBalance = accounts.every((a) => a.balances.length === 0)
-    ? null
-    : round(
-        accounts.reduce(
-          (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
-          0
+  // Consolidated balance entering and leaving the viewed month (accounts have
+  // no semantics — always the sum of all of them). For the current month the
+  // "end" snapshot is simply the latest one; for a past month it is the last
+  // snapshot inside it, so navigation shows that month's own delta.
+  const [startSnapshots, endSnapshots] = await Promise.all([
+    Promise.all(
+      accounts.map((a) =>
+        prisma.accountBalance.findFirst({
+          where: { bankAccountId: a.id, date: { lt: start } },
+          orderBy: { date: "desc" },
+          select: { balance: true },
+        })
+      )
+    ),
+    Promise.all(
+      accounts.map((a) =>
+        prisma.accountBalance.findFirst({
+          where: { bankAccountId: a.id, date: { lt: end } },
+          orderBy: { date: "desc" },
+          select: { balance: true },
+        })
+      )
+    ),
+  ]);
+  const consolidatedBalance =
+    accounts.length > 0 && endSnapshots.some((s) => s !== null)
+      ? round(
+          endSnapshots.reduce(
+            (sum, s) => sum + (s ? Number(s.balance.toString()) : 0),
+            0
+          )
         )
-      );
-  const startSnapshots = await Promise.all(
-    accounts.map((a) =>
-      prisma.accountBalance.findFirst({
-        where: { bankAccountId: a.id, date: { lt: start } },
-        orderBy: { date: "desc" },
-        select: { balance: true },
-      })
-    )
-  );
+      : null;
   const haveAllStarts =
     accounts.length > 0 && startSnapshots.every((s) => s !== null);
   const consolidatedDelta =
@@ -461,12 +494,23 @@ export async function buildMonthStatus(
     monthsOfCushion: monthsOfCushion(consolidatedBalance, avgMonthlySpend),
   };
 
+  // Pace reference for the viewed month: a past month is fully elapsed, a
+  // future one hasn't started. Provisional applies while last month's charges
+  // can still slide in — which also keeps the JUST-CLOSED month's numbers open.
+  const monthElapsed =
+    ahead === 0
+      ? Math.round((Number(today.slice(8, 10)) / daysInMonth) * 100) / 100
+      : ahead < 0
+        ? 1
+        : 0;
+  const provisional = isProvisionalMonth(today) && (ahead === 0 || ahead === -1);
+
   return {
     year,
     month,
     today,
-    provisional: isProvisionalMonth(today),
-    monthElapsed: Math.round((Number(today.slice(8, 10)) / daysInMonth) * 100) / 100,
+    provisional,
+    monthElapsed,
     configured: variableBudget > 0,
     cascade,
     weekly,
