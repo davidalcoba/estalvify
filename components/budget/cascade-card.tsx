@@ -52,7 +52,7 @@ export function CascadeCard({
             <dd className="tabular-nums">−{fmt(cascade.variableBudget)}</dd>
           </div>
           <div className="flex items-center justify-between border-t pt-1.5 font-medium">
-            <dt>Expected result — the goal</dt>
+            <dt>Expected result (goal)</dt>
             <dd
               className={`tabular-nums ${cascade.expectedResult < 0 ? "text-destructive" : "text-success"}`}
             >
@@ -61,11 +61,6 @@ export function CascadeCard({
             </dd>
           </div>
         </dl>
-        <p className="text-xs text-muted-foreground">
-          Want to save more? Lower the variable budget until this number is the
-          one you want. Savings itself is derived — see the reconciliation.
-        </p>
-
         <dl className="space-y-1.5 border-t pt-3 text-sm">
           <div className="flex items-center justify-between">
             <dt className="text-muted-foreground">Actual result (accrual)</dt>
@@ -87,9 +82,7 @@ export function CascadeCard({
           </div>
           {reconciliation.consolidatedDelta != null && (
             <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">
-                Real savings (consolidated balance change)
-              </dt>
+              <dt className="text-muted-foreground">Real savings (balance change)</dt>
               <dd
                 className={`tabular-nums ${
                   reconciliation.consolidatedDelta >= 0 ? "text-success" : "text-destructive"
@@ -111,10 +104,9 @@ export function CascadeCard({
         {reconciliation.discrepancy != null &&
           Math.abs(reconciliation.discrepancy) > 1 && (
             <p className="text-xs text-warning">
-              Flows ({fmt(reconciliation.actualResult)}) and the balance change (
-              {fmt(reconciliation.consolidatedDelta ?? 0)}) differ by{" "}
-              {fmt(Math.abs(reconciliation.discrepancy))} — uncaptured flow
-              somewhere: an unsynced account or a sync hole.
+              Flows and balance change differ by{" "}
+              {fmt(Math.abs(reconciliation.discrepancy))} — an unsynced account
+              or a sync hole.
             </p>
           )}
       </CardContent>
