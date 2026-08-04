@@ -118,10 +118,8 @@ export function ObjectivesCard({
           <div className="flex items-start gap-3 text-sm text-muted-foreground">
             <Target className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
-              Assign the variable budget per category — groceries, restaurants,
-              clothes. The sum becomes the month&apos;s variable budget in the
-              cascade, and each line is judged against how much of the month has
-              gone by, not against a moving feeling.
+              Assign the variable budget per category — the sum becomes the
+              month&apos;s variable budget in the cascade.
             </p>
           </div>
         ) : (
@@ -209,9 +207,8 @@ export function ObjectivesCard({
 
             {funds.length > 0 && (
               <div className="space-y-3 border-t pt-3">
-                <p className="text-xs text-muted-foreground">
-                  Rollover funds — here filling up is the point: the remainder
-                  accumulates for the lump (IBI, holidays, the car).
+                <p className="text-xs font-medium text-muted-foreground">
+                  Rollover funds
                 </p>
                 <ul className="space-y-2">
                   {funds.map((o) => (
