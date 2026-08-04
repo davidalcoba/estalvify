@@ -1,89 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   addDays,
-  monthlyAnchorFor,
-  scheduleSeries,
   projectAccountDaily,
   consolidateDaily,
   firstBreach,
   dailyVariableSpend,
 } from "./cashflow";
-
-describe("monthlyAnchorFor", () => {
-  it("anchors a mortgage-style series to month end (31 Mar, 30 Apr, 31 May…)", () => {
-    const anchor = monthlyAnchorFor([
-      { date: "2026-03-31", amount: 562.48 },
-      { date: "2026-04-30", amount: 562.48 },
-      { date: "2026-05-31", amount: 562.48 },
-      { date: "2026-06-30", amount: 562.48 },
-      { date: "2026-07-31", amount: 562.48 },
-    ]);
-    expect(anchor).toEqual({ type: "MONTH_END" });
-  });
-
-  it("anchors a rent-style series to its median day (2, 6, 1, 1, 3 → day 2)", () => {
-    const anchor = monthlyAnchorFor([
-      { date: "2026-04-02", amount: 1389.17 },
-      { date: "2026-05-06", amount: 1389.17 },
-      { date: "2026-06-01", amount: 1389.17 },
-      { date: "2026-07-01", amount: 1389.17 },
-      { date: "2026-08-03", amount: 1389.17 },
-    ]);
-    expect(anchor).toEqual({ type: "DAY", day: 2 });
-  });
-});
-
-describe("scheduleSeries", () => {
-  it("schedules a month-end series once per calendar month, never zero or twice", () => {
-    const dates = scheduleSeries(
-      {
-        cadence: "MONTHLY",
-        history: [
-          { date: "2026-06-30", amount: 562 },
-          { date: "2026-07-31", amount: 562 },
-        ],
-        nextExpected: "2026-08-31",
-      },
-      "2026-08-03",
-      "2026-10-02"
-    );
-    expect(dates).toEqual(["2026-08-31", "2026-09-30"]);
-  });
-
-  it("clamps an overdue charge to tomorrow instead of dropping it", () => {
-    const dates = scheduleSeries(
-      {
-        cadence: "MONTHLY",
-        history: [
-          { date: "2026-06-01", amount: 1389 },
-          { date: "2026-07-01", amount: 1389 },
-        ],
-        nextExpected: "2026-08-01",
-      },
-      "2026-08-03",
-      "2026-09-15"
-    );
-    expect(dates).toEqual(["2026-08-04", "2026-09-01"]);
-  });
-
-  it("steps weekly series by 7 days from nextExpected", () => {
-    const dates = scheduleSeries(
-      { cadence: "WEEKLY", history: [], nextExpected: "2026-08-05" },
-      "2026-08-03",
-      "2026-08-20"
-    );
-    expect(dates).toEqual(["2026-08-05", "2026-08-12", "2026-08-19"]);
-  });
-
-  it("keeps a yearly series to a single occurrence in a 60-day window", () => {
-    const dates = scheduleSeries(
-      { cadence: "YEARLY", history: [], nextExpected: "2026-09-01" },
-      "2026-08-03",
-      "2026-10-02"
-    );
-    expect(dates).toEqual(["2026-09-01"]);
-  });
-});
 
 describe("projectAccountDaily", () => {
   it("detects the rent-before-salary squeeze the monthly view cannot see", () => {

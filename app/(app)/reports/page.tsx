@@ -27,7 +27,7 @@ import {
   parseReportFilters,
   selectableMonths,
 } from "@/lib/analytics/report-filters";
-import { merchantDisplayName } from "@/lib/recurring/detect";
+import { merchantDisplayName } from "@/lib/transactions/merchant";
 import { traceabilityForMonth } from "@/lib/analytics/traceability";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -87,11 +87,6 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
         valueDate: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
-        // Extraordinary split lines are subtracted from income averages.
-        splits: {
-          where: { isExtraordinary: true },
-          select: { amount: true },
-        },
       },
     }),
     prisma.transaction.findMany({
@@ -99,7 +94,6 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       select: {
         amount: true,
         categorization: { select: { categoryId: true } },
-        splits: { select: { amount: true, categoryId: true } },
       },
     }),
     prisma.category.findMany({
@@ -118,7 +112,6 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
         description: true,
         remittanceInfo: true,
         categorization: { select: { category: { select: { kind: true } } } },
-        splits: { select: { amount: true, categoryId: true } },
       },
     }),
   ]);
@@ -139,10 +132,6 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
       categoryKind: t.categorization?.category?.kind ?? null,
-      extraordinaryAmount: t.splits.reduce(
-        (sum, s) => sum + Number(s.amount.toString()),
-        0,
-      ),
     })),
     months,
   );
@@ -187,11 +176,6 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
         amount: Math.abs(Number(tx.amount.toString())),
         description: tx.description,
         remittanceInfo: tx.remittanceInfo,
-        categorizedSplitTotal: tx.splits.reduce(
-          (sum, split) =>
-            split.categoryId ? sum + Number(split.amount.toString()) : sum,
-          0,
-        ),
       })),
   );
 
@@ -320,8 +304,8 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
           </dl>
           <p className="text-xs text-muted-foreground">
             While this share is dark, every budget can look met while
-            overspending. Shrink it by splitting a withdrawal into what the
-            cash actually bought — open the transaction and hit Split.
+            overspending. The goal is to reduce the cash itself, not to
+            catalogue it — pay by card where possible.
           </p>
         </CardContent>
       </Card>

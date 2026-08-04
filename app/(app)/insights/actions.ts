@@ -17,12 +17,7 @@ import {
   topCategories,
 } from "@/lib/analytics/trends";
 import { averageMonthly, projectBalances } from "@/lib/analytics/forecast";
-import { monthlyEquivalent } from "@/lib/recurring/recurring-dto";
 import { buildBudgetData } from "@/lib/budget/budget-dto";
-import {
-  plannedMonthlyByCategory,
-  type PlanItemInput,
-} from "@/lib/plan/plan-item";
 import {
   getAiProvider,
   buildFinancialSummary,
@@ -51,7 +46,7 @@ export async function generateInsights(): Promise<InsightsResult> {
   const fullMonths = lastNMonths(prev.year, prev.month, HISTORY_MONTHS);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
-  const [accounts, trendTx, spendRows, categories, planItems, recurring] =
+  const [accounts, trendTx, spendRows, categories, plannedDebits, recurring] =
     await Promise.all([
       prisma.bankAccount.findMany({
         where: { userId, isActive: true },
@@ -84,20 +79,13 @@ export async function generateInsights(): Promise<InsightsResult> {
         where: { isActive: true, OR: [{ userId }, { userId: null }] },
         select: { id: true, name: true, color: true, parentId: true },
       }),
-      prisma.planItem.findMany({
-        where: { userId, active: true },
-        select: {
-          direction: true,
-          categoryId: true,
-          amount: true,
-          cadence: true,
-          onDate: true,
-          endDate: true,
-        },
+      prisma.plannedItem.findMany({
+        where: { userId, year, month, direction: "DEBIT" },
+        select: { categoryId: true, amount: true },
       }),
       prisma.recurringSeries.findMany({
-        where: { userId, status: "CONFIRMED" },
-        select: { direction: true, cadence: true, averageAmount: true },
+        where: { userId, active: true },
+        select: { direction: true, cadence: true, expectedAmount: true },
       }),
     ]);
 
@@ -128,17 +116,15 @@ export async function generateInsights(): Promise<InsightsResult> {
 
   const spendingByCategory = aggregateSpendingByCategory(spendRows);
 
-  // Per-category limits come from the Plan; synthesize budget-item records so
-  // buildBudgetData (planned-vs-actual) keeps working for the AI summary.
-  const planInputs: PlanItemInput[] = planItems.map((p) => ({
-    direction: p.direction,
-    categoryId: p.categoryId,
-    amount: Number(p.amount.toString()),
-    cadence: p.cadence,
-    onDate: p.onDate ? p.onDate.toISOString().slice(0, 10) : null,
-    endDate: p.endDate ? p.endDate.toISOString().slice(0, 10) : null,
-  }));
-  const limitByCategory = plannedMonthlyByCategory(planInputs, { year, month });
+  // Per-category "planned" figures come from this month's planned items;
+  // synthesize budget-item records so buildBudgetData (planned-vs-actual)
+  // keeps working for the AI summary.
+  const limitByCategory: Record<string, number> = {};
+  for (const p of plannedDebits) {
+    if (!p.categoryId) continue;
+    limitByCategory[p.categoryId] =
+      (limitByCategory[p.categoryId] ?? 0) + Number(p.amount.toString());
+  }
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const planItemRecords = Object.entries(limitByCategory)
     .map(([categoryId, planned]) => {
@@ -162,13 +148,19 @@ export async function generateInsights(): Promise<InsightsResult> {
     categories,
   });
 
+  const CADENCE_PER_MONTH: Record<string, number> = {
+    WEEKLY: 52 / 12,
+    MONTHLY: 1,
+    BIMONTHLY: 1 / 2,
+    QUARTERLY: 1 / 3,
+    YEARLY: 1 / 12,
+  };
   let monthlyRecurringExpenses = 0;
   for (const r of recurring) {
-    if (r.cadence === "IRREGULAR" || r.direction !== "DEBIT") continue;
-    monthlyRecurringExpenses += monthlyEquivalent(
-      Number(r.averageAmount.toString()),
-      r.cadence,
-    );
+    if (r.direction !== "DEBIT") continue;
+    const factor = CADENCE_PER_MONTH[r.cadence];
+    if (!factor) continue;
+    monthlyRecurringExpenses += Number(r.expectedAmount.toString()) * factor;
   }
 
   const summary = buildFinancialSummary({

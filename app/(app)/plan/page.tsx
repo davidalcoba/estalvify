@@ -1,58 +1,27 @@
-// Plan page — manual cash-flow planning. The single place to declare expected
-// income and expenses (multiple per category, with cadences). A category's
-// planned monthly total acts as its limit vs real spending, and the Forecast
-// projects from these entries.
+// Monthly control view: the cascade (base income − planned − fund quotas −
+// savings goal = variable budget) and the rollover funds' state. Control, not
+// operations — the operating number lives on the dashboard, weekly.
 
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
-import {
-  buildMonthlySpendingWhere,
-  aggregateSpendingByCategory,
-  currentYearMonth,
-} from "@/lib/analytics/spending";
-import { buildPlanData } from "@/lib/plan/plan-dto";
-import { buildMonthStatus } from "@/lib/plan/month-status";
-import { PlanView } from "@/components/plan/plan-view";
-import { CommitmentsCard } from "@/components/plan/commitments-card";
-import { SinkingFundsCard } from "@/components/plan/sinking-funds-card";
+import { buildMonthStatus } from "@/lib/budget/month-status";
+import { syncPlannedState } from "@/lib/planned/engine";
+import { PageHeader } from "@/components/layout/page-header";
+import { CascadeCard } from "@/components/budget/cascade-card";
+import { FundsCard } from "@/components/budget/funds-card";
 
-export const metadata: Metadata = { title: "Plan" };
+export const metadata: Metadata = { title: "Monthly control" };
 
 export default async function PlanPage() {
   const session = await auth();
   const userId = session!.user.id;
   const prefs = await getUserPrefs(userId);
 
-  const { year, month } = currentYearMonth(prefs.timezone);
-
-  const monthStatusPromise = buildMonthStatus(userId, prefs.timezone);
-  const [planItems, spendingRows, categories] = await Promise.all([
-    prisma.planItem.findMany({
-      where: { userId, active: true },
-      select: {
-        id: true,
-        label: true,
-        direction: true,
-        categoryId: true,
-        amount: true,
-        currency: true,
-        cadence: true,
-        dayOfMonth: true,
-        onDate: true,
-        endDate: true,
-        recurringMerchantKey: true,
-      },
-    }),
-    prisma.transaction.findMany({
-      where: buildMonthlySpendingWhere(userId, year, month),
-      select: {
-        amount: true,
-        categorization: { select: { categoryId: true } },
-        splits: { select: { amount: true, categoryId: true } },
-      },
-    }),
+  await syncPlannedState(userId, prefs.timezone, prefs.currency, prefs.locale);
+  const [status, categories] = await Promise.all([
+    buildMonthStatus(userId, prefs.timezone),
     prisma.category.findMany({
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -60,38 +29,20 @@ export default async function PlanPage() {
     }),
   ]);
 
-  const spendingByCategory = aggregateSpendingByCategory(spendingRows);
-  const data = buildPlanData({
-    currency: prefs.currency,
-    items: planItems,
-    spendingByCategory,
-    categories,
-    ref: { year, month },
-  });
-  const monthStatus = await monthStatusPromise;
-
   return (
-    <PlanView
-      data={data}
-      categories={categories}
-      locale={prefs.locale}
-      currency={prefs.currency}
-      dateLocale={prefs.language}
-      commitmentsSlot={
-        <>
-          <CommitmentsCard
-            status={monthStatus}
-            currency={prefs.currency}
-            locale={prefs.locale}
-          />
-          <SinkingFundsCard
-            funds={monthStatus.funds}
-            currency={prefs.currency}
-            locale={prefs.locale}
-            dateLocale={prefs.language}
-          />
-        </>
-      }
-    />
+    <div className="space-y-6">
+      <PageHeader title="Monthly control" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <CascadeCard status={status} currency={prefs.currency} locale={prefs.locale} />
+        <FundsCard
+          funds={status.funds}
+          categories={categories}
+          year={status.year}
+          month={status.month}
+          currency={prefs.currency}
+          locale={prefs.locale}
+        />
+      </div>
+    </div>
   );
 }
