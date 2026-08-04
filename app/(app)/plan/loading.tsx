@@ -8,7 +8,7 @@ import {
 export default function PlanLoading() {
   return (
     <div className="space-y-6">
-      <PageHeaderSkeleton titleWidth="w-40" />
+      <PageHeaderSkeleton titleWidth="w-40" actionsWidth="w-56" />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Monthly cascade + reconciliation */}
