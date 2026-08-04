@@ -29,9 +29,9 @@ export function WeeklyCard({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Set your base monthly income in{" "}
-            <Link href="/settings" className="text-brand underline-offset-2 hover:underline">
-              Settings
+            Assign your variable budget per category in{" "}
+            <Link href="/plan" className="text-brand underline-offset-2 hover:underline">
+              Monthly control
             </Link>{" "}
             to get the one number that matters: what you can still spend this
             week.

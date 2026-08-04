@@ -37,86 +37,28 @@ export async function updatePreferences(data: {
 }
 
 export interface PlanningSettingsInput {
-  /** Expected base monthly income (the two salaries) — configuration, never inferred. */
-  baseMonthlyIncome: number | null;
   /** Cash-flow alert threshold (0 = "don't go negative"). */
   lowBalanceThreshold: number;
-  /** Savings goal: a fixed monthly amount, a percent of fixed income, or none. */
-  savingsGoalType: "none" | "amount" | "percent";
-  savingsGoalValue: number | null;
-  /** Account whose net balance change measures real savings; null = untracked. */
-  savingsAccountId: string | null;
 }
 
-// Planning & alert settings: cash-flow threshold plus the savings-first goal.
+// Planning & alert settings. Under the v3 model this is only the cash-flow
+// threshold: income and charges come from planned items, savings is derived.
 export async function updatePlanningSettings(input: PlanningSettingsInput) {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
   const userId = session.user.id;
 
-  const { lowBalanceThreshold, savingsGoalType, savingsGoalValue } = input;
+  const { lowBalanceThreshold } = input;
   if (
     !Number.isFinite(lowBalanceThreshold) ||
     Math.abs(lowBalanceThreshold) > 1_000_000
   ) {
     throw new Error("Invalid threshold");
   }
-  let baseMonthlyIncome: number | null = null;
-  if (input.baseMonthlyIncome != null) {
-    if (
-      !Number.isFinite(input.baseMonthlyIncome) ||
-      input.baseMonthlyIncome < 0 ||
-      input.baseMonthlyIncome > 1_000_000
-    ) {
-      throw new Error("Invalid base income");
-    }
-    baseMonthlyIncome = input.baseMonthlyIncome;
-  }
-
-  let savingsGoalAmount: number | null = null;
-  let savingsGoalPercent: number | null = null;
-  if (savingsGoalType === "amount") {
-    if (
-      savingsGoalValue == null ||
-      !Number.isFinite(savingsGoalValue) ||
-      savingsGoalValue <= 0 ||
-      savingsGoalValue > 1_000_000
-    ) {
-      throw new Error("Invalid savings amount");
-    }
-    savingsGoalAmount = savingsGoalValue;
-  } else if (savingsGoalType === "percent") {
-    if (
-      savingsGoalValue == null ||
-      !Number.isFinite(savingsGoalValue) ||
-      savingsGoalValue <= 0 ||
-      savingsGoalValue > 100
-    ) {
-      throw new Error("Invalid savings percent");
-    }
-    savingsGoalPercent = savingsGoalValue;
-  }
-
-  // The account must be the user's own; an unknown id turns tracking off.
-  let savingsAccountId: string | null = null;
-  if (input.savingsAccountId) {
-    const account = await prisma.bankAccount.findFirst({
-      where: { id: input.savingsAccountId, userId },
-      select: { id: true },
-    });
-    if (!account) throw new Error("Account not found");
-    savingsAccountId = account.id;
-  }
 
   await prisma.user.update({
     where: { id: userId },
-    data: {
-      baseMonthlyIncome,
-      lowBalanceThreshold,
-      savingsGoalAmount,
-      savingsGoalPercent,
-      savingsAccountId,
-    },
+    data: { lowBalanceThreshold },
   });
 
   revalidatePath("/settings");

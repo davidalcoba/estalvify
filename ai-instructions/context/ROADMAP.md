@@ -8,51 +8,45 @@
 > como un PR independiente siguiendo `PLAYBOOK_NEW_FEATURE.md`, y **marca la fase como
 > hecha aquí** en el mismo cambio.
 
-**Última actualización:** 2026-08-03 · **Fase en curso:** ninguna ·
+**Última actualización:** 2026-08-04 · **Fase en curso:** ninguna ·
 **Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
 
-> **Post-roadmap — MODELO DE PLANIFICACIÓN V2 (spec definitivo, 2026-08-04).** Sustituye
-> al batch anterior de 8 features; varias piezas de aquel batch se retiraron el mismo día
-> al llegar el spec definitivo (split de transacciones, autodetección de series, detección
-> de ingresos extraordinarios por desviación, tabla SinkingFund, PlanItem). El modelo:
+> **Post-roadmap — MODELO DE PLANIFICACIÓN V3 (spec definitivo, 2026-08-04).** Sustituye
+> a los dos specs anteriores (el batch de 8 features y el modelo v2 del mismo día).
+> Cuatro principios y sus consecuencias:
 >
-> - **`planned_items` es la fuente de verdad** (`lib/planned/`): las series generan
->   instancias fechadas hacia delante (`engine.ts`, generación a 4 meses, idempotente);
->   los puntuales (IBI de este año) se teclean a mano; ambos viven en la misma lista
->   (/forecast → "Upcoming"). El matcher liga transacciones (contains normalizado del
->   `merchantKey` de la serie, fallback categoría+importe ±25%) → `MATCHED` con
->   `matchedAmount` (desviación >15% ⇒ alerta `RECURRING_AMOUNT_CHANGE`); ventana cerrada
->   +5 días de gracia ⇒ `MISSED` + alerta. Ventanas de días (`windowFromDay`–`windowToDay`,
->   alquiler 1–6) y `anchorMonthEnd` (hipoteca, último día — sobrevive meses cortos).
-> - **Series recurrentes = CRUD manual** (/recurring, `SeriesManager`): a n=1 configurar
->   15 series conocidas es más barato que inferirlas. `expectedAmount`, cadencia (con
->   `BIMONTHLY`), ventana, cuenta (`bankAccountId`) y matcher editables. Sin detección.
-> - **Cascada mensual** (`lib/budget/cascade.ts`, /plan → "Monthly control"): ingreso base
->   (`User.baseMonthlyIncome`, configuración — lo que exceda es extraordinario POR
->   DIFERENCIA, sin heurística) − planned items del mes (al importe real si MATCHED;
->   MISSED sigue contando: se debe) − cuotas rollover − objetivo de ahorro = presupuesto
->   variable. Los planned CREDIT nunca entran (el ingreso es el base configurado).
-> - **Disponible SEMANAL** (`lib/budget/weekly.ts`, dashboard): tasa diaria recalculada
->   (`restanteMes / díasRestantes`), semana ISO, sin carry-over ni caso especial de
->   cambio de mes. **Contador de operaciones** vs mediana de 12 semanas completas — el
->   driver del gasto es la frecuencia, no el ticket. Composición informativa sin
->   semáforos. `variable` se deriva por exclusión (ni matched ni matcher de serie), así
->   el alquiler jamás aparece como operación.
-> - **Sinking funds = `budget_items.rollover: true`** (sin tabla propia): la cuota entra
->   en la cascada, el remanente rueda; el saldo del fondo se DERIVA (asignado − gastado
->   por meses, `rolloverBalance`), y la fila del mes actual se propaga sola desde el mes
->   anterior (`ensureRolloverPropagation`; borrar la fila del mes retira el fondo).
-> - **Dos pools** (/envelopes): `stock_envelopes` etiqueta el saldo de Estalvis (STOCK,
->   `locked`) y nunca entra en el ciclo mensual (FLUJO). Métrica **meses de colchón** =
->   (saldo Estalvis − fondos rollover) / gasto medio 6m (`monthsOfCushion`).
-> - **Previsión de caja** se mantiene, alimentada por planned items (cargos el primer día
->   de su ventana, ingresos el último — el lado conservador ambas veces).
-> - **MCP**: `list/create/update/delete_recurring_series`, `list/create/delete_planned_item`,
->   `upsert/delete_budget_item` (el `create_budget` que faltaba). Trazabilidad (% efectivo
->   + tarjeta) se queda como métrica en Reports, sin desglose: el objetivo es reducir el
->   efectivo, no catalogarlo.
+> - **Las cuentas no llevan semántica** (§1.1): no hay cuenta de ahorro, ni envelopes, ni
+>   pools — `stock_envelopes`, `User.savingsGoal*`, `User.savingsAccountId` y
+>   `User.baseMonthlyIncome` están **eliminados** del esquema. La planificación es siempre
+>   consolidada; la única pantalla donde las cuentas importan es la previsión de caja
+>   (`lib/analytics/cashflow-data.ts`, por cuenta, mensajes operativos sin juicios).
+> - **El ahorro es DERIVADO** (§1.2): ahorro del mes = variación del saldo consolidado.
+>   No es una línea, ni una categoría, ni un traspaso. Se muestra en el bloque de
+>   **reconciliación** de /plan junto al check flujos-vs-saldo (`reconciliationGap`:
+>   una discrepancia = flujo sin capturar).
+> - **El objetivo mensual es el RESULTADO ESPERADO** (§1.3, `lib/budget/cascade.ts`):
+>   ingresos previstos (planned CREDIT) − cargos previstos (planned DEBIT) − cuotas
+>   rollover − presupuesto variable = **resultado esperado**. La cascada usa SIEMPRE
+>   importes previstos — la realidad aterriza en `performance` (real − esperado), nunca
+>   moviendo la portería. Para ahorrar más se baja el presupuesto variable.
+> - **Devengo y caja no se mezclan** (§1.4, `lib/planned/matching.ts`): una transacción
+>   emparejada computa en el `year/month` de su planned item (tolerancia ±5/−7 días
+>   cruzando el borde de mes, emparejamiento FIFO, MISSED al cerrar la tolerancia, mes
+>   **provisional** hasta el día 7); el gasto variable computa por fecha, sin devengo.
+>   La proyección de saldo usa la fecha real. `buildMonthStatus` excluye TRANSFER.
+> - **Objetivos por categoría** (/plan, `ObjectivesCard`): los budget items no-rollover
+>   son el presupuesto variable, con **% consumido siempre junto a % de mes transcurrido**
+>   (ritmo). Los rollover tienen **polaridad invertida** (acumular es bueno — misma
+>   widget, significado opuesto, distinguidos visualmente) y su saldo se deriva
+>   (`rolloverBalance`). Toda asignación se propaga sola al mes siguiente
+>   (`ensureBudgetPropagation`); borrar la fila del mes la retira.
+> - Se mantienen de v2: **series manuales** (CRUD en /recurring, sin detección),
+>   **planned_items como fuente de verdad** (motor a 4 meses, `lib/planned/engine.ts`),
+>   **disponible SEMANAL** con contador de operaciones vs mediana de 12 semanas, y la
+>   previsión de caja alimentada por planned items (cargos al inicio de su ventana,
+>   ingresos al final). Ajustes queda reducido a `lowBalanceThreshold`.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en

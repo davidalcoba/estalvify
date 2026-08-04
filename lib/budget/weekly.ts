@@ -126,17 +126,3 @@ export function weekComposition(rows: VariableTx[], today: string): WeekCategory
     .map(([categoryId, v]) => ({ categoryId, spent: round(v.spent), count: v.count }))
     .sort((a, b) => b.spent - a.spent);
 }
-
-/**
- * Months of cushion: what the savings balance covers once the rollover funds'
- * accumulated money (already spoken for) is set aside. The number that changes
- * a decision: moving 1.000 € to checking drops it from 6.0 to 5.9.
- */
-export function monthsOfCushion(
-  savingsBalance: number,
-  rolloverBalances: number,
-  avgMonthlySpend: number
-): number | null {
-  if (avgMonthlySpend <= 0) return null;
-  return Math.round(((savingsBalance - rolloverBalances) / avgMonthlySpend) * 10) / 10;
-}
