@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   matchPlannedItems,
   isMissed,
+  isProvisionalMonth,
   significantDeviation,
   matchWindow,
   type PlannedForMatch,
@@ -157,8 +158,108 @@ describe("matchWindow / isMissed", () => {
     expect(w.end).toBe("2026-10-07");
   });
 
-  it("MISSED only after the window plus grace", () => {
-    expect(isMissed(rent, "2026-09-10")).toBe(false); // window ends the 6th, grace 5
-    expect(isMissed(rent, "2026-09-12")).toBe(true);
+  it("plan test #9: MISSED fires when the TOLERANCE window closes, not the due date", () => {
+    expect(isMissed(rent, "2026-09-07")).toBe(false); // due window ended the 6th
+    expect(isMissed(rent, "2026-09-13")).toBe(false); // tolerance = +7 days
+    expect(isMissed(rent, "2026-09-14")).toBe(true);
+  });
+});
+
+const mortgage = (id: string, year: number, month: number): PlannedForMatch => ({
+  id,
+  direction: "DEBIT",
+  amount: 562.48,
+  matcher: "PRESTAMO",
+  categoryId: "mortgage",
+  year,
+  month,
+  dueDay: null,
+  windowFromDay: null,
+  windowToDay: null,
+  anchorMonthEnd: true,
+});
+
+describe("accrual across the month border", () => {
+  it("plan test #2: mortgage expected 31 Jul, charged 2 Aug → pairs with JULY's item", () => {
+    const results = matchPlannedItems(
+      [mortgage("jul", 2026, 7)],
+      [
+        {
+          id: "t-aug2",
+          date: "2026-08-02",
+          direction: "DEBIT",
+          amount: 562.48,
+          descriptor: "AMORTIZACION PRESTAMO 0182",
+          categoryId: "mortgage",
+        },
+      ]
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].itemId).toBe("jul");
+  });
+
+  it("plan test #3: two mortgage charges in one calendar month split FIFO", () => {
+    const results = matchPlannedItems(
+      [mortgage("aug", 2026, 8), mortgage("jul", 2026, 7)],
+      [
+        {
+          id: "t-late",
+          date: "2026-08-02",
+          direction: "DEBIT",
+          amount: 562.48,
+          descriptor: "AMORTIZACION PRESTAMO 0182",
+          categoryId: "mortgage",
+        },
+        {
+          id: "t-current",
+          date: "2026-08-31",
+          direction: "DEBIT",
+          amount: 562.48,
+          descriptor: "AMORTIZACION PRESTAMO 0182",
+          categoryId: "mortgage",
+        },
+      ]
+    );
+    const byItem = Object.fromEntries(results.map((r) => [r.itemId, r.transactionId]));
+    expect(byItem["jul"]).toBe("t-late");
+    expect(byItem["aug"]).toBe("t-current");
+  });
+
+  it("plan test #4: a salary expected the 28th arriving the 1st pairs with its budget month", () => {
+    const salary: PlannedForMatch = {
+      id: "jul-salary",
+      direction: "CREDIT",
+      amount: 6009,
+      matcher: "MOVIL ACCESS",
+      categoryId: "salary",
+      year: 2026,
+      month: 7,
+      dueDay: null,
+      windowFromDay: 27,
+      windowToDay: 29,
+      anchorMonthEnd: false,
+    };
+    const results = matchPlannedItems(
+      [salary],
+      [
+        {
+          id: "t-aug1",
+          date: "2026-08-01",
+          direction: "CREDIT",
+          amount: 6009,
+          descriptor: "NOMINA MOVIL ACCESS SL",
+          categoryId: "salary",
+        },
+      ]
+    );
+    expect(results[0]?.itemId).toBe("jul-salary");
+  });
+});
+
+describe("isProvisionalMonth", () => {
+  it("plan test #13: provisional while last month's charges can still slide in", () => {
+    expect(isProvisionalMonth("2026-08-02")).toBe(true);
+    expect(isProvisionalMonth("2026-08-07")).toBe(true);
+    expect(isProvisionalMonth("2026-08-08")).toBe(false);
   });
 });

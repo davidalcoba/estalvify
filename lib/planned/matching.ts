@@ -14,11 +14,19 @@ export function normalizeDescriptor(value: string | null | undefined): string {
     .trim();
 }
 
-/** Days a transaction may arrive before/after the window and still match. */
-export const MATCH_LEAD_DAYS = 3;
+/**
+ * Tolerance window: how far a transaction may arrive before/after the expected
+ * window and still match — CROSSING the month border, so a mortgage expected on
+ * 31 July that charges on 2 August still pairs with July's planned item and is
+ * booked in July (accrual).
+ */
+export const MATCH_LEAD_DAYS = 5;
 export const MATCH_LAG_DAYS = 7;
-/** Days past the window's end before a PENDING item turns MISSED. */
-export const MISSED_GRACE_DAYS = 5;
+/**
+ * MISSED fires when the TOLERANCE window closes (windowEnd + lag), not when the
+ * expected date passes — a charge sliding three days is normal, not missing.
+ */
+export const MISSED_GRACE_DAYS = MATCH_LAG_DAYS;
 /** Relative amount tolerance for the category+amount fallback match. */
 export const AMOUNT_TOLERANCE = 0.25;
 /** Relative deviation of a matched amount that triggers a price-change alert. */
@@ -86,8 +94,13 @@ export interface MatchResult {
  * Match PENDING items against candidate transactions. Strong signal is the
  * descriptor containing the item's matcher; the fallback for matcher-less
  * one-offs is same category + amount within tolerance. Each transaction links
- * at most one item and vice versa; ties resolve to the arrival closest to the
- * window.
+ * at most one item and vice versa.
+ *
+ * FIFO: items are processed oldest budget month first and each takes the
+ * EARLIEST matching arrival, so when two charges of the same series land in
+ * one calendar month (the delayed one and the current one), the first pairs
+ * with July's planned item and the second with August's — instead of August
+ * eating both and July reading zero.
  */
 export function matchPlannedItems(
   items: PlannedForMatch[],
@@ -96,12 +109,18 @@ export function matchPlannedItems(
   const results: MatchResult[] = [];
   const usedTx = new Set<string>();
 
-  for (const item of items) {
+  const ordered = [...items].sort(
+    (a, b) =>
+      a.year - b.year ||
+      a.month - b.month ||
+      (a.windowFromDay ?? a.dueDay ?? 1) - (b.windowFromDay ?? b.dueDay ?? 1)
+  );
+
+  for (const item of ordered) {
     const { start, end } = matchWindow(item);
     const matcher = normalizeDescriptor(item.matcher);
 
-    let best: { tx: TransactionForMatch; strong: boolean; distance: number } | null =
-      null;
+    let best: { tx: TransactionForMatch; strong: boolean } | null = null;
     for (const tx of transactions) {
       if (usedTx.has(tx.id)) continue;
       if (tx.direction !== item.direction) continue;
@@ -116,13 +135,13 @@ export function matchPlannedItems(
         !strong && item.categoryId !== null && tx.categoryId === item.categoryId && amountOk;
       if (!strong && !weak) continue;
 
-      const distance = Math.abs(Date.parse(tx.date) - Date.parse(start));
+      // FIFO tie-break: the earliest arrival wins.
       if (
         !best ||
         (strong && !best.strong) ||
-        (strong === best.strong && distance < best.distance)
+        (strong === best.strong && tx.date < best.tx.date)
       ) {
-        best = { tx, strong, distance };
+        best = { tx, strong };
       }
     }
 
@@ -155,4 +174,13 @@ export function significantDeviation(
 ): number | null {
   if (deviation == null || Math.abs(deviation) < threshold) return null;
   return Math.round(deviation * 1000) / 1000;
+}
+
+/**
+ * A month is PROVISIONAL while last month's charges can still slide into it —
+ * i.e. until the tolerance window of a month-end charge has fully closed.
+ * Otherwise the performance number changes on the 3rd with no explanation.
+ */
+export function isProvisionalMonth(today: string): boolean {
+  return Number(today.slice(8, 10)) <= MATCH_LAG_DAYS;
 }

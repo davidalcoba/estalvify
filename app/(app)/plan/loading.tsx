@@ -11,10 +11,10 @@ export default function PlanLoading() {
       <PageHeaderSkeleton titleWidth="w-40" />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Monthly cascade */}
-        <ListCardSkeleton rows={5} titleWidth="w-40" />
-        {/* Rollover funds */}
-        <ListCardSkeleton rows={3} titleWidth="w-36" />
+        {/* Monthly cascade + reconciliation */}
+        <ListCardSkeleton rows={9} titleWidth="w-40" />
+        {/* Category objectives */}
+        <ListCardSkeleton rows={6} titleWidth="w-44" />
       </div>
     </div>
   );

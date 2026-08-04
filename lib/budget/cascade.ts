@@ -1,69 +1,107 @@
-// Pure monthly cascade — the calculation that makes the available number TRUE:
+// Pure monthly cascade, v3: the expected RESULT is the goal.
 //
-//   base income (config, never inferred)
-//   − planned items due this month (actual amount once matched)
-//   − rollover-fund quotas (budget_items with rollover: the IBI accumulating)
-//   − savings goal (a commitment next to the rent, never a residue)
+//   expected income  (CREDIT planned items of the budget month)
+//   − expected charges (DEBIT planned items of the budget month)
+//   − rollover-fund quotas (budget_items with rollover)
+//   − variable budget (Σ non-rollover budget_items assignments)
 //   ─────────────────────────────────────────────
-//   = the month's variable budget
+//   = expected result of the month
 //
-// Income above the base is extraordinary BY DIFFERENCE — no detection.
-// No Prisma — unit-tested in isolation.
+// Savings is NOT a line here — it is the derived consequence: the month's
+// consolidated balance change. Want to save more? Lower the variable budget
+// until the expected result is the number you want. The cascade always uses
+// EXPECTED amounts (the plan); reality lands in `performance`, so a salary
+// arriving 14.5k above expectation shows up as performance, not as a silently
+// moved goalpost. No Prisma — unit-tested in isolation.
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
 export interface PlannedForCascade {
   direction: "DEBIT" | "CREDIT";
-  amount: number;
-  matchedAmount: number | null;
-  status: "PENDING" | "MATCHED" | "MISSED";
+  amount: number; // expected
 }
 
 export interface MonthCascade {
-  baseIncome: number;
-  plannedCharges: number;
+  expectedIncome: number;
+  expectedCharges: number;
   rolloverQuotas: number;
-  savingsGoal: number;
   variableBudget: number;
+  expectedResult: number;
 }
 
-/**
- * The month's cascade. Planned DEBIT items count at their matched amount once
- * one arrived (truth beats estimate) and at the expected amount otherwise —
- * including MISSED: a bill whose window closed unpaid is still owed, and
- * dropping it would inflate the available exactly when things go wrong.
- * Planned CREDIT items never enter — income is the configured base, and
- * counting salary series here would double it.
- */
 export function computeCascade(input: {
-  baseIncome: number;
   plannedItems: PlannedForCascade[];
   rolloverQuotas: number;
-  savingsGoal: number;
+  variableBudget: number;
 }): MonthCascade {
-  let plannedCharges = 0;
+  let expectedIncome = 0;
+  let expectedCharges = 0;
   for (const item of input.plannedItems) {
-    if (item.direction !== "DEBIT") continue;
-    plannedCharges += item.status === "MATCHED" && item.matchedAmount != null
-      ? item.matchedAmount
-      : item.amount;
+    if (item.direction === "CREDIT") expectedIncome += item.amount;
+    else expectedCharges += item.amount;
   }
+  expectedIncome = round(expectedIncome);
+  expectedCharges = round(expectedCharges);
   const rolloverQuotas = round(Math.max(0, input.rolloverQuotas));
-  const savingsGoal = round(Math.max(0, input.savingsGoal));
-  const baseIncome = round(Math.max(0, input.baseIncome));
-  plannedCharges = round(plannedCharges);
+  const variableBudget = round(Math.max(0, input.variableBudget));
   return {
-    baseIncome,
-    plannedCharges,
+    expectedIncome,
+    expectedCharges,
     rolloverQuotas,
-    savingsGoal,
-    variableBudget: round(baseIncome - plannedCharges - rolloverQuotas - savingsGoal),
+    variableBudget,
+    expectedResult: round(
+      expectedIncome - expectedCharges - rolloverQuotas - variableBudget
+    ),
   };
 }
 
-/** Extraordinary income by difference: what arrived above the configured base. */
-export function extraordinaryIncome(actualIncome: number, baseIncome: number): number {
-  return round(Math.max(0, actualIncome - baseIncome));
+export interface AccrualInputs {
+  /** Matched planned items of this budget month, at their ACTUAL amounts. */
+  matchedCredit: number;
+  matchedDebit: number;
+  /** Unmatched (no planned item), non-transfer flows of the calendar month. */
+  unmatchedCredit: number;
+  unmatchedDebit: number;
+}
+
+export interface ActualResult {
+  actualIncome: number;
+  actualExpenses: number;
+  actualResult: number;
+}
+
+/**
+ * The month's real result under ACCRUAL: a matched transaction counts in its
+ * planned item's budget month (the mortgage charged on 2 Aug still belongs to
+ * July's books), everything unmatched counts by its own date. A café on the
+ * 1st of August is August's.
+ */
+export function computeActualResult(input: AccrualInputs): ActualResult {
+  const actualIncome = round(input.matchedCredit + input.unmatchedCredit);
+  const actualExpenses = round(input.matchedDebit + input.unmatchedDebit);
+  return {
+    actualIncome,
+    actualExpenses,
+    actualResult: round(actualIncome - actualExpenses),
+  };
+}
+
+/** performance = real − expected. Positive = the month beat its plan. */
+export function performance(actualResult: number, expectedResult: number): number {
+  return round(actualResult - expectedResult);
+}
+
+/**
+ * The free reconciliation check: income − expenses should equal the
+ * consolidated balance change. A gap means uncaptured flow — an unsynced
+ * account, a sync hole. Shown, never hidden. Null when balances are unknown.
+ */
+export function reconciliationGap(
+  consolidatedDelta: number | null,
+  actualResult: number
+): number | null {
+  if (consolidatedDelta == null) return null;
+  return round(consolidatedDelta - actualResult);
 }
 
 export interface RolloverMonthRow {
@@ -73,9 +111,19 @@ export interface RolloverMonthRow {
 
 /**
  * A rollover fund's balance: every month's assignment minus what its category
- * actually spent, summed since the fund began. Derived, never stored — it can
- * always be recomputed and cannot drift.
+ * actually spent, summed since the fund began. Derived, never stored. These
+ * funds are ACCOUNTING SMOOTHING, not a pot of money — their one job is that
+ * the 600 € IBI doesn't wreck September.
  */
 export function rolloverBalance(rows: RolloverMonthRow[]): number {
   return round(rows.reduce((sum, r) => sum + r.assigned - r.spent, 0));
+}
+
+/** Months the consolidated balance covers at the average monthly spend. */
+export function monthsOfCushion(
+  consolidatedBalance: number | null,
+  avgMonthlySpend: number
+): number | null {
+  if (consolidatedBalance == null || avgMonthlySpend <= 0) return null;
+  return Math.round((consolidatedBalance / avgMonthlySpend) * 10) / 10;
 }

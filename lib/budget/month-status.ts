@@ -1,8 +1,10 @@
-// Assembles the month's money position under the v2 model: the cascade
-// (base income − planned − rollover quotas − savings goal), the weekly
-// available with its operations counter, rollover funds with derived balances,
-// and the savings execution status. Shared by the Dashboard, the monthly
-// control page and the notification cron so every surface shows one truth.
+// Assembles the month's money position under the v3 model: the cascade whose
+// bottom line is the EXPECTED RESULT (the goal), per-category objectives with
+// a pace reference, the weekly available with its operations counter, and the
+// reconciliation block — real result under accrual, performance vs expected,
+// the consolidated balance change (which IS the month's savings) and the
+// flows-vs-balance discrepancy check. Accounts carry no semantics anywhere
+// here: planning is consolidated.
 //
 // Pure math: lib/budget/cascade.ts + lib/budget/weekly.ts. Matching state is
 // maintained by lib/planned/engine.ts before this reads it.
@@ -11,12 +13,16 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
-import { normalizeDescriptor } from "@/lib/planned/matching";
+import { normalizeDescriptor, isProvisionalMonth } from "@/lib/planned/matching";
 import {
   computeCascade,
-  extraordinaryIncome,
+  computeActualResult,
+  performance,
+  reconciliationGap,
   rolloverBalance,
+  monthsOfCushion,
   type MonthCascade,
+  type ActualResult,
 } from "./cascade";
 import {
   computeWeeklyAvailable,
@@ -26,27 +32,35 @@ import {
   type WeeklyAvailable,
   type VariableTx,
 } from "./weekly";
-import {
-  monthTransferActivity,
-  netSavingsChange,
-  type MonthTransferActivity,
-} from "@/lib/plan/savings";
 
 const OPS_LOOKBACK_DAYS = 98; // 14 weeks: current + 12 complete + margin
+const CUSHION_BASELINE_MONTHS = 6;
 
-export interface SavingsStatus {
-  accountId: string;
-  accountName: string;
-  netChange: number | null;
-  activity: MonthTransferActivity;
-}
-
-export interface RolloverFundStatus {
+export interface CategoryObjective {
   categoryId: string;
   categoryName: string;
   categoryColor: string;
-  assigned: number; // this month's quota
-  balance: number; // accumulated across months (derived)
+  assigned: number;
+  consumed: number;
+  /**
+   * Rollover objectives have INVERTED polarity: the % is accumulation
+   * progress (more is better), not consumption. Same widget, opposite meaning
+   * — the UI must distinguish them.
+   */
+  rollover: boolean;
+  /** Accumulated balance across months (rollover only). */
+  balance: number | null;
+}
+
+export interface Reconciliation extends ActualResult {
+  expectedResult: number;
+  performance: number;
+  /** The month's consolidated balance change — the REAL savings, derived. */
+  consolidatedDelta: number | null;
+  /** consolidatedDelta − actualResult: uncaptured flow when non-zero. */
+  discrepancy: number | null;
+  consolidatedBalance: number | null;
+  monthsOfCushion: number | null;
 }
 
 export interface WeekCompositionRow {
@@ -61,7 +75,11 @@ export interface MonthStatus {
   year: number;
   month: number;
   today: string; // YYYY-MM-DD, user timezone
-  /** Base income is configuration; false until the user sets it in Settings. */
+  /** True while last month's charges can still slide in — numbers may move. */
+  provisional: boolean;
+  /** 0–1, how much of the month has elapsed (the pace reference). */
+  monthElapsed: number;
+  /** False until at least one budget assignment exists. */
   configured: boolean;
   cascade: MonthCascade;
   weekly: WeeklyAvailable;
@@ -70,10 +88,8 @@ export interface MonthStatus {
   spentThisWeek: number;
   composition: WeekCompositionRow[];
   variableSpentMonth: number;
-  extraordinaryIncome: number;
-  funds: RolloverFundStatus[];
-  savings: SavingsStatus | null;
-  hasSavingsGoal: boolean;
+  objectives: CategoryObjective[];
+  reconciliation: Reconciliation;
 }
 
 function todayInTimezone(timezone: string, now: Date = new Date()): string {
@@ -85,13 +101,15 @@ function todayInTimezone(timezone: string, now: Date = new Date()): string {
   }).format(now);
 }
 
+const round = (n: number) => Math.round(n * 100) / 100;
+
 /**
- * "The month arrives already assigned": copy last month's rollover quotas into
- * the current month if it has none yet. Deleting a fund's current-month row
- * stops the propagation from the next month on — the copy only ever looks one
- * month back.
+ * "The month arrives already assigned": copy last month's budget items
+ * (rollover funds AND variable assignments) into the current month if it has
+ * none yet. Deleting a current-month row stops the propagation from the next
+ * month on — the copy only ever looks one month back.
  */
-export async function ensureRolloverPropagation(
+export async function ensureBudgetPropagation(
   userId: string,
   year: number,
   month: number
@@ -100,7 +118,11 @@ export async function ensureRolloverPropagation(
   const [prevBudget, currentBudget] = await Promise.all([
     prisma.budget.findUnique({
       where: { userId_year_month: { userId, year: prev.year, month: prev.month } },
-      select: { budgetItems: { where: { rollover: true }, select: { categoryId: true, plannedAmount: true } } },
+      select: {
+        budgetItems: {
+          select: { categoryId: true, plannedAmount: true, rollover: true },
+        },
+      },
     }),
     prisma.budget.findUnique({
       where: { userId_year_month: { userId, year, month } },
@@ -128,7 +150,7 @@ export async function ensureRolloverPropagation(
         budgetId,
         categoryId: c.categoryId,
         plannedAmount: c.plannedAmount,
-        rollover: true,
+        rollover: c.rollover,
       })),
       skipDuplicates: true,
     });
@@ -140,23 +162,14 @@ export async function buildMonthStatus(
   timezone: string
 ): Promise<MonthStatus> {
   const { year, month } = currentYearMonth(timezone);
-  await ensureRolloverPropagation(userId, year, month);
+  await ensureBudgetPropagation(userId, year, month);
   const today = todayInTimezone(timezone);
   const { start, end } = monthRange(year, month);
   const opsStart = new Date(start);
   opsStart.setUTCDate(opsStart.getUTCDate() - OPS_LOOKBACK_DAYS);
 
-  const [user, plannedMonth, matchedIdsRows, series, txWindow, budgets, categories] =
+  const [plannedMonth, matchedIdsRows, series, txWindow, monthFlows, budgets, categories, accounts] =
     await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          baseMonthlyIncome: true,
-          savingsGoalAmount: true,
-          savingsGoalPercent: true,
-          savingsAccountId: true,
-        },
-      }),
       prisma.plannedItem.findMany({
         where: { userId, year, month },
         select: { direction: true, amount: true, matchedAmount: true, status: true },
@@ -172,7 +185,7 @@ export async function buildMonthStatus(
       prisma.transaction.findMany({
         // DEBIT expense rows for the ops window; the variable set is derived
         // by exclusion (matched planned items + series matchers), so a rent
-        // charge never shows up as an "operation" (acceptance #8).
+        // charge never shows up as an "operation" (plan test #10).
         where: {
           userId,
           direction: "DEBIT",
@@ -190,6 +203,20 @@ export async function buildMonthStatus(
           categorization: { select: { categoryId: true } },
         },
       }),
+      prisma.transaction.findMany({
+        // Both directions for the month's REAL result — transfers between own
+        // accounts excluded (they are internal noise, plan test #11).
+        where: {
+          userId,
+          valueDate: { gte: start, lt: end },
+          NOT: {
+            categorization: {
+              is: { category: { is: { kind: "TRANSFER" } } },
+            },
+          },
+        },
+        select: { id: true, direction: true, amount: true },
+      }),
       prisma.budget.findMany({
         where: { userId },
         orderBy: [{ year: "asc" }, { month: "asc" }],
@@ -205,20 +232,14 @@ export async function buildMonthStatus(
         where: { OR: [{ userId }, { userId: null }] },
         select: { id: true, name: true, color: true },
       }),
+      prisma.bankAccount.findMany({
+        where: { userId, isActive: true },
+        select: {
+          id: true,
+          balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } },
+        },
+      }),
     ]);
-
-  const baseIncome = user?.baseMonthlyIncome
-    ? Number(user.baseMonthlyIncome.toString())
-    : 0;
-  const savingsGoalAmount = user?.savingsGoalAmount
-    ? Number(user.savingsGoalAmount.toString())
-    : null;
-  const savingsGoalPercent = user?.savingsGoalPercent
-    ? Number(user.savingsGoalPercent.toString())
-    : null;
-  const savingsGoal =
-    savingsGoalAmount ??
-    (savingsGoalPercent ? Math.round(baseIncome * savingsGoalPercent) / 100 : 0);
 
   // ── Variable set (derived by exclusion) ─────────────────────────────────
   const matchedIds = new Set(matchedIdsRows.map((r) => r.matchedTransactionId));
@@ -242,32 +263,43 @@ export async function buildMonthStatus(
     });
     if (tx.valueDate >= start && tx.valueDate < end) variableSpentMonth += amount;
   }
-  variableSpentMonth = Math.round(variableSpentMonth * 100) / 100;
+  variableSpentMonth = round(variableSpentMonth);
 
-  // ── Rollover funds: this month's quota + derived balance ────────────────
+  // ── Budget items: current month's assignments + rollover balances ───────
   const categoryById = new Map(categories.map((c) => [c.id, c]));
-  // Fund identity is the category. Collect every rollover row per category,
-  // then balance = Σ (assigned − spent-in-category-that-month).
-  const fundRows = new Map<string, { year: number; month: number; assigned: number }[]>();
-  const currentFundIds = new Set<string>();
+  const currentItems: { categoryId: string; assigned: number; rollover: boolean }[] = [];
+  const rolloverHistory = new Map<string, { year: number; month: number; assigned: number }[]>();
   for (const b of budgets) {
     for (const item of b.budgetItems) {
-      if (!item.rollover) continue;
-      if (b.year > year || (b.year === year && b.month > month)) continue;
-      if (b.year === year && b.month === month) currentFundIds.add(item.categoryId);
-      const list = fundRows.get(item.categoryId) ?? [];
-      list.push({
-        year: b.year,
-        month: b.month,
-        assigned: Number(item.plannedAmount.toString()),
-      });
-      fundRows.set(item.categoryId, list);
+      const inPast = b.year < year || (b.year === year && b.month <= month);
+      if (b.year === year && b.month === month) {
+        currentItems.push({
+          categoryId: item.categoryId,
+          assigned: Number(item.plannedAmount.toString()),
+          rollover: item.rollover,
+        });
+      }
+      if (item.rollover && inPast) {
+        const list = rolloverHistory.get(item.categoryId) ?? [];
+        list.push({
+          year: b.year,
+          month: b.month,
+          assigned: Number(item.plannedAmount.toString()),
+        });
+        rolloverHistory.set(item.categoryId, list);
+      }
     }
   }
-  // A fund is "live" when it has a row THIS month (deleting that row retires
-  // it); balances still derive from the full history.
-  const fundCategoryIds = [...currentFundIds];
-  const fundSpend = new Map<string, number>(); // `${cat}:${y}-${m}` → spent
+  const variableBudget = currentItems
+    .filter((i) => !i.rollover)
+    .reduce((sum, i) => sum + i.assigned, 0);
+  const rolloverQuotas = currentItems
+    .filter((i) => i.rollover)
+    .reduce((sum, i) => sum + i.assigned, 0);
+
+  // Spending per category per month for the fund categories (their balances).
+  const fundCategoryIds = currentItems.filter((i) => i.rollover).map((i) => i.categoryId);
+  const fundSpend = new Map<string, number>();
   if (fundCategoryIds.length > 0) {
     const rows = await prisma.transaction.findMany({
       where: {
@@ -285,45 +317,55 @@ export async function buildMonthStatus(
     });
     for (const row of rows) {
       const key = `${row.categorization!.categoryId}:${row.valueDate.getUTCFullYear()}-${row.valueDate.getUTCMonth() + 1}`;
-      fundSpend.set(
-        key,
-        (fundSpend.get(key) ?? 0) + Math.abs(Number(row.amount.toString()))
-      );
+      fundSpend.set(key, (fundSpend.get(key) ?? 0) + Math.abs(Number(row.amount.toString())));
     }
   }
-  const funds: RolloverFundStatus[] = fundCategoryIds.map((categoryId) => {
-    const rows = fundRows.get(categoryId)!;
-    const currentRow = rows.find((r) => r.year === year && r.month === month);
-    const balance = rolloverBalance(
-      rows.map((r) => ({
-        assigned: r.assigned,
-        spent: fundSpend.get(`${categoryId}:${r.year}-${r.month}`) ?? 0,
-      }))
-    );
-    const cat = categoryById.get(categoryId);
-    return {
-      categoryId,
-      categoryName: cat?.name ?? "?",
-      categoryColor: cat?.color ?? "#6366f1",
-      assigned: currentRow?.assigned ?? 0,
-      balance,
-    };
-  });
-  const rolloverQuotas = funds.reduce((sum, f) => sum + f.assigned, 0);
 
-  // ── Cascade + weekly ─────────────────────────────────────────────────────
+  // Consumed this month per category, from the variable set (by date — the
+  // variable spend never carries accrual, plan §4.5).
+  const consumedByCategory = new Map<string, number>();
+  for (const tx of variableTx) {
+    if (!tx.categoryId || tx.date < today.slice(0, 8) + "01") continue;
+    consumedByCategory.set(
+      tx.categoryId,
+      (consumedByCategory.get(tx.categoryId) ?? 0) + tx.amount
+    );
+  }
+
+  const objectives: CategoryObjective[] = currentItems
+    .map((item) => {
+      const cat = categoryById.get(item.categoryId);
+      const balance = item.rollover
+        ? rolloverBalance(
+            (rolloverHistory.get(item.categoryId) ?? []).map((r) => ({
+              assigned: r.assigned,
+              spent: fundSpend.get(`${item.categoryId}:${r.year}-${r.month}`) ?? 0,
+            }))
+          )
+        : null;
+      return {
+        categoryId: item.categoryId,
+        categoryName: cat?.name ?? "?",
+        categoryColor: cat?.color ?? "#6366f1",
+        assigned: round(item.assigned),
+        consumed: round(consumedByCategory.get(item.categoryId) ?? 0),
+        rollover: item.rollover,
+        balance,
+      };
+    })
+    .sort((a, b) => Number(a.rollover) - Number(b.rollover) || b.assigned - a.assigned);
+
+  // ── Cascade (always EXPECTED amounts — the plan is the plan) ────────────
   const cascade = computeCascade({
-    baseIncome,
     plannedItems: plannedMonth.map((p) => ({
       direction: p.direction,
       amount: Number(p.amount.toString()),
-      matchedAmount: p.matchedAmount ? Number(p.matchedAmount.toString()) : null,
-      status: p.status,
     })),
     rolloverQuotas,
-    savingsGoal,
+    variableBudget,
   });
 
+  // ── Weekly ───────────────────────────────────────────────────────────────
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const weekly = computeWeeklyAvailable({
     variableBudget: cascade.variableBudget,
@@ -341,76 +383,91 @@ export async function buildMonthStatus(
     };
   });
 
-  // ── Extraordinary income (by difference, no heuristics) ─────────────────
-  const incomeAgg = await prisma.transaction.aggregate({
+  // ── Reconciliation: real result under accrual + balance-change check ────
+  let matchedCredit = 0;
+  let matchedDebit = 0;
+  for (const p of plannedMonth) {
+    if (p.status !== "MATCHED" || p.matchedAmount == null) continue;
+    const amount = Number(p.matchedAmount.toString());
+    if (p.direction === "CREDIT") matchedCredit += amount;
+    else matchedDebit += amount;
+  }
+  let unmatchedCredit = 0;
+  let unmatchedDebit = 0;
+  for (const tx of monthFlows) {
+    if (matchedIds.has(tx.id)) continue; // matched rows book in their item's month
+    const amount = Math.abs(Number(tx.amount.toString()));
+    if (tx.direction === "CREDIT") unmatchedCredit += amount;
+    else unmatchedDebit += amount;
+  }
+  const actual = computeActualResult({
+    matchedCredit,
+    matchedDebit,
+    unmatchedCredit,
+    unmatchedDebit,
+  });
+
+  // Consolidated balance now and entering the month (accounts have no
+  // semantics — always the sum of all of them).
+  const consolidatedBalance = accounts.every((a) => a.balances.length === 0)
+    ? null
+    : round(
+        accounts.reduce(
+          (sum, a) => sum + (a.balances[0] ? Number(a.balances[0].balance.toString()) : 0),
+          0
+        )
+      );
+  const startSnapshots = await Promise.all(
+    accounts.map((a) =>
+      prisma.accountBalance.findFirst({
+        where: { bankAccountId: a.id, date: { lt: start } },
+        orderBy: { date: "desc" },
+        select: { balance: true },
+      })
+    )
+  );
+  const haveAllStarts =
+    accounts.length > 0 && startSnapshots.every((s) => s !== null);
+  const consolidatedDelta =
+    consolidatedBalance != null && haveAllStarts
+      ? round(
+          consolidatedBalance -
+            startSnapshots.reduce((sum, s) => sum + Number(s!.balance.toString()), 0)
+        )
+      : null;
+
+  // Average monthly spend over the trailing full months, for the cushion.
+  const baselineStart = new Date(Date.UTC(year, month - 1 - CUSHION_BASELINE_MONTHS, 1));
+  const baselineAgg = await prisma.transaction.aggregate({
     where: {
       userId,
-      direction: "CREDIT",
-      valueDate: { gte: start, lt: end },
-      categorization: {
-        is: { status: "APPROVED", category: { is: { kind: "INCOME" } } },
-      },
+      direction: "DEBIT",
+      valueDate: { gte: baselineStart, lt: start },
+      NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
     },
     _sum: { amount: true },
   });
-  const actualIncome = incomeAgg._sum.amount
-    ? Math.abs(Number(incomeAgg._sum.amount.toString()))
+  const avgMonthlySpend = baselineAgg._sum.amount
+    ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
     : 0;
 
-  // ── Savings execution (unchanged from v1 — it was kept on purpose) ──────
-  let savings: SavingsStatus | null = null;
-  if (user?.savingsAccountId) {
-    const account = await prisma.bankAccount.findFirst({
-      where: { id: user.savingsAccountId, userId },
-      select: {
-        id: true,
-        name: true,
-        balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } },
-      },
-    });
-    if (account) {
-      const [startSnapshot, monthRows] = await Promise.all([
-        prisma.accountBalance.findFirst({
-          where: { bankAccountId: account.id, date: { lt: start } },
-          orderBy: { date: "desc" },
-          select: { balance: true },
-        }),
-        prisma.transaction.findMany({
-          where: { userId, bankAccountId: account.id, valueDate: { gte: start, lt: end } },
-          select: {
-            direction: true,
-            amount: true,
-            description: true,
-            remittanceInfo: true,
-            categorization: { select: { category: { select: { kind: true } } } },
-          },
-        }),
-      ]);
-      savings = {
-        accountId: account.id,
-        accountName: account.name,
-        netChange: netSavingsChange(
-          startSnapshot ? Number(startSnapshot.balance.toString()) : null,
-          account.balances[0] ? Number(account.balances[0].balance.toString()) : null
-        ),
-        activity: monthTransferActivity(
-          monthRows.map((r) => ({
-            direction: r.direction,
-            amount: Number(r.amount.toString()),
-            description: r.description,
-            remittanceInfo: r.remittanceInfo,
-            categoryKind: r.categorization?.category?.kind ?? null,
-          }))
-        ),
-      };
-    }
-  }
+  const reconciliation: Reconciliation = {
+    ...actual,
+    expectedResult: cascade.expectedResult,
+    performance: performance(actual.actualResult, cascade.expectedResult),
+    consolidatedDelta,
+    discrepancy: reconciliationGap(consolidatedDelta, actual.actualResult),
+    consolidatedBalance,
+    monthsOfCushion: monthsOfCushion(consolidatedBalance, avgMonthlySpend),
+  };
 
   return {
     year,
     month,
     today,
-    configured: baseIncome > 0,
+    provisional: isProvisionalMonth(today),
+    monthElapsed: Math.round((Number(today.slice(8, 10)) / daysInMonth) * 100) / 100,
+    configured: variableBudget > 0,
     cascade,
     weekly,
     opsThisWeek: ops.count,
@@ -418,9 +475,7 @@ export async function buildMonthStatus(
     opsMedian: weeklyOpsMedian(variableTx, today),
     composition,
     variableSpentMonth,
-    extraordinaryIncome: extraordinaryIncome(actualIncome, baseIncome),
-    funds,
-    savings,
-    hasSavingsGoal: savingsGoal > 0,
+    objectives,
+    reconciliation,
   };
 }

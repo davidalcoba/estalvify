@@ -34,6 +34,17 @@ export default function SettingsLoading() {
           </CardContent>
         </Card>
 
+        {/* Alerts (low-balance threshold) */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-20" />
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <FieldSkeleton />
+            <Skeleton className="h-9 w-32" />
+          </CardContent>
+        </Card>
+
         {/* Category manager */}
         <Card>
           <CardHeader>
