@@ -41,7 +41,10 @@ recurrentes, etc.).
 >   (ritmo). Los rollover tienen **polaridad invertida** (acumular es bueno — misma
 >   widget, significado opuesto, distinguidos visualmente) y su saldo se deriva
 >   (`rolloverBalance`). Toda asignación se propaga sola al mes siguiente
->   (`ensureBudgetPropagation`); borrar la fila del mes la retira.
+>   (`ensureBudgetPropagation`); borrar la fila del mes la retira. La vista es
+>   **navegable por mes** (`/plan?y=&m=`): un mes pasado se lee cerrado (ritmo
+>   100%, saldo consolidado al cierre de ese mes), uno futuro llega ya asignado
+>   por propagación — nunca se materializan filas en meses pasados.
 > - Se mantienen de v2: **series manuales** (CRUD en /recurring, sin detección),
 >   **planned_items como fuente de verdad** (motor a 4 meses, `lib/planned/engine.ts`),
 >   **disponible SEMANAL** con contador de operaciones vs mediana de 12 semanas, y la
