@@ -16,6 +16,8 @@ export interface DetectionInput {
   categoryId?: string | null;
   categoryName?: string | null;
   categoryColor?: string | null;
+  /** Account the charge hit — lets per-account cash-flow place the series. */
+  bankAccountId?: string | null;
 }
 
 export interface RecurringCandidate {
@@ -32,6 +34,19 @@ export interface RecurringCandidate {
   categoryId: string | null;
   categoryName: string | null;
   categoryColor: string | null;
+  /**
+   * Chronological occurrences (absolute amounts). Feeds the amount-deviation
+   * alert (baseline = the charges before the latest one) and the day-of-month
+   * window the cash-flow projection schedules charges in.
+   */
+  history: SeriesOccurrence[];
+  /** Account most of the series' charges hit, or null when inputs carry none. */
+  bankAccountId: string | null;
+}
+
+export interface SeriesOccurrence {
+  date: string; // YYYY-MM-DD
+  amount: number; // absolute value
 }
 
 // Minimum repeats before something counts as a series.
@@ -141,6 +156,23 @@ export function nextExpectedDate(lastSeen: string, cadence: Cadence): string {
   }
 }
 
+function majorityAccount(rows: DetectionInput[]): string | null {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.bankAccountId) continue;
+    counts.set(row.bankAccountId, (counts.get(row.bankAccountId) ?? 0) + 1);
+  }
+  let bestId: string | null = null;
+  let best = 0;
+  for (const [id, count] of counts) {
+    if (count > best) {
+      bestId = id;
+      best = count;
+    }
+  }
+  return bestId;
+}
+
 function majorityCategory(
   rows: DetectionInput[]
 ): { id: string | null; name: string | null; color: string | null } {
@@ -228,6 +260,11 @@ export function detectRecurringSeries(rows: DetectionInput[]): RecurringCandidat
       categoryId: cat.id,
       categoryName: cat.name,
       categoryColor: cat.color,
+      history: sorted.map((r) => ({
+        date: toDateOnly(r.valueDate),
+        amount: Math.abs(r.amount),
+      })),
+      bankAccountId: majorityAccount(sorted),
     });
   }
 

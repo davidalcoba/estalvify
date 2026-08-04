@@ -13,6 +13,118 @@
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.).
 
+> **Post-roadmap — Alertas de series recurrentes (cambio de importe y serie ausente).**
+> Las alertas se calculan con **detección en vivo** en el cron de notificaciones, no desde
+> los snapshots de `recurringSeries` (que solo se escribían al confirmar y quedaban
+> obsoletos): `RECURRING_AMOUNT_CHANGE` cuando el último cargo de una serie confirmada se
+> desvía >15% de la mediana de los cargos anteriores (`lib/recurring/alerts.ts`, puro), y
+> `RECURRING_MISSED` cuando el cargo esperado no llega pasados 4 días de gracia. El cron
+> además **refresca los snapshots** (importe medio, lastSeenAt, nextExpectedDate, cadencia)
+> y los plan items espejados (`recurringMerchantKey`), así el Forecast sigue la realidad
+> (una subida de alquiler incluida) y `RECURRING_UPCOMING` deja de clavarse en la fecha del
+> día de la confirmación. `RecurringCandidate` lleva ahora `history` (fecha+importe por
+> ocurrencia), que alimenta la desviación y la ventana de días de la previsión de caja.
+
+> **Post-roadmap — Previsión de caja diaria (30/60 días, por cuenta).** El forecast
+> mensual no ve el descuadre de calendario (el alquiler sale el día 1–6 y la nómina entra
+> el ~28): `lib/analytics/cashflow.ts` (puro, con tests) proyecta el saldo **día a día y
+> por cuenta** desde las series confirmadas — con anclaje a fin de mes para cargos tipo
+> hipoteca (31 mar, 30 abr…) y día mediano para ventanas tipo alquiler — más una tasa de
+> gasto variable diaria (90 días, excluyendo TRANSFER y lo ya programado como serie).
+> `lib/analytics/cashflow-data.ts` (server-only) ensambla los datos y lo comparten la
+> página /forecast (tarjetas de cobertura por cuenta + curva diaria consolidada + próximos
+> cargos con fecha real) y el cron de notificaciones (aviso `LOW_BALANCE_PROJECTED` por
+> cuenta, re-alerta semanal, con el traspaso sugerido para cubrirlo). El umbral es
+> configurable en Settings (`User.lowBalanceThreshold`). Un cargo vencido y no llegado se
+> proyecta "mañana" en vez de desaparecer de la curva.
+
+> **Post-roadmap — Ahorro como compromiso + "disponible para gastar".** El orden del
+> cálculo se invierte (`lib/plan/commitments.ts`, puro): ingreso fijo del Plan − cargos
+> comprometidos − **objetivo de ahorro** (€ fijo o % del ingreso fijo, en Settings, tratado
+> como un cargo más) − sinking funds = presupuesto variable. La tarjeta de compromisos vive
+> en /plan (`components/plan/commitments-card.tsx`) y deja claro que **la app no mueve
+> dinero**: detecta si el traspaso se ejecutó (`lib/plan/savings.ts` — TRASPASO/kind
+> TRANSFER en la cuenta de ahorro designada, `User.savingsAccountId`) y mide el **ahorro
+> real como variación neta del saldo** de esa cuenta (un traspaso que vuelve es churn, no
+> ahorro). Aviso `SAVINGS_NOT_EXECUTED` a ≤5 días de fin de mes. El dashboard abre con
+> **"Available to spend"** (`components/plan/available-card.tsx`): presupuesto variable −
+> gasto variable. El gasto fijo se descuenta arriba: `splitVariableSpend` topa el gasto de
+> cada categoría con su **límite mensual del Plan** (los mismos límites de las barras y de
+> las alertas de budget), así un cargo ya comprometido — espejo de serie confirmada O item
+> fijo tecleado a mano — nunca cuenta dos veces, y solo el exceso sobre el límite drena el
+> variable. Con ritmo vs lo
+> que tocaría a estas alturas y disponible/día. Todo lo sirve `lib/plan/month-status.ts`
+> (server-only), compartido por dashboard, /plan y el cron.
+
+> **Post-roadmap — Split de transacciones + gasto sin trazabilidad.** Nuevo modelo
+> `TransactionSplit`: una fila del banco (inmutable) se parte en líneas que **deben sumar
+> exactamente el importe** (`lib/transactions/splits.ts`, puro; acción
+> `setTransactionSplits` reemplaza el set completo). Cuando hay líneas, **ellas son la
+> verdad** para la agregación por categoría (`aggregateSpendingByCategory`): cada línea
+> cuenta en su categoría y una línea sin categoría cae en la del padre. UI: botón Split en
+> el diálogo de detalle de transacción (editor de líneas con resto por asignar). El caso
+> que lo motiva: ~7% del gasto es opaco — retiradas de cajero (`RET. EFECTIVO`/`EN
+> CAJERO`) y liquidaciones de tarjeta (`ADEUDO MENSUAL DE TARJETA`).
+> `lib/analytics/traceability.ts` (puro) mide ese % por mes, descontando lo que los splits
+> ya explican, y Reports lo muestra en la tarjeta "Untracked spending". `isExtraordinary`
+> en una línea marca ingreso extraordinario (ver siguiente nota).
+
+> **Post-roadmap — Ingresos extraordinarios como evento.** Los variables anuales llegan
+> **dentro del mismo apunte** que la nómina (abril: 14,5k sobre una base de 6k), así que la
+> media de ingresos de 6 meses sobreestima el fijo en miles de euros. Detección pura
+> (`detectIncomeExcess` en `lib/recurring/alerts.ts`): si el último cobro de una serie
+> CREDIT confirmada supera la mediana de los anteriores en >20%, aviso
+> `EXTRAORDINARY_INCOME` con el exceso cuantificado y la instrucción de **partir el apunte**
+> (split con línea `isExtraordinary`) y asignarlo antes de que el mes se lo coma. Las
+> líneas extraordinarias se **restan de las medias de ingresos** en toda la app
+> (`TrendRow.extraordinaryAmount` en `lib/analytics/trends.ts`, alimentado desde los 4
+> consumidores del trend). El presupuesto/tasa de ahorro ya usaba solo el ingreso fijo del
+> Plan, inmune por construcción. Una nómina reducida (deviation a la baja) sigue avisando
+> vía `RECURRING_AMOUNT_CHANGE`.
+
+> **Post-roadmap — Sinking funds.** Modelo `SinkingFund` (`{name, targetAmount,
+> targetDate?, monthlyContribution, startDate, initialAmount, active}`): provisión mensual
+> para golpes previsibles no mensuales (IBI — que no aparece en 8 meses de histórico y va a
+> llegar —, vacaciones, vuelta al cole, taller). **Contabilidad interna** sobre el saldo de
+> Estalvis, sin cuenta real ni cron: lo acumulado se **computa** (`lib/plan/sinking-funds.ts`,
+> puro — inicial + aportación × meses desde startDate, cap en el objetivo; un fondo lleno
+> deja de aportar, sin cobrar dos veces el mes que lo completa; `suggestedContribution`
+> reparte lo restante hasta targetDate). La aportación mensual de los fondos activos entra
+> en el **bloque de compromisos** junto al objetivo de ahorro (`buildMonthStatus`), así que
+> reduce el presupuesto variable. UI en /plan: `components/plan/sinking-funds-card.tsx`
+> (lista con progreso + diálogo alta/edición/borrado).
+
+> **Post-roadmap — Titulares de hogar.** `BankAccount.ownerName` (texto libre, editable
+> inline en /accounts junto al nombre — `components/accounts/account-owner-editor.tsx`).
+> La vista consolidada de hogar **ya era** la por defecto y los traspasos entre titulares
+> ya no cuentan como gasto/ingreso vía `Category.kind` TRANSFER; lo nuevo es la dimensión
+> de titular y el **indicador de concentración de ingresos**
+> (`lib/analytics/household.ts`, puro): % del ingreso del hogar (ventana de tendencia,
+> extraordinarios excluidos) que llega vía un solo titular, mostrado en la KPI de ingresos
+> del dashboard cuando hay ≥2 titulares con ingresos. Es el riesgo estructural real de la
+> familia (73% del fijo en una persona).
+
+> **Post-roadmap — Deuda técnica MCP.** (1) `neverMatched` corregido: era
+> `matchCount === 0` con al menos un run — pero `matchCount` solo guarda el **último** run,
+> así que marcaba en rojo reglas sanas sin nada nuevo que coger. Ahora es
+> `lastRunAt !== null && lastMatchAt === null` (mismo fix en `lib/rules/rule-dto.ts` para
+> la UI, con test). (2) `lib/mcp/tools-schema.test.ts`: parsea el registro de tools y
+> **rompe el build** si un handler destructura un parámetro que su `inputSchema` no declara
+> o declara uno que no lee — la divergencia que ya pasó tres veces (`offset`,
+> `dateFrom`/`dateTo`, `categoryId`). Requiere schemas inline (el test cazó un schema por
+> referencia el mismo día que nació). (3) En vez de `create_budget` (budgets está
+> deprecado a favor del Plan): tools `list_plan_items` / `create_plan_item` /
+> `update_plan_item` / `delete_plan_item` (`lib/mcp/manage.ts`, misma validación que las
+> Server Actions; los items espejados de una serie confirmada se rechazan — los gestiona la
+> serie). `get_budgets` queda marcado LEGACY en su descripción. (3b) `update_category`
+> acepta `isActive: true` — el undo de `delete_category` que no existía; es el paso previo
+> para reactivar `Hogar y decoración` con reglas de descripción (Xina Center, Central
+> Garden, Natura, Fes Mes) cuando este código esté desplegado, en vez de dejarla apagada.
+> (4) La renumeración de
+> prioridades 0..N es **diseño**, no bug: el número nunca se muestra, el orden se cambia con
+> `reorder_rules`/drag — insertar entre dos reglas es reordenar, no numerar. (5) La alerta
+> de >72 h sin transacciones ya existía (`NO_TRANSACTIONS`, umbral 3 días).
+
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
 > `lib/categories/hierarchy.ts`) y `categoryCounts: true`, que devuelve el **conteo por

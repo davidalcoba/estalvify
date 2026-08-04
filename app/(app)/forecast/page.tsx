@@ -23,17 +23,25 @@ import {
   type PlanItemInput,
 } from "@/lib/plan/plan-item";
 import { daysBetween } from "@/lib/recurring/detect";
+import { buildCashflowData } from "@/lib/analytics/cashflow-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BalanceForecastChart } from "@/components/reports/balance-forecast-chart";
-import { TrendingUp, LineChart, CalendarClock } from "lucide-react";
+import {
+  TrendingUp,
+  LineChart,
+  CalendarClock,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
 
 export const metadata: Metadata = { title: "Forecast" };
 
 const HISTORY_MONTHS = 6;
 const HORIZON_MONTHS = 6;
 const UPCOMING_HORIZON_DAYS = 45;
+const CASHFLOW_HORIZON_DAYS = 60;
 
 export default async function ForecastPage() {
   const session = await auth();
@@ -46,6 +54,11 @@ export default async function ForecastPage() {
   const fullMonths = lastNMonths(prev.year, prev.month, HISTORY_MONTHS);
   const trendStart = monthRange(fullMonths[0].year, fullMonths[0].month).start;
 
+  const cashflowPromise = buildCashflowData(
+    userId,
+    timezone,
+    CASHFLOW_HORIZON_DAYS,
+  );
   const [accounts, trendTx, planItems] = await Promise.all([
     prisma.bankAccount.findMany({
       where: { userId, isActive: true },
@@ -65,6 +78,11 @@ export default async function ForecastPage() {
         valueDate: true,
         // Category kind so transfers can be excluded from income/expense totals.
         categorization: { select: { category: { select: { kind: true } } } },
+        // Extraordinary split lines are subtracted from income averages.
+        splits: {
+          where: { isExtraordinary: true },
+          select: { amount: true },
+        },
       },
     }),
     prisma.planItem.findMany({
@@ -78,10 +96,12 @@ export default async function ForecastPage() {
         dayOfMonth: true,
         onDate: true,
         endDate: true,
+        recurringMerchantKey: true,
         category: { select: { name: true } },
       },
     }),
   ]);
+  const cashflow = await cashflowPromise;
 
   const hasData =
     accounts.length > 0 || trendTx.length > 0 || planItems.length > 0;
@@ -97,6 +117,10 @@ export default async function ForecastPage() {
     direction: t.direction,
     valueDate: t.valueDate.toISOString(),
     categoryKind: t.categorization?.category?.kind ?? null,
+    extraordinaryAmount: t.splits.reduce(
+      (sum, s) => sum + Number(s.amount.toString()),
+      0,
+    ),
   }));
   const trend = monthlyIncomeExpenses(rows, fullMonths);
   const avg = averageMonthly(trend);
@@ -186,37 +210,57 @@ export default async function ForecastPage() {
     return `${y}-${String(m).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
   };
 
-  // Upcoming charges within the horizon, from the Plan — one-offs by their date
-  // and monthly items with a day-of-month. Other cadences still drive the
-  // projection but have no single near-term date to show.
-  const upcoming = planItems
-    .map((p) => {
-      let date: string | null = null;
-      if (p.cadence === "ONE_OFF" && p.onDate) {
-        date = p.onDate.toISOString().slice(0, 10);
-      } else if (p.cadence === "MONTHLY" && p.dayOfMonth != null) {
-        date = nextMonthlyOccurrence(p.dayOfMonth);
-      }
-      if (!date) return null;
-      // Nothing is due after the item's last date.
-      if (p.endDate && date > p.endDate.toISOString().slice(0, 10)) return null;
-      return {
-        displayName:
-          p.label ??
-          p.category?.name ??
-          (p.direction === "CREDIT" ? "Income" : "Expense"),
-        direction: p.direction,
-        amount: Number(p.amount.toString()),
-        date,
-        inDays: daysBetween(today, date),
-      };
-    })
-    .filter(
-      (r): r is NonNullable<typeof r> =>
-        r !== null && r.inDays >= 0 && r.inDays <= UPCOMING_HORIZON_DAYS,
-    )
+  // Upcoming charges within the horizon: confirmed recurring series contribute
+  // their scheduled dates (via the cash-flow projection, so rent's day window
+  // and the mortgage's month-end anchor are respected), and manually typed plan
+  // items — one-offs by their date, monthly ones by day-of-month — fill in the
+  // rest. Mirrored plan items are skipped: their series already covers them.
+  const upcoming = [
+    ...cashflow.upcomingEvents.map((event) => ({
+      displayName: event.label,
+      direction: event.direction as "DEBIT" | "CREDIT",
+      amount: event.amount,
+      date: event.date,
+      inDays: event.daysAway,
+      accountName: event.accountName as string | null,
+    })),
+    ...planItems
+      .filter((p) => p.recurringMerchantKey === null)
+      .map((p) => {
+        let date: string | null = null;
+        if (p.cadence === "ONE_OFF" && p.onDate) {
+          date = p.onDate.toISOString().slice(0, 10);
+        } else if (p.cadence === "MONTHLY" && p.dayOfMonth != null) {
+          date = nextMonthlyOccurrence(p.dayOfMonth);
+        }
+        if (!date) return null;
+        // Nothing is due after the item's last date.
+        if (p.endDate && date > p.endDate.toISOString().slice(0, 10))
+          return null;
+        return {
+          displayName:
+            p.label ??
+            p.category?.name ??
+            (p.direction === "CREDIT" ? "Income" : "Expense"),
+          direction: p.direction as "DEBIT" | "CREDIT",
+          amount: Number(p.amount.toString()),
+          date,
+          inDays: daysBetween(today, date),
+          accountName: null as string | null,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null),
+  ]
+    .filter((r) => r.inDays >= 0 && r.inDays <= UPCOMING_HORIZON_DAYS)
     .sort((a, b) => a.inDays - b.inDays)
-    .slice(0, 8);
+    .slice(0, 10);
+
+  const dayLabel = (iso: string) =>
+    formatDate(iso, language, "UTC", { day: "numeric", month: "short" });
+  const cashflowChartData = cashflow.consolidated.map((p) => ({
+    label: dayLabel(p.date),
+    balance: p.balance,
+  }));
 
   return (
     <div className="space-y-6">
@@ -272,6 +316,72 @@ export default async function ForecastPage() {
             </Kpi>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {cashflow.accounts.map((account) => (
+              <Card key={account.accountId}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {account.accountName}
+                  </CardTitle>
+                  {account.breach ? (
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 text-success" />
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(account.startingBalance, currency, locale)}
+                  </div>
+                  {account.breach ? (
+                    <p className="text-xs text-destructive">
+                      Projected {formatCurrency(account.breach.balance, currency, locale)}{" "}
+                      on {dayLabel(account.breach.date)} (
+                      {account.breach.daysAway === 1
+                        ? "tomorrow"
+                        : `in ${account.breach.daysAway} days`}
+                      ). A transfer of{" "}
+                      {formatCurrency(
+                        Math.ceil(cashflow.threshold - account.minBalance),
+                        currency,
+                        locale,
+                      )}{" "}
+                      would keep it covered.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Covers the next {CASHFLOW_HORIZON_DAYS} days · lowest{" "}
+                      {formatCurrency(account.minBalance, currency, locale)} on{" "}
+                      {dayLabel(account.minDate)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Cash flow · next {CASHFLOW_HORIZON_DAYS} days
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BalanceForecastChart
+                data={cashflowChartData}
+                currency={currency}
+                locale={locale}
+                threshold={cashflow.threshold}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                All accounts combined, day by day: confirmed recurring charges
+                and income on their expected dates, plus your average variable
+                spend. Per-account coverage is above — a combined total can look
+                fine while one account misses rent.
+              </p>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
@@ -312,11 +422,16 @@ export default async function ForecastPage() {
                 <ul className="divide-y">
                   {upcoming.map((r, i) => (
                     <li
-                      key={`${r.displayName}-${i}`}
+                      key={`${r.displayName}-${r.date}-${i}`}
                       className="flex items-center gap-3 py-2 text-sm"
                     >
                       <span className="min-w-0 flex-1 truncate">
                         {r.displayName}
+                        {r.accountName ? (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {r.accountName}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {formatDate(r.date, language, "UTC", {

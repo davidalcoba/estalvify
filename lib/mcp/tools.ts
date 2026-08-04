@@ -23,6 +23,10 @@ import {
   updateRuleForUser,
   runRuleForUser,
   runAllRulesForUser,
+  listPlanItemsForUser,
+  createPlanItemForUser,
+  updatePlanItemForUser,
+  deletePlanItemForUser,
 } from "@/lib/mcp/manage";
 import {
   deleteRuleForUser,
@@ -357,7 +361,10 @@ export function registerTools(server: McpServer): void {
     "get_budgets",
     {
       description:
-        "Get the user's monthly budgets and their per-category planned amounts.",
+        "Get the user's LEGACY monthly budgets (per-category planned amounts). The Budget " +
+        "feature was replaced by the Plan (/budget redirects to /plan) and these tables are " +
+        "no longer written by the app — use list_plan_items / create_plan_item / " +
+        "update_plan_item / delete_plan_item for planning instead.",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
@@ -391,6 +398,145 @@ export function registerTools(server: McpServer): void {
           })),
         })),
       );
+    },
+  );
+
+  // ── Plan items (the planning surface that replaced budgets) ─────────────────
+  server.registerTool(
+    "list_plan_items",
+    {
+      description:
+        "List the user's Plan: standing expected income and expenses with cadences. " +
+        "This is what drives the forecast, the category limits and the month's " +
+        "commitments. An item with a non-null recurringMerchantKey mirrors a confirmed " +
+        "recurring series and is managed from /recurring, not through these tools.",
+      inputSchema: {},
+    },
+    async (_args, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      return json(await listPlanItemsForUser(userId));
+    },
+  );
+
+  server.registerTool(
+    "create_plan_item",
+    {
+      description:
+        "Add a standing expected income or expense to the Plan. Expenses (DEBIT) need a " +
+        "categoryId; a ONE_OFF needs onDate; periodic items may carry dayOfMonth (when " +
+        "the charge lands) and an inclusive endDate (a loan's last month).",
+      inputSchema: {
+    direction: z.enum(["DEBIT", "CREDIT"]),
+    categoryId: z
+      .string()
+      .optional()
+      .describe("Required for a DEBIT (expense) item; optional for income"),
+    label: z.string().max(60).optional(),
+    amount: z.number().min(0),
+    cadence: z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY", "ONE_OFF"]),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    onDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .optional()
+      .describe("Required for ONE_OFF"),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .optional()
+      .describe("Last month a periodic item applies (inclusive)"),
+  },
+    },
+    async (
+      { direction, categoryId, label, amount, cadence, dayOfMonth, onDate, endDate },
+      extra,
+    ) => {
+      const userId = requireUserId(extra as ToolExtra);
+      return json(
+        await createPlanItemForUser(userId, {
+          direction,
+          categoryId: categoryId ?? null,
+          label: label ?? null,
+          amount,
+          cadence,
+          dayOfMonth: dayOfMonth ?? null,
+          onDate: onDate ?? null,
+          endDate: endDate ?? null,
+        }),
+      );
+    },
+  );
+
+  server.registerTool(
+    "update_plan_item",
+    {
+      description:
+        "Replace a plan item's fields (same validation as create_plan_item). Items " +
+        "mirrored from a confirmed recurring series are refused — adjust the series.",
+      inputSchema: {
+        planItemId: z.string(),
+    direction: z.enum(["DEBIT", "CREDIT"]),
+    categoryId: z
+      .string()
+      .optional()
+      .describe("Required for a DEBIT (expense) item; optional for income"),
+    label: z.string().max(60).optional(),
+    amount: z.number().min(0),
+    cadence: z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY", "ONE_OFF"]),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    onDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .optional()
+      .describe("Required for ONE_OFF"),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+      .optional()
+      .describe("Last month a periodic item applies (inclusive)"),
+  },
+    },
+    async (
+      {
+        planItemId,
+        direction,
+        categoryId,
+        label,
+        amount,
+        cadence,
+        dayOfMonth,
+        onDate,
+        endDate,
+      },
+      extra,
+    ) => {
+      const userId = requireUserId(extra as ToolExtra);
+      return json(
+        await updatePlanItemForUser(userId, planItemId, {
+          direction,
+          categoryId: categoryId ?? null,
+          label: label ?? null,
+          amount,
+          cadence,
+          dayOfMonth: dayOfMonth ?? null,
+          onDate: onDate ?? null,
+          endDate: endDate ?? null,
+        }),
+      );
+    },
+  );
+
+  server.registerTool(
+    "delete_plan_item",
+    {
+      description:
+        "Delete a plan item. Items mirrored from a confirmed recurring series are " +
+        "refused — ignore the series on /recurring instead.",
+      inputSchema: { planItemId: z.string() },
+    },
+    async ({ planItemId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      return json(await deletePlanItemForUser(userId, planItemId));
     },
   );
 
@@ -498,20 +644,30 @@ export function registerTools(server: McpServer): void {
         "category has subcategories of its own, or if the target is itself a subcategory — " +
         "nesting is limited to two levels.\n" +
         "`kind` controls how it counts: EXPENSE in spending totals, INCOME in income, TRANSFER " +
-        "in neither.",
+        "in neither.\n" +
+        "`isActive: true` restores a soft-deleted category — the undo delete_category never " +
+        "had. Rules deactivated by the deletion stay off; re-enable them (or write new ones) " +
+        "explicitly. A subcategory can only be restored under an active parent.",
       inputSchema: {
         categoryId: z.string(),
         name: z.string().optional(),
         color: z.string().optional(),
         kind: z.enum(["EXPENSE", "INCOME", "TRANSFER"]).optional(),
         parentId: z.string().nullable().optional(),
+        isActive: z.boolean().optional(),
       },
     },
-    async ({ categoryId, name, color, kind, parentId }, extra) => {
+    async ({ categoryId, name, color, kind, parentId, isActive }, extra) => {
       const userId = requireUserId(extra as ToolExtra);
       try {
         return json(
-          await updateCategoryForUser(userId, categoryId, { name, color, kind, parentId }),
+          await updateCategoryForUser(userId, categoryId, {
+            name,
+            color,
+            kind,
+            parentId,
+            isActive,
+          }),
         );
       } catch (err) {
         return errorResult(err, "update_category failed");
@@ -569,8 +725,10 @@ export function registerTools(server: McpServer): void {
         "List the user's categorization rules in evaluation order — first in the list runs " +
         "first and wins. Includes conditions, target category, ids and " +
         "run metrics: `matchCount` is how many transactions the rule claimed in its most " +
-        "recent run, and `neverMatched` flags a rule that has run and caught nothing — " +
-        "usually a sign its conditions look at the wrong field or word.",
+        "recent run, and `neverMatched` flags a rule that has run but has never matched " +
+        "anything in any run (lastMatchAt is null) — usually a sign its conditions look " +
+        "at the wrong field or word. A rule with matchCount 0 but neverMatched false is " +
+        "healthy: it simply had nothing new to claim last run.",
       inputSchema: {},
     },
     async (_args, extra) => {

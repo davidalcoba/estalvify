@@ -42,6 +42,12 @@ export interface TrendRow {
    * which is worse than the transfer contamination this field exists to fix.
    */
   categoryKind?: "EXPENSE" | "INCOME" | "TRANSFER" | null;
+  /**
+   * Total of the row's split lines marked extraordinary. Subtracted before
+   * bucketing, so the April bonus riding inside the salary row stops inflating
+   * income averages (a 6-month mean 2.4k€/month above the real fixed income).
+   */
+  extraordinaryAmount?: number;
 }
 
 export interface MonthlyTotals extends MonthBucket {
@@ -73,8 +79,9 @@ export function monthlyIncomeExpenses(
     const key = `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}`;
     const entry = totals.get(key);
     if (!entry) continue;
-    const amount = Math.abs(row.amount);
-    if (!Number.isFinite(amount)) continue;
+    const gross = Math.abs(row.amount);
+    if (!Number.isFinite(gross)) continue;
+    const amount = Math.max(0, gross - Math.abs(row.extraordinaryAmount ?? 0));
     if (row.direction === "CREDIT") entry.income += amount;
     else entry.expenses += amount;
   }

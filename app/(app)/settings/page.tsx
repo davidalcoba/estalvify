@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
 import { seedDefaultCategories } from "./actions";
 
@@ -12,10 +13,21 @@ export default async function SettingsPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [user, categories] = await Promise.all([
+  const [user, categories, bankAccounts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, timezone: true, currency: true, locale: true, language: true },
+      select: {
+        name: true,
+        email: true,
+        timezone: true,
+        currency: true,
+        locale: true,
+        language: true,
+        lowBalanceThreshold: true,
+        savingsGoalAmount: true,
+        savingsGoalPercent: true,
+        savingsAccountId: true,
+      },
     }),
     prisma.category.findMany({
       where: { userId, parentId: null, isActive: true },
@@ -26,6 +38,11 @@ export default async function SettingsPage() {
         },
       },
       orderBy: { sortOrder: "asc" },
+    }),
+    prisma.bankAccount.findMany({
+      where: { userId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -42,22 +59,28 @@ export default async function SettingsPage() {
       },
       orderBy: { sortOrder: "asc" },
     });
-    return <SettingsLayout user={user} categories={seeded} />;
+    return <SettingsLayout user={user} categories={seeded} bankAccounts={bankAccounts} />;
   }
 
-  return <SettingsLayout user={user} categories={categories} />;
+  return <SettingsLayout user={user} categories={categories} bankAccounts={bankAccounts} />;
 }
 
 function SettingsLayout({
   user,
   categories,
+  bankAccounts,
 }: {
   user: {
     timezone?: string | null;
     currency?: string | null;
     locale?: string | null;
     language?: string | null;
+    lowBalanceThreshold?: { toString(): string } | null;
+    savingsGoalAmount?: { toString(): string } | null;
+    savingsGoalPercent?: { toString(): string } | null;
+    savingsAccountId?: string | null;
   } | null;
+  bankAccounts: { id: string; name: string }[];
   categories: {
     id: string;
     name: string;
@@ -75,6 +98,19 @@ function SettingsLayout({
           currency={user?.currency ?? "EUR"}
           locale={user?.locale ?? "es-ES"}
           language={user?.language ?? "en-GB"}
+        />
+
+        <PlanningForm
+          lowBalanceThreshold={Number(user?.lowBalanceThreshold?.toString() ?? "0")}
+          savingsGoalAmount={
+            user?.savingsGoalAmount ? Number(user.savingsGoalAmount.toString()) : null
+          }
+          savingsGoalPercent={
+            user?.savingsGoalPercent ? Number(user.savingsGoalPercent.toString()) : null
+          }
+          savingsAccountId={user?.savingsAccountId ?? null}
+          accounts={bankAccounts}
+          currency={user?.currency ?? "EUR"}
         />
 
         <CategoryManager initialCategories={categories} />

@@ -21,9 +21,18 @@ interface PlanViewProps {
   locale: string;
   currency: string;
   dateLocale: string;
+  /** Server-rendered "this month's commitments" card (savings-first budget). */
+  commitmentsSlot?: React.ReactNode;
 }
 
-export function PlanView({ data, categories, locale, currency, dateLocale }: PlanViewProps) {
+export function PlanView({
+  data,
+  categories,
+  locale,
+  currency,
+  dateLocale,
+  commitmentsSlot,
+}: PlanViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [target, setTarget] = useState<PlanDialogTarget | null>(null);
@@ -107,6 +116,8 @@ export function PlanView({ data, categories, locale, currency, dateLocale }: Pla
         </EmptyState>
       ) : (
         <>
+          {commitmentsSlot}
+
           {/* Monthly summary — the goal: am I planning to save? */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <SummaryTile

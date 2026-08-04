@@ -13,7 +13,10 @@ import {
   currentYearMonth,
 } from "@/lib/analytics/spending";
 import { buildPlanData } from "@/lib/plan/plan-dto";
+import { buildMonthStatus } from "@/lib/plan/month-status";
 import { PlanView } from "@/components/plan/plan-view";
+import { CommitmentsCard } from "@/components/plan/commitments-card";
+import { SinkingFundsCard } from "@/components/plan/sinking-funds-card";
 
 export const metadata: Metadata = { title: "Plan" };
 
@@ -24,6 +27,7 @@ export default async function PlanPage() {
 
   const { year, month } = currentYearMonth(prefs.timezone);
 
+  const monthStatusPromise = buildMonthStatus(userId, prefs.timezone);
   const [planItems, spendingRows, categories] = await Promise.all([
     prisma.planItem.findMany({
       where: { userId, active: true },
@@ -43,7 +47,11 @@ export default async function PlanPage() {
     }),
     prisma.transaction.findMany({
       where: buildMonthlySpendingWhere(userId, year, month),
-      select: { amount: true, categorization: { select: { categoryId: true } } },
+      select: {
+        amount: true,
+        categorization: { select: { categoryId: true } },
+        splits: { select: { amount: true, categoryId: true } },
+      },
     }),
     prisma.category.findMany({
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
@@ -60,6 +68,7 @@ export default async function PlanPage() {
     categories,
     ref: { year, month },
   });
+  const monthStatus = await monthStatusPromise;
 
   return (
     <PlanView
@@ -68,6 +77,21 @@ export default async function PlanPage() {
       locale={prefs.locale}
       currency={prefs.currency}
       dateLocale={prefs.language}
+      commitmentsSlot={
+        <>
+          <CommitmentsCard
+            status={monthStatus}
+            currency={prefs.currency}
+            locale={prefs.locale}
+          />
+          <SinkingFundsCard
+            funds={monthStatus.funds}
+            currency={prefs.currency}
+            locale={prefs.locale}
+            dateLocale={prefs.language}
+          />
+        </>
+      }
     />
   );
 }

@@ -48,22 +48,37 @@ export function buildMonthlySpendingWhere(
 interface SpendingRow {
   amount: { toString(): string };
   categorization: { categoryId: string } | null;
+  /**
+   * User-authored split lines. When present they are the truth: each line
+   * counts under its own category and an unassigned line falls back to the
+   * parent's category, so a split cash withdrawal stops being one opaque
+   * "Cash" lump. Callers that don't fetch splits keep the old behaviour.
+   */
+  splits?: { amount: { toString(): string }; categoryId: string | null }[];
 }
 
 /**
  * Sum transaction amounts by their approved category. Rows without a
- * categorization or with a non-numeric amount are ignored.
+ * categorization or with a non-numeric amount are ignored. A row with split
+ * lines contributes its lines instead of itself (never both).
  */
 export function aggregateSpendingByCategory(
   rows: SpendingRow[]
 ): Record<string, number> {
   const totals: Record<string, number> = {};
-  for (const row of rows) {
-    const categoryId = row.categorization?.categoryId;
-    if (!categoryId) continue;
-    const amount = Number(row.amount.toString());
-    if (!Number.isFinite(amount)) continue;
+  const add = (categoryId: string | null | undefined, amount: number) => {
+    if (!categoryId || !Number.isFinite(amount)) return;
     totals[categoryId] = (totals[categoryId] ?? 0) + amount;
+  };
+  for (const row of rows) {
+    const parentCategoryId = row.categorization?.categoryId ?? null;
+    if (row.splits && row.splits.length > 0) {
+      for (const split of row.splits) {
+        add(split.categoryId ?? parentCategoryId, Number(split.amount.toString()));
+      }
+    } else {
+      add(parentCategoryId, Number(row.amount.toString()));
+    }
   }
   return totals;
 }

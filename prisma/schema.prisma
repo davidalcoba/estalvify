@@ -32,6 +32,21 @@ model User {
   // Language used for date rendering (formatDate) — decoupled from number format.
   language String @default("en-GB")
 
+  // Daily cash-flow alert: warn when a projected account balance dips below
+  // this. 0 = "don't go negative"; raise it to keep a cushion.
+  lowBalanceThreshold Decimal @default(0) @db.Decimal(15, 2)
+
+  // Savings-first budgeting: the monthly savings goal is treated as one more
+  // committed charge, subtracted BEFORE the variable budget — never a residue.
+  // Either a fixed amount (wins when both set) or a percent of fixed income.
+  savingsGoalAmount  Decimal? @db.Decimal(15, 2)
+  savingsGoalPercent Decimal? @db.Decimal(5, 2)
+  // Which bank account holds savings. Real savings is measured as this
+  // account's net balance change — a transfer that comes straight back to cover
+  // rent is churn, not saving. Plain id (no FK): a deleted account just turns
+  // the tracking off.
+  savingsAccountId String?
+
   accounts         Account[]
   sessions         Session[]
   bankConnections  BankConnection[]
@@ -39,6 +54,8 @@ model User {
   transactions     Transaction[]
   categories       Category[]
   categoryRules    CategoryRule[]
+  transactionSplits TransactionSplit[]
+  sinkingFunds     SinkingFund[]
   budgets          Budget[]
   planItems        PlanItem[]
   recurringSeries  RecurringSeries[]
@@ -152,6 +169,10 @@ model BankAccount {
   iban              String?
 
   name     String
+  // Household holder of this account (free text, e.g. "David"). Purely a
+  // reporting dimension: the household view stays the default, and this lets
+  // per-holder breakdowns and the income-concentration indicator exist.
+  ownerName String?
   type     BankAccountType @default(CHECKING)
   currency String          @default("EUR")
   isActive Boolean         @default(true)
@@ -236,11 +257,43 @@ model Transaction {
   bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
 
   categorization TransactionCategorization?
+  splits         TransactionSplit[]
 
   @@unique([bankAccountId, externalTransactionId])
   @@index([userId, valueDate])
   @@index([bankAccountId, valueDate])
   @@map("transactions")
+}
+
+// A user-authored breakdown of one bank transaction into lines (a cash
+// withdrawal split into what the cash actually bought; a salary split into base
+// and extraordinary). The bank row stays immutable — splits sit next to it, and
+// when they exist they are the truth for category aggregation: the parent's own
+// categorization no longer counts, a line without a category falls back to it.
+// Lines must sum to the parent's amount exactly (enforced in the action).
+model TransactionSplit {
+  id            String @id @default(cuid())
+  transactionId String
+  userId        String
+
+  amount     Decimal @db.Decimal(15, 2) // absolute value, same currency as parent
+  categoryId String? // null = unassigned remainder (keeps the parent's category)
+  note       String?
+
+  // Marks an income line as extraordinary (the April bonus inside the salary
+  // row): excluded from base-income medians and savings-rate calculations.
+  isExtraordinary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?   @relation(fields: [categoryId], references: [id])
+
+  @@index([transactionId])
+  @@index([userId])
+  @@map("transaction_splits")
 }
 
 enum TransactionDirection {
@@ -283,6 +336,7 @@ model Category {
   budgetItems           BudgetItem[]
   planItems             PlanItem[]
   recurringSeries       RecurringSeries[]
+  transactionSplits     TransactionSplit[]
 
   // Almost every page reads the user's categories (OR system defaults).
   @@index([userId])
@@ -482,6 +536,40 @@ enum PlanCadence {
 }
 
 // ─────────────────────────────────────────────
+// SINKING FUNDS - Provisioning for foreseeable non-monthly expenses
+// ─────────────────────────────────────────────
+
+// A named pot the user provisions monthly for a foreseeable lump expense (IBI,
+// car maintenance, summer holidays, back-to-school). Internal accounting over
+// the savings balance — no real sub-account exists. The accrued amount is
+// COMPUTED, never cron-updated: initialAmount + monthlyContribution per month
+// elapsed since startDate, capped at targetAmount (lib/plan/sinking-funds.ts).
+// Contributions of unfunded active funds join the month's commitments.
+model SinkingFund {
+  id     String @id @default(cuid())
+  userId String
+
+  name                String
+  targetAmount        Decimal   @db.Decimal(15, 2)
+  targetDate          DateTime? @db.Date // When the expense is expected (optional)
+  monthlyContribution Decimal   @db.Decimal(15, 2)
+
+  // Accrual anchor: contributions count from this month (inclusive) onward.
+  startDate     DateTime @db.Date
+  initialAmount Decimal  @default(0) @db.Decimal(15, 2)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sinking_funds")
+}
+
+// ─────────────────────────────────────────────
 // RECURRING SERIES - Detected recurring payments / subscriptions
 // ─────────────────────────────────────────────
 
@@ -567,6 +655,10 @@ enum NotificationType {
   BUDGET_OVER
   BUDGET_NEAR
   RECURRING_UPCOMING
+  RECURRING_AMOUNT_CHANGE // A recurring charge deviated from its usual amount
+  RECURRING_MISSED // An expected recurring charge never arrived
+  SAVINGS_NOT_EXECUTED // Savings goal set but no transfer landed this month
+  EXTRAORDINARY_INCOME // An income arrived far above its usual amount
   LOW_BALANCE_PROJECTED
   CONSENT_EXPIRING // PSD2 consent about to lapse — warn before syncing stops
   NO_TRANSACTIONS // Nothing new for days; the sync may have died quietly
