@@ -171,49 +171,6 @@ export function staleTransactionNotifications(
   return specs;
 }
 
-export interface SavingsExecutionInput {
-  savingsGoal: number; // resolved €, > 0 means a goal is set
-  /** Whether an inbound transfer landed on the savings account this month. */
-  executed: boolean;
-  /** False when no savings account is designated — nothing to measure. */
-  tracked: boolean;
-  year: number;
-  month: number;
-  dayOfMonth: number;
-  daysInMonth: number;
-}
-
-/** Days before month end at which an unexecuted savings transfer is flagged. */
-export const SAVINGS_WARNING_WINDOW_DAYS = 5;
-
-/**
- * The savings goal is set but no transfer into the savings account has landed
- * and the month is nearly over. The app cannot move money — the standing order
- * lives at the bank — so noticing it didn't run IS the feature. Once per month.
- */
-export function savingsNotExecutedNotifications(
-  input: SavingsExecutionInput,
-  currency: string,
-  locale: string
-): NotificationSpec[] {
-  if (input.savingsGoal <= 0 || !input.tracked || input.executed) return [];
-  const daysLeft = input.daysInMonth - input.dayOfMonth;
-  if (daysLeft > SAVINGS_WARNING_WINDOW_DAYS) return [];
-
-  return [
-    {
-      type: "SAVINGS_NOT_EXECUTED" as NotificationType,
-      severity: "WARNING" as NotificationSeverity,
-      title: "This month's savings transfer hasn't run",
-      body: `Your goal is ${formatCurrency(input.savingsGoal, currency, locale)} and no transfer into your savings account has arrived this month, with ${
-        daysLeft === 0 ? "the month ending today" : `${daysLeft} days left`
-      }. If it isn't automatic at the bank, make the move now — unmoved money gets spent.`,
-      dedupeKey: `savings-missing:${input.year}-${input.month}`,
-      metadata: { year: String(input.year), month: String(input.month) },
-    },
-  ];
-}
-
 export interface CashflowBreachInput {
   accountId: string;
   accountName: string;

@@ -13,7 +13,7 @@ export default async function SettingsPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [user, categories, bankAccounts] = await Promise.all([
+  const [user, categories] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -24,10 +24,6 @@ export default async function SettingsPage() {
         locale: true,
         language: true,
         lowBalanceThreshold: true,
-        baseMonthlyIncome: true,
-        savingsGoalAmount: true,
-        savingsGoalPercent: true,
-        savingsAccountId: true,
       },
     }),
     prisma.category.findMany({
@@ -39,11 +35,6 @@ export default async function SettingsPage() {
         },
       },
       orderBy: { sortOrder: "asc" },
-    }),
-    prisma.bankAccount.findMany({
-      where: { userId, isActive: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -60,16 +51,15 @@ export default async function SettingsPage() {
       },
       orderBy: { sortOrder: "asc" },
     });
-    return <SettingsLayout user={user} categories={seeded} bankAccounts={bankAccounts} />;
+    return <SettingsLayout user={user} categories={seeded} />;
   }
 
-  return <SettingsLayout user={user} categories={categories} bankAccounts={bankAccounts} />;
+  return <SettingsLayout user={user} categories={categories} />;
 }
 
 function SettingsLayout({
   user,
   categories,
-  bankAccounts,
 }: {
   user: {
     timezone?: string | null;
@@ -77,12 +67,7 @@ function SettingsLayout({
     locale?: string | null;
     language?: string | null;
     lowBalanceThreshold?: { toString(): string } | null;
-    baseMonthlyIncome?: { toString(): string } | null;
-    savingsGoalAmount?: { toString(): string } | null;
-    savingsGoalPercent?: { toString(): string } | null;
-    savingsAccountId?: string | null;
   } | null;
-  bankAccounts: { id: string; name: string }[];
   categories: {
     id: string;
     name: string;
@@ -103,18 +88,7 @@ function SettingsLayout({
         />
 
         <PlanningForm
-          baseMonthlyIncome={
-            user?.baseMonthlyIncome ? Number(user.baseMonthlyIncome.toString()) : null
-          }
           lowBalanceThreshold={Number(user?.lowBalanceThreshold?.toString() ?? "0")}
-          savingsGoalAmount={
-            user?.savingsGoalAmount ? Number(user.savingsGoalAmount.toString()) : null
-          }
-          savingsGoalPercent={
-            user?.savingsGoalPercent ? Number(user.savingsGoalPercent.toString()) : null
-          }
-          savingsAccountId={user?.savingsAccountId ?? null}
-          accounts={bankAccounts}
           currency={user?.currency ?? "EUR"}
         />
 

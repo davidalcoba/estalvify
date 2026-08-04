@@ -1,6 +1,7 @@
-// Monthly control view: the cascade (base income − planned − fund quotas −
-// savings goal = variable budget) and the rollover funds' state. Control, not
-// operations — the operating number lives on the dashboard, weekly.
+// Monthly control view: the cascade whose bottom line is the expected result
+// (the goal), and the category objectives judged against the month's pace.
+// Control, not operations — the operating number lives on the dashboard,
+// weekly.
 
 import type { Metadata } from "next";
 import { auth } from "@/auth";
@@ -10,7 +11,7 @@ import { buildMonthStatus } from "@/lib/budget/month-status";
 import { syncPlannedState } from "@/lib/planned/engine";
 import { PageHeader } from "@/components/layout/page-header";
 import { CascadeCard } from "@/components/budget/cascade-card";
-import { FundsCard } from "@/components/budget/funds-card";
+import { ObjectivesCard } from "@/components/budget/objectives-card";
 
 export const metadata: Metadata = { title: "Monthly control" };
 
@@ -34,8 +35,9 @@ export default async function PlanPage() {
       <PageHeader title="Monthly control" />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <CascadeCard status={status} currency={prefs.currency} locale={prefs.locale} />
-        <FundsCard
-          funds={status.funds}
+        <ObjectivesCard
+          objectives={status.objectives}
+          monthElapsed={status.monthElapsed}
           categories={categories}
           year={status.year}
           month={status.month}

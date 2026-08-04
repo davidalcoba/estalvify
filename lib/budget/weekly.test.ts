@@ -6,7 +6,6 @@ import {
   weekOperations,
   weeklyOpsMedian,
   weekComposition,
-  monthsOfCushion,
 } from "./weekly";
 
 describe("ISO week helpers", () => {
@@ -101,22 +100,5 @@ describe("weeklyOpsMedian", () => {
     // A noisy current week must not move the median.
     rows.push({ date: "2026-08-04", amount: 10, categoryId: null });
     expect(weeklyOpsMedian(rows, "2026-08-05")).toBe(3);
-  });
-});
-
-describe("monthsOfCushion", () => {
-  it("acceptance #7: moving 1.000 € out of savings lowers the months", () => {
-    const before = monthsOfCushion(46265, 0, 7700);
-    const after = monthsOfCushion(45265, 0, 7700);
-    expect(before).toBe(6);
-    expect(after).toBe(5.9);
-  });
-
-  it("rollover balances are already spoken for", () => {
-    expect(monthsOfCushion(46265, 1500, 7700)).toBe(5.8);
-  });
-
-  it("null without a spend baseline", () => {
-    expect(monthsOfCushion(46265, 0, 0)).toBeNull();
   });
 });

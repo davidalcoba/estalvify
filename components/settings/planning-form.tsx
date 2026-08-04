@@ -4,50 +4,20 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { SimpleSelect } from "@/components/ui/simple-select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { updatePlanningSettings } from "@/app/(app)/settings/actions";
 import { Check } from "lucide-react";
 
-type GoalType = "none" | "amount" | "percent";
-
 interface PlanningFormProps {
-  baseMonthlyIncome: number | null;
   lowBalanceThreshold: number;
-  savingsGoalAmount: number | null;
-  savingsGoalPercent: number | null;
-  savingsAccountId: string | null;
-  accounts: { id: string; name: string }[];
   currency: string;
 }
 
-// Planning & alert settings: the cash-flow cushion and the savings-first goal.
-// Separate card from regional preferences — these change money behaviour, not
-// formatting.
-export function PlanningForm({
-  baseMonthlyIncome,
-  lowBalanceThreshold,
-  savingsGoalAmount,
-  savingsGoalPercent,
-  savingsAccountId,
-  accounts,
-  currency,
-}: PlanningFormProps) {
-  const initialType: GoalType =
-    savingsGoalAmount != null ? "amount" : savingsGoalPercent != null ? "percent" : "none";
-  const [baseIncome, setBaseIncome] = useState(
-    baseMonthlyIncome != null ? String(baseMonthlyIncome) : ""
-  );
+// Planning & alert settings. Under the v3 model income and charges live in
+// planned items and savings is derived, so the only knob left here is the
+// cash-flow alert threshold.
+export function PlanningForm({ lowBalanceThreshold, currency }: PlanningFormProps) {
   const [threshold, setThreshold] = useState(String(lowBalanceThreshold));
-  const [goalType, setGoalType] = useState<GoalType>(initialType);
-  const [goalValue, setGoalValue] = useState(
-    savingsGoalAmount != null
-      ? String(savingsGoalAmount)
-      : savingsGoalPercent != null
-        ? String(savingsGoalPercent)
-        : ""
-  );
-  const [accountId, setAccountId] = useState(savingsAccountId ?? "none");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -62,26 +32,10 @@ export function PlanningForm({
       setError("Threshold must be a number");
       return;
     }
-    const baseIncomeValue = baseIncome.trim() === "" ? null : Number(baseIncome);
-    if (baseIncomeValue != null && !Number.isFinite(baseIncomeValue)) {
-      setError("Base income must be a number");
-      return;
-    }
-    const parsedGoal = goalType === "none" ? null : Number(goalValue);
-    if (goalType !== "none" && !Number.isFinite(parsedGoal)) {
-      setError("Savings goal must be a number");
-      return;
-    }
 
     startTransition(async () => {
       try {
-        await updatePlanningSettings({
-          baseMonthlyIncome: baseIncomeValue,
-          lowBalanceThreshold: thresholdValue,
-          savingsGoalType: goalType,
-          savingsGoalValue: parsedGoal,
-          savingsAccountId: accountId === "none" ? null : accountId,
-        });
+        await updatePlanningSettings({ lowBalanceThreshold: thresholdValue });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
@@ -93,77 +47,10 @@ export function PlanningForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Savings &amp; alerts</CardTitle>
+        <CardTitle>Alerts</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="base-income">Base monthly income ({currency})</Label>
-            <Input
-              id="base-income"
-              type="number"
-              step="any"
-              min="0"
-              placeholder="8262"
-              value={baseIncome}
-              onChange={(e) => setBaseIncome(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              The two salaries. Configuration, not inference — anything arriving
-              above it is extraordinary by difference and never enters averages.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Monthly savings goal</Label>
-            <div className="flex gap-2">
-              <SimpleSelect
-                value={goalType}
-                onValueChange={(v) => setGoalType(v as GoalType)}
-                options={[
-                  { value: "none", label: "No goal" },
-                  { value: "amount", label: `Fixed amount (${currency})` },
-                  { value: "percent", label: "% of fixed income" },
-                ]}
-                ariaLabel="Savings goal type"
-                className="w-44 shrink-0"
-              />
-              {goalType !== "none" && (
-                <Input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={goalValue}
-                  onChange={(e) => setGoalValue(e.target.value)}
-                  placeholder={goalType === "amount" ? "500" : "15"}
-                  aria-label="Savings goal value"
-                />
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Counted as a commitment next to rent — the variable budget is
-              what&apos;s left after it, not the other way round.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Savings account</Label>
-            <SimpleSelect
-              value={accountId}
-              onValueChange={setAccountId}
-              options={[
-                { value: "none", label: "Not tracked" },
-                ...accounts.map((a) => ({ value: a.id, label: a.name })),
-              ]}
-              ariaLabel="Savings account"
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              Real savings is measured as this account&apos;s net balance change
-              — a transfer that bounces back to cover rent doesn&apos;t count.
-            </p>
-          </div>
-
           <div className="space-y-1.5">
             <Label htmlFor="low-balance-threshold">
               Low balance threshold ({currency})

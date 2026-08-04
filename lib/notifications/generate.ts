@@ -9,7 +9,6 @@ import { buildMonthStatus } from "@/lib/budget/month-status";
 import {
   upcomingRecurringNotifications,
   cashflowBreachNotifications,
-  savingsNotExecutedNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
   type NotificationSpec,
@@ -51,9 +50,6 @@ export async function generateNotificationsForUser(
     ]);
 
   const today = monthStatus.today;
-  const daysInMonth = new Date(
-    Date.UTC(monthStatus.year, monthStatus.month, 0),
-  ).getUTCDate();
 
   const specs: NotificationSpec[] = [
     // Due-soon reminders straight from the planned items' resolved dates.
@@ -82,19 +78,6 @@ export async function generateNotificationsForUser(
         })),
       cashflow.threshold,
       today,
-      prefs.currency,
-      prefs.locale,
-    ),
-    ...savingsNotExecutedNotifications(
-      {
-        savingsGoal: monthStatus.cascade.savingsGoal,
-        executed: monthStatus.savings?.activity.executed ?? false,
-        tracked: monthStatus.savings !== null,
-        year: monthStatus.year,
-        month: monthStatus.month,
-        dayOfMonth: Number(today.slice(8, 10)),
-        daysInMonth,
-      },
       prefs.currency,
       prefs.locale,
     ),

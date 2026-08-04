@@ -15,16 +15,17 @@ function revalidate(): void {
   revalidatePath("/plan");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
-  revalidatePath("/envelopes");
 }
 
-// A rollover fund is a budget item with rollover: true. Upserting this month's
-// row is all it takes — propagation copies it forward from here.
-export async function upsertRolloverFund(
+// A category objective is a budget item; rollover: true makes it a fund whose
+// remainder accumulates. Upserting this month's row is all it takes —
+// propagation copies it forward from here.
+export async function upsertBudgetObjective(
   categoryId: string,
   year: number,
   month: number,
   assigned: number,
+  rollover: boolean,
 ): Promise<void> {
   const userId = await requireUserId();
   await upsertBudgetItemForUser(userId, {
@@ -32,15 +33,15 @@ export async function upsertRolloverFund(
     year,
     month,
     assigned,
-    rollover: true,
+    rollover,
   });
   revalidate();
 }
 
-// Deleting the current month's row retires the fund: propagation only ever
-// looks one month back, so nothing recreates it. History (and its balance
-// contribution) stays untouched.
-export async function removeRolloverFund(
+// Deleting the current month's row retires the objective: propagation only
+// ever looks one month back, so nothing recreates it. History (and a fund's
+// balance contribution) stays untouched.
+export async function removeBudgetObjective(
   categoryId: string,
   year: number,
   month: number,
