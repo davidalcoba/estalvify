@@ -60,7 +60,7 @@ export function TransactionDetailDialog({
       )}
       <Dialog open={!!transaction} onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogContent
-          className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden"
+          className="sm:w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">Transaction details</DialogTitle>

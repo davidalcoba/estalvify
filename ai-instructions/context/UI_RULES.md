@@ -121,6 +121,24 @@ overflowing on a 375 px viewport.
   not a sentence explaining the obvious. Prefer "For dates." over "The language used to
   render dates throughout the app." Trust the UI; don't narrate it.
 
+## Modals: bottom sheet on mobile, centered on desktop
+
+Every modal in the app opens **bottom-up on mobile** (like the transactions
+detail sheet) and centered on `sm+`. This is built into the primitives — do not
+re-implement it per feature:
+
+- `components/ui/dialog` — `DialogContent` is responsive by itself: below `sm`
+  it docks to the bottom edge (`rounded-t-xl`, slides in from the bottom, capped
+  at `85dvh` and scrollable), from `sm` up it is the classic centered dialog.
+  Just use `Dialog`; no extra classes needed.
+- Width/height overrides on `DialogContent` must be desktop-only (`sm:`-prefixed,
+  e.g. `sm:w-[min(96vw,640px)]`) so the mobile sheet stays full-width.
+- `components/ui/sheet` with `side="bottom"` remains the right tool when the
+  surface is a sheet on **all** viewports or needs sheet-specific chrome
+  (e.g. the transactions mobile detail).
+- `QuickRuleDialog` follows the same rule: its `dialog` mode is centered on
+  desktop and bottom-up on mobile; its `sheet` mode is always bottom-up.
+
 ## Use the Shared Controls (no one-off form controls)
 
 - Selects: use `components/ui/simple-select` (flat options) or

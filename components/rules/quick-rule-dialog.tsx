@@ -284,12 +284,15 @@ export function QuickRuleDialog({
           <Primitive.Content
             onOpenAutoFocus={(e) => e.preventDefault()}
             className={cn(
-              "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
-              "w-full max-w-lg bg-background rounded-xl border shadow-2xl p-6",
+              "fixed z-50 w-full bg-background shadow-2xl p-6",
               "data-[state=open]:animate-in data-[state=closed]:animate-out",
               "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-              "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
-              "duration-200"
+              // Mobile: bottom sheet sliding up from the edge
+              "max-sm:inset-x-0 max-sm:bottom-0 max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:rounded-t-xl max-sm:border-t max-sm:duration-300",
+              "max-sm:data-[state=open]:slide-in-from-bottom max-sm:data-[state=closed]:slide-out-to-bottom",
+              // ≥sm: centered dialog
+              "sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-lg sm:rounded-xl sm:border sm:duration-200",
+              "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95"
             )}
           >
             {body}
