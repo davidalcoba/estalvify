@@ -1,4 +1,4 @@
-// Skeleton shown by Next.js while the Forecast server component resolves.
+// Skeleton shown by Next.js while the Upcoming server component resolves.
 
 import {
   PageHeaderSkeleton,
@@ -10,19 +10,16 @@ import {
 export default function ForecastLoading() {
   return (
     <div className="space-y-6">
-      <PageHeaderSkeleton titleWidth="w-36" />
+      <PageHeaderSkeleton titleWidth="w-32" />
 
-      <KpiGridSkeleton count={3} className="grid grid-cols-1 gap-4 md:grid-cols-3" />
-
-      {/* Per-account cash-flow coverage cards */}
+      {/* Per-account coverage cards */}
       <KpiGridSkeleton count={2} className="grid grid-cols-1 gap-4 md:grid-cols-2" />
 
-      {/* Daily cash-flow curve */}
-      <ChartCardSkeleton titleWidth="w-56" height={260} />
+      {/* Planned items list */}
+      <TableCardSkeleton rows={8} titleWidth="w-44" />
 
+      {/* Daily projected balance */}
       <ChartCardSkeleton titleWidth="w-64" height={260} />
-
-      <TableCardSkeleton rows={6} titleWidth="w-52" />
     </div>
   );
 }

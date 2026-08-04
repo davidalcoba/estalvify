@@ -24,6 +24,7 @@ export default async function SettingsPage() {
         locale: true,
         language: true,
         lowBalanceThreshold: true,
+        baseMonthlyIncome: true,
         savingsGoalAmount: true,
         savingsGoalPercent: true,
         savingsAccountId: true,
@@ -76,6 +77,7 @@ function SettingsLayout({
     locale?: string | null;
     language?: string | null;
     lowBalanceThreshold?: { toString(): string } | null;
+    baseMonthlyIncome?: { toString(): string } | null;
     savingsGoalAmount?: { toString(): string } | null;
     savingsGoalPercent?: { toString(): string } | null;
     savingsAccountId?: string | null;
@@ -101,6 +103,9 @@ function SettingsLayout({
         />
 
         <PlanningForm
+          baseMonthlyIncome={
+            user?.baseMonthlyIncome ? Number(user.baseMonthlyIncome.toString()) : null
+          }
           lowBalanceThreshold={Number(user?.lowBalanceThreshold?.toString() ?? "0")}
           savingsGoalAmount={
             user?.savingsGoalAmount ? Number(user.savingsGoalAmount.toString()) : null

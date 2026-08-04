@@ -23,10 +23,15 @@ import {
   updateRuleForUser,
   runRuleForUser,
   runAllRulesForUser,
-  listPlanItemsForUser,
-  createPlanItemForUser,
-  updatePlanItemForUser,
-  deletePlanItemForUser,
+  listSeriesForUser,
+  createSeriesForUser,
+  updateSeriesForUser,
+  deleteSeriesForUser,
+  listPlannedItemsForUser,
+  createPlannedItemForUser,
+  deletePlannedItemForUser,
+  upsertBudgetItemForUser,
+  deleteBudgetItemForUser,
 } from "@/lib/mcp/manage";
 import {
   deleteRuleForUser,
@@ -401,142 +406,275 @@ export function registerTools(server: McpServer): void {
     },
   );
 
-  // ── Plan items (the planning surface that replaced budgets) ─────────────────
+  // ── Recurring series + planned items + budget assignments (v2 model) ───────
   server.registerTool(
-    "list_plan_items",
+    "list_recurring_series",
     {
       description:
-        "List the user's Plan: standing expected income and expenses with cadences. " +
-        "This is what drives the forecast, the category limits and the month's " +
-        "commitments. An item with a non-null recurringMerchantKey mirrors a confirmed " +
-        "recurring series and is managed from /recurring, not through these tools.",
+        "List the hand-maintained recurring series registry: standing charges and income " +
+        "with expected amount, cadence (MONTHLY/BIMONTHLY/QUARTERLY/YEARLY), day window or " +
+        "month-end anchor, matcher text (looked for in transaction descriptors to link " +
+        "arrivals) and account. Series generate planned_items forward; matching drives the " +
+        "price-deviation and missed-charge alerts.",
       inputSchema: {},
     },
     async (_args, extra) => {
       const userId = requireUserId(extra as ToolExtra);
-      return json(await listPlanItemsForUser(userId));
+      return json(await listSeriesForUser(userId));
     },
   );
 
   server.registerTool(
-    "create_plan_item",
+    "create_recurring_series",
     {
       description:
-        "Add a standing expected income or expense to the Plan. Expenses (DEBIT) need a " +
-        "categoryId; a ONE_OFF needs onDate; periodic items may carry dayOfMonth (when " +
-        "the charge lands) and an inclusive endDate (a loan's last month).",
+        "Register a standing charge or income. matcher: text found (accents/case folded) in " +
+        "the transaction's descriptors — e.g. 'ALQUILER', 'O2 FIBRA'. windowFromDay/windowToDay " +
+        "model charges with a variable date (rent: 1–6); anchorMonthEnd: true is for charges on " +
+        "the month's LAST day (mortgage). anchorDate (YYYY-MM-DD, any date in a due month) " +
+        "anchors BIMONTHLY/QUARTERLY/YEARLY cadences.",
       inputSchema: {
-    direction: z.enum(["DEBIT", "CREDIT"]),
-    categoryId: z
-      .string()
-      .optional()
-      .describe("Required for a DEBIT (expense) item; optional for income"),
-    label: z.string().max(60).optional(),
-    amount: z.number().min(0),
-    cadence: z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY", "ONE_OFF"]),
-    dayOfMonth: z.number().int().min(1).max(31).optional(),
-    onDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
-      .optional()
-      .describe("Required for ONE_OFF"),
-    endDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
-      .optional()
-      .describe("Last month a periodic item applies (inclusive)"),
-  },
-    },
-    async (
-      { direction, categoryId, label, amount, cadence, dayOfMonth, onDate, endDate },
-      extra,
-    ) => {
-      const userId = requireUserId(extra as ToolExtra);
-      return json(
-        await createPlanItemForUser(userId, {
-          direction,
-          categoryId: categoryId ?? null,
-          label: label ?? null,
-          amount,
-          cadence,
-          dayOfMonth: dayOfMonth ?? null,
-          onDate: onDate ?? null,
-          endDate: endDate ?? null,
-        }),
-      );
-    },
-  );
-
-  server.registerTool(
-    "update_plan_item",
-    {
-      description:
-        "Replace a plan item's fields (same validation as create_plan_item). Items " +
-        "mirrored from a confirmed recurring series are refused — adjust the series.",
-      inputSchema: {
-        planItemId: z.string(),
-    direction: z.enum(["DEBIT", "CREDIT"]),
-    categoryId: z
-      .string()
-      .optional()
-      .describe("Required for a DEBIT (expense) item; optional for income"),
-    label: z.string().max(60).optional(),
-    amount: z.number().min(0),
-    cadence: z.enum(["WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY", "ONE_OFF"]),
-    dayOfMonth: z.number().int().min(1).max(31).optional(),
-    onDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
-      .optional()
-      .describe("Required for ONE_OFF"),
-    endDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
-      .optional()
-      .describe("Last month a periodic item applies (inclusive)"),
-  },
-    },
-    async (
-      {
-        planItemId,
-        direction,
-        categoryId,
-        label,
-        amount,
-        cadence,
-        dayOfMonth,
-        onDate,
-        endDate,
+        displayName: z.string().max(120),
+        matcher: z.string().min(3).max(120),
+        direction: z.enum(["DEBIT", "CREDIT"]),
+        categoryId: z.string().optional(),
+        bankAccountId: z.string().optional(),
+        cadence: z.enum(["WEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "YEARLY", "IRREGULAR"]),
+        expectedAmount: z.number().min(0),
+        windowFromDay: z.number().int().min(1).max(31).optional(),
+        windowToDay: z.number().int().min(1).max(31).optional(),
+        anchorMonthEnd: z.boolean().optional(),
+        anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       },
+    },
+    async (
+      { displayName, matcher, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate },
       extra,
     ) => {
       const userId = requireUserId(extra as ToolExtra);
-      return json(
-        await updatePlanItemForUser(userId, planItemId, {
-          direction,
-          categoryId: categoryId ?? null,
-          label: label ?? null,
-          amount,
-          cadence,
-          dayOfMonth: dayOfMonth ?? null,
-          onDate: onDate ?? null,
-          endDate: endDate ?? null,
-        }),
-      );
+      try {
+        return json(
+          await createSeriesForUser(userId, {
+            displayName,
+            matcher,
+            direction,
+            categoryId: categoryId ?? null,
+            bankAccountId: bankAccountId ?? null,
+            cadence,
+            expectedAmount,
+            windowFromDay: windowFromDay ?? null,
+            windowToDay: windowToDay ?? null,
+            anchorMonthEnd,
+            anchorDate: anchorDate ?? null,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "create_recurring_series failed");
+      }
     },
   );
 
   server.registerTool(
-    "delete_plan_item",
+    "update_recurring_series",
     {
       description:
-        "Delete a plan item. Items mirrored from a confirmed recurring series are " +
-        "refused — ignore the series on /recurring instead.",
-      inputSchema: { planItemId: z.string() },
+        "Replace a series' definition (same fields as create_recurring_series, plus active: " +
+        "false to pause generation). Pending planned instances are updated to mirror it; " +
+        "after a real price change, update expectedAmount so next month expects the new price.",
+      inputSchema: {
+        seriesId: z.string(),
+        displayName: z.string().max(120),
+        matcher: z.string().min(3).max(120),
+        direction: z.enum(["DEBIT", "CREDIT"]),
+        categoryId: z.string().optional(),
+        bankAccountId: z.string().optional(),
+        cadence: z.enum(["WEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "YEARLY", "IRREGULAR"]),
+        expectedAmount: z.number().min(0),
+        windowFromDay: z.number().int().min(1).max(31).optional(),
+        windowToDay: z.number().int().min(1).max(31).optional(),
+        anchorMonthEnd: z.boolean().optional(),
+        anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        active: z.boolean().optional(),
+      },
     },
-    async ({ planItemId }, extra) => {
+    async (
+      { seriesId, displayName, matcher, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate, active },
+      extra,
+    ) => {
       const userId = requireUserId(extra as ToolExtra);
-      return json(await deletePlanItemForUser(userId, planItemId));
+      try {
+        return json(
+          await updateSeriesForUser(userId, seriesId, {
+            displayName,
+            matcher,
+            direction,
+            categoryId: categoryId ?? null,
+            bankAccountId: bankAccountId ?? null,
+            cadence,
+            expectedAmount,
+            windowFromDay: windowFromDay ?? null,
+            windowToDay: windowToDay ?? null,
+            anchorMonthEnd,
+            anchorDate: anchorDate ?? null,
+            active,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "update_recurring_series failed");
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_recurring_series",
+    {
+      description:
+        "Delete a series and its planned instances (matched history included).",
+      inputSchema: { seriesId: z.string() },
+    },
+    async ({ seriesId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await deleteSeriesForUser(userId, seriesId));
+      } catch (err) {
+        return errorResult(err, "delete_recurring_series failed");
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_planned_items",
+    {
+      description:
+        "List planned items — dated expected charges/income, the SOURCE OF TRUTH the monthly " +
+        "cascade derives from. Series-generated instances and hand-typed one-offs live in the " +
+        "same list. status: PENDING (expected), MATCHED (a transaction arrived in the window " +
+        "and was linked, matchedAmount holds what actually arrived), MISSED (window closed " +
+        "with nothing). Filter by year/month.",
+      inputSchema: {
+        year: z.number().int().optional(),
+        month: z.number().int().min(1).max(12).optional(),
+      },
+    },
+    async ({ year, month }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      return json(await listPlannedItemsForUser(userId, { year, month }));
+    },
+  );
+
+  server.registerTool(
+    "create_planned_item",
+    {
+      description:
+        "Add a one-off expected charge (this year's IBI) to a specific month. Series " +
+        "instances are engine-generated — use create_recurring_series for those. dueDay or a " +
+        "window narrows when in the month it lands; omit both for 'any day'.",
+      inputSchema: {
+        description: z.string().max(120),
+        direction: z.enum(["DEBIT", "CREDIT"]).optional(),
+        categoryId: z.string().optional(),
+        bankAccountId: z.string().optional(),
+        amount: z.number().positive(),
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+        dueDay: z.number().int().min(1).max(31).optional(),
+        windowFromDay: z.number().int().min(1).max(31).optional(),
+        windowToDay: z.number().int().min(1).max(31).optional(),
+      },
+    },
+    async (
+      { description, direction, categoryId, bankAccountId, amount, year, month, dueDay, windowFromDay, windowToDay },
+      extra,
+    ) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await createPlannedItemForUser(userId, {
+            description,
+            direction,
+            categoryId: categoryId ?? null,
+            bankAccountId: bankAccountId ?? null,
+            amount,
+            year,
+            month,
+            dueDay: dueDay ?? null,
+            windowFromDay: windowFromDay ?? null,
+            windowToDay: windowToDay ?? null,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "create_planned_item failed");
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_planned_item",
+    {
+      description:
+        "Delete a hand-typed one-off planned item. Series-generated instances are refused — " +
+        "edit or delete the series instead.",
+      inputSchema: { plannedItemId: z.string() },
+    },
+    async ({ plannedItemId }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await deletePlannedItemForUser(userId, plannedItemId));
+      } catch (err) {
+        return errorResult(err, "delete_planned_item failed");
+      }
+    },
+  );
+
+  server.registerTool(
+    "upsert_budget_item",
+    {
+      description:
+        "Set a category's assignment for a month. rollover: false = classic budget line " +
+        "(resets monthly); rollover: true = accumulation fund (IBI, holidays — the unspent " +
+        "remainder rolls forward, the quota joins the monthly cascade, and the current " +
+        "month's row propagates into the next automatically). This is the create_budget " +
+        "write path the MCP lacked.",
+      inputSchema: {
+        categoryId: z.string(),
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+        assigned: z.number().min(0),
+        rollover: z.boolean().optional(),
+      },
+    },
+    async ({ categoryId, year, month, assigned, rollover }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await upsertBudgetItemForUser(userId, { categoryId, year, month, assigned, rollover }),
+        );
+      } catch (err) {
+        return errorResult(err, "upsert_budget_item failed");
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_budget_item",
+    {
+      description:
+        "Remove a category's assignment for a month. Deleting a rollover fund's CURRENT " +
+        "month row retires the fund (propagation only looks one month back); its history " +
+        "and accumulated balance stay derivable.",
+      inputSchema: {
+        categoryId: z.string(),
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+      },
+    },
+    async ({ categoryId, year, month }, extra) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(await deleteBudgetItemForUser(userId, { categoryId, year, month }));
+      } catch (err) {
+        return errorResult(err, "delete_budget_item failed");
+      }
     },
   );
 

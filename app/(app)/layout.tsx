@@ -9,7 +9,6 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { NavProgressBar } from "@/components/layout/nav-progress";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
-import { getRecurringReviewCount } from "@/lib/recurring/review-count";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -20,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const userId = session.user.id;
 
-  const [pendingCategorizations, notificationRows, unreadCount, recurringToReview] =
+  const [pendingCategorizations, notificationRows, unreadCount] =
     await Promise.all([
       prisma.transaction.count({
         where: {
@@ -47,7 +46,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }),
       prisma.notification.count({ where: { userId, readAt: null } }),
       // Cached — detection is too heavy to rerun on every navigation.
-      getRecurringReviewCount(userId),
     ]);
 
   const notifications = notificationRows.map(toNotificationDTO);
@@ -63,7 +61,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppSidebar
         user={session.user}
         pendingCategorizations={pendingCategorizations}
-        recurringToReview={recurringToReview}
         onSignOut={handleSignOut}
       />
       <SidebarInset>

@@ -122,7 +122,6 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
       include: {
         bankAccount: { select: { id: true, name: true } },
         categorization: { include: { category: { select: { name: true, color: true } } } },
-        splits: { include: { category: { select: { name: true, color: true } } } },
       },
       orderBy: { valueDate: "desc" },
       skip: (effectivePage - 1) * PAGE_SIZE,

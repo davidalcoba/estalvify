@@ -331,7 +331,7 @@ export async function deleteCategoryForUser(
       prisma.categoryRule.count({
         where: { userId, sourceCategoryId: { in: ids }, isActive: true },
       }),
-      prisma.planItem.count({ where: { userId, categoryId: { in: ids } } }),
+      prisma.plannedItem.count({ where: { userId, categoryId: { in: ids } } }),
       prisma.recurringSeries.count({ where: { userId, categoryId: { in: ids } } }),
       prisma.budgetItem.count({ where: { categoryId: { in: ids }, budget: { userId } } }),
     ]);
@@ -536,157 +536,294 @@ export async function runAllRulesForUser(
   return runRules(userId, options);
 }
 
-// ── Plan items ────────────────────────────────────────────────────────────────
-// The Plan replaced Budget as the planning surface (see ROADMAP "Plan"), so
-// this is the write path an MCP client gets for planning. Same rules as the
-// UI actions in app/(app)/plan/actions.ts: expenses need a category, a one-off
-// needs its date, and an item mirrored from a recurring series
-// (recurringMerchantKey) is owned by the series — edit the series instead.
+// ── Recurring series (hand-maintained registry) ───────────────────────────────
 
-export type PlanDirectionInput = "DEBIT" | "CREDIT";
-export type PlanCadenceInput = "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY" | "ONE_OFF";
+export type SeriesCadenceInput =
+  | "WEEKLY"
+  | "MONTHLY"
+  | "BIMONTHLY"
+  | "QUARTERLY"
+  | "YEARLY"
+  | "IRREGULAR";
 
-export interface PlanItemInputFields {
-  direction: PlanDirectionInput;
+export interface SeriesFields {
+  displayName: string;
+  /** Text the matcher looks for in a transaction's descriptors. */
+  matcher: string;
+  direction: "DEBIT" | "CREDIT";
   categoryId?: string | null;
-  label?: string | null;
-  amount: number;
-  cadence: PlanCadenceInput;
-  dayOfMonth?: number | null;
-  onDate?: string | null; // YYYY-MM-DD, required for ONE_OFF
-  endDate?: string | null; // YYYY-MM-DD, periodic items only
+  bankAccountId?: string | null;
+  cadence: SeriesCadenceInput;
+  expectedAmount: number;
+  windowFromDay?: number | null;
+  windowToDay?: number | null;
+  anchorMonthEnd?: boolean;
+  /** Anchor month for non-monthly cadences (any date in a due month). */
+  anchorDate?: string | null; // YYYY-MM-DD
+  active?: boolean;
 }
 
-async function normalizePlanFields(
-  userId: string,
-  fields: PlanItemInputFields,
-  currency: string,
-) {
-  if (!Number.isFinite(fields.amount) || fields.amount < 0) {
-    throw new Error("Invalid amount");
+async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
+  const displayName = fields.displayName?.trim();
+  const matcher = fields.matcher?.trim();
+  if (!displayName) throw new Error("displayName is required");
+  if (!matcher || matcher.length < 3) throw new Error("matcher needs at least 3 characters");
+  if (!Number.isFinite(fields.expectedAmount) || fields.expectedAmount < 0) {
+    throw new Error("Invalid expectedAmount");
   }
-  const categoryId = fields.categoryId || null;
-  if (fields.direction === "DEBIT" && !categoryId) {
-    throw new Error("Category required for an expense");
+  if (fields.categoryId) await assertOwnedCategory(userId, fields.categoryId);
+  if (fields.bankAccountId) {
+    const account = await prisma.bankAccount.findFirst({
+      where: { id: fields.bankAccountId, userId },
+      select: { id: true },
+    });
+    if (!account) throw new Error("Account not found");
   }
-  if (categoryId) await assertOwnedCategory(userId, categoryId);
-
-  let dayOfMonth: number | null = null;
-  let onDate: Date | null = null;
-  if (fields.cadence === "ONE_OFF") {
-    if (!fields.onDate || !/^\d{4}-\d{2}-\d{2}$/.test(fields.onDate)) {
-      throw new Error("A date (YYYY-MM-DD) is required for a one-off item");
-    }
-    onDate = new Date(`${fields.onDate}T00:00:00.000Z`);
-    if (Number.isNaN(onDate.getTime())) throw new Error("Invalid date");
-  } else if (fields.dayOfMonth != null) {
-    const d = Math.trunc(fields.dayOfMonth);
-    if (d < 1 || d > 31) throw new Error("Invalid day of month");
-    dayOfMonth = d;
+  const day = (v: number | null | undefined) => {
+    if (v == null) return null;
+    const d = Math.trunc(v);
+    if (d < 1 || d > 31) throw new Error("Window days must be 1–31");
+    return d;
+  };
+  let nextExpectedDate: Date | null = null;
+  if (fields.anchorDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.anchorDate)) throw new Error("Invalid anchorDate");
+    nextExpectedDate = new Date(`${fields.anchorDate}T00:00:00Z`);
   }
-
-  let endDate: Date | null = null;
-  if (fields.endDate && fields.cadence !== "ONE_OFF") {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.endDate)) throw new Error("Invalid end date");
-    endDate = new Date(`${fields.endDate}T00:00:00.000Z`);
-    if (Number.isNaN(endDate.getTime())) throw new Error("Invalid end date");
-  }
-
   return {
+    displayName: displayName.slice(0, 120),
+    merchantKey: matcher.slice(0, 120),
     direction: fields.direction,
-    categoryId,
-    label: fields.label?.trim() ? fields.label.trim().slice(0, 60) : null,
-    amount: fields.amount,
-    currency,
+    categoryId: fields.categoryId ?? null,
+    bankAccountId: fields.bankAccountId ?? null,
     cadence: fields.cadence,
-    dayOfMonth,
-    onDate,
-    endDate,
+    expectedAmount: fields.expectedAmount,
+    windowFromDay: day(fields.windowFromDay),
+    windowToDay: day(fields.windowToDay),
+    anchorMonthEnd: fields.anchorMonthEnd ?? false,
+    ...(nextExpectedDate ? { nextExpectedDate } : {}),
+    ...(fields.active !== undefined ? { active: fields.active } : {}),
   };
 }
 
-export async function listPlanItemsForUser(userId: string) {
-  const items = await prisma.planItem.findMany({
+export async function listSeriesForUser(userId: string) {
+  const series = await prisma.recurringSeries.findMany({
     where: { userId },
-    orderBy: [{ direction: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      label: true,
-      direction: true,
-      categoryId: true,
-      amount: true,
-      currency: true,
-      cadence: true,
-      dayOfMonth: true,
-      onDate: true,
-      endDate: true,
-      recurringMerchantKey: true,
-      active: true,
-      category: { select: { name: true } },
-    },
+    orderBy: [{ direction: "asc" }, { expectedAmount: "desc" }],
+    include: { category: { select: { name: true } } },
   });
-  return items.map((item) => ({
-    id: item.id,
-    label: item.label,
-    direction: item.direction,
-    categoryId: item.categoryId,
-    category: item.category?.name ?? null,
-    amount: Number(item.amount.toString()),
-    currency: item.currency,
-    cadence: item.cadence,
-    dayOfMonth: item.dayOfMonth,
-    onDate: item.onDate?.toISOString().slice(0, 10) ?? null,
-    endDate: item.endDate?.toISOString().slice(0, 10) ?? null,
-    // Non-null = mirrored from a confirmed recurring series; the series owns it.
-    recurringMerchantKey: item.recurringMerchantKey,
-    active: item.active,
+  return series.map((s) => ({
+    id: s.id,
+    displayName: s.displayName,
+    matcher: s.merchantKey,
+    direction: s.direction,
+    categoryId: s.categoryId,
+    category: s.category?.name ?? null,
+    bankAccountId: s.bankAccountId,
+    cadence: s.cadence,
+    expectedAmount: Number(s.expectedAmount.toString()),
+    currency: s.currency,
+    windowFromDay: s.windowFromDay,
+    windowToDay: s.windowToDay,
+    anchorMonthEnd: s.anchorMonthEnd,
+    active: s.active,
+    lastSeenAt: s.lastSeenAt?.toISOString().slice(0, 10) ?? null,
+    nextExpectedDate: s.nextExpectedDate?.toISOString().slice(0, 10) ?? null,
   }));
 }
 
-export async function createPlanItemForUser(
-  userId: string,
-  fields: PlanItemInputFields,
-  currency = "EUR",
-) {
-  const data = await normalizePlanFields(userId, fields, currency);
-  const created = await prisma.planItem.create({
-    data: { ...data, userId },
+export async function createSeriesForUser(userId: string, fields: SeriesFields) {
+  const data = await normalizeSeriesFields(userId, fields);
+  const created = await prisma.recurringSeries.create({
+    data: { userId, ...data },
     select: { id: true },
   });
   return { id: created.id };
 }
 
-export async function updatePlanItemForUser(
+export async function updateSeriesForUser(
   userId: string,
-  planItemId: string,
-  fields: PlanItemInputFields,
+  seriesId: string,
+  fields: SeriesFields,
 ) {
-  const existing = await prisma.planItem.findFirst({
-    where: { id: planItemId, userId },
-    select: { currency: true, recurringMerchantKey: true },
+  const existing = await prisma.recurringSeries.findFirst({
+    where: { id: seriesId, userId },
+    select: { id: true },
   });
-  if (!existing) throw new Error("Plan item not found");
-  if (existing.recurringMerchantKey) {
-    throw new Error(
-      "This item mirrors a confirmed recurring series; adjust the series on /recurring instead",
-    );
-  }
-  const data = await normalizePlanFields(userId, fields, existing.currency);
-  await prisma.planItem.update({ where: { id: planItemId }, data });
-  return { id: planItemId };
+  if (!existing) throw new Error("Series not found");
+  const data = await normalizeSeriesFields(userId, fields);
+  await prisma.recurringSeries.update({ where: { id: seriesId }, data });
+  // Future PENDING instances mirror the series definition.
+  await prisma.plannedItem.updateMany({
+    where: { userId, recurringSeriesId: seriesId, status: "PENDING" },
+    data: {
+      description: data.displayName,
+      amount: data.expectedAmount,
+      categoryId: data.categoryId,
+      bankAccountId: data.bankAccountId,
+      windowFromDay: data.windowFromDay,
+      windowToDay: data.windowToDay,
+      anchorMonthEnd: data.anchorMonthEnd,
+    },
+  });
+  return { id: seriesId };
 }
 
-export async function deletePlanItemForUser(userId: string, planItemId: string) {
-  const existing = await prisma.planItem.findFirst({
-    where: { id: planItemId, userId },
-    select: { recurringMerchantKey: true },
+export async function deleteSeriesForUser(userId: string, seriesId: string) {
+  const existing = await prisma.recurringSeries.findFirst({
+    where: { id: seriesId, userId },
+    select: { id: true },
   });
-  if (!existing) throw new Error("Plan item not found");
-  if (existing.recurringMerchantKey) {
+  if (!existing) throw new Error("Series not found");
+  // Cascade removes its planned instances (matched history included).
+  await prisma.recurringSeries.delete({ where: { id: seriesId } });
+  return { deleted: seriesId };
+}
+
+// ── Planned items (one-offs; series instances are engine-generated) ──────────
+
+export interface PlannedOneOffFields {
+  description: string;
+  direction?: "DEBIT" | "CREDIT";
+  categoryId?: string | null;
+  bankAccountId?: string | null;
+  amount: number;
+  year: number;
+  month: number;
+  dueDay?: number | null;
+  windowFromDay?: number | null;
+  windowToDay?: number | null;
+}
+
+export async function listPlannedItemsForUser(
+  userId: string,
+  filter?: { year?: number; month?: number },
+) {
+  const items = await prisma.plannedItem.findMany({
+    where: {
+      userId,
+      ...(filter?.year ? { year: filter.year } : {}),
+      ...(filter?.month ? { month: filter.month } : {}),
+    },
+    orderBy: [{ year: "asc" }, { month: "asc" }, { windowFromDay: "asc" }],
+    include: { category: { select: { name: true } } },
+  });
+  return items.map((p) => ({
+    id: p.id,
+    description: p.description,
+    direction: p.direction,
+    categoryId: p.categoryId,
+    category: p.category?.name ?? null,
+    amount: Number(p.amount.toString()),
+    year: p.year,
+    month: p.month,
+    dueDay: p.dueDay,
+    windowFromDay: p.windowFromDay,
+    windowToDay: p.windowToDay,
+    anchorMonthEnd: p.anchorMonthEnd,
+    recurringSeriesId: p.recurringSeriesId,
+    status: p.status,
+    matchedTransactionId: p.matchedTransactionId,
+    matchedAmount: p.matchedAmount ? Number(p.matchedAmount.toString()) : null,
+  }));
+}
+
+export async function createPlannedItemForUser(
+  userId: string,
+  fields: PlannedOneOffFields,
+) {
+  const description = fields.description?.trim();
+  if (!description) throw new Error("description is required");
+  if (!Number.isFinite(fields.amount) || fields.amount <= 0) {
+    throw new Error("Invalid amount");
+  }
+  if (fields.month < 1 || fields.month > 12) throw new Error("Invalid month");
+  if (fields.categoryId) await assertOwnedCategory(userId, fields.categoryId);
+  const created = await prisma.plannedItem.create({
+    data: {
+      userId,
+      description: description.slice(0, 120),
+      direction: fields.direction ?? "DEBIT",
+      categoryId: fields.categoryId ?? null,
+      bankAccountId: fields.bankAccountId ?? null,
+      amount: fields.amount,
+      year: fields.year,
+      month: fields.month,
+      dueDay: fields.dueDay ?? null,
+      windowFromDay: fields.windowFromDay ?? null,
+      windowToDay: fields.windowToDay ?? null,
+    },
+    select: { id: true },
+  });
+  return { id: created.id };
+}
+
+export async function deletePlannedItemForUser(userId: string, plannedItemId: string) {
+  const existing = await prisma.plannedItem.findFirst({
+    where: { id: plannedItemId, userId },
+    select: { recurringSeriesId: true },
+  });
+  if (!existing) throw new Error("Planned item not found");
+  if (existing.recurringSeriesId) {
     throw new Error(
-      "This item mirrors a confirmed recurring series; ignore the series on /recurring instead",
+      "This instance is generated from a recurring series; edit or delete the series instead",
     );
   }
-  await prisma.planItem.delete({ where: { id: planItemId } });
-  return { deleted: planItemId };
+  await prisma.plannedItem.delete({ where: { id: plannedItemId } });
+  return { deleted: plannedItemId };
+}
+
+// ── Budget items (assignments; rollover: true is the accumulation fund) ─────
+
+export async function upsertBudgetItemForUser(
+  userId: string,
+  input: {
+    categoryId: string;
+    year: number;
+    month: number;
+    assigned: number;
+    rollover?: boolean;
+  },
+) {
+  if (input.month < 1 || input.month > 12) throw new Error("Invalid month");
+  if (!Number.isFinite(input.assigned) || input.assigned < 0) {
+    throw new Error("Invalid assigned amount");
+  }
+  await assertOwnedCategory(userId, input.categoryId);
+  const budget = await prisma.budget.upsert({
+    where: { userId_year_month: { userId, year: input.year, month: input.month } },
+    create: { userId, year: input.year, month: input.month },
+    update: {},
+    select: { id: true },
+  });
+  const item = await prisma.budgetItem.upsert({
+    where: { budgetId_categoryId: { budgetId: budget.id, categoryId: input.categoryId } },
+    create: {
+      budgetId: budget.id,
+      categoryId: input.categoryId,
+      plannedAmount: input.assigned,
+      rollover: input.rollover ?? false,
+    },
+    update: {
+      plannedAmount: input.assigned,
+      ...(input.rollover !== undefined ? { rollover: input.rollover } : {}),
+    },
+    select: { id: true },
+  });
+  return { id: item.id };
+}
+
+export async function deleteBudgetItemForUser(
+  userId: string,
+  input: { categoryId: string; year: number; month: number },
+) {
+  const budget = await prisma.budget.findUnique({
+    where: { userId_year_month: { userId, year: input.year, month: input.month } },
+    select: { id: true },
+  });
+  if (!budget) throw new Error("Budget month not found");
+  await prisma.budgetItem.deleteMany({
+    where: { budgetId: budget.id, categoryId: input.categoryId },
+  });
+  return { deleted: input.categoryId };
 }

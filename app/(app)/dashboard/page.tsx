@@ -19,7 +19,8 @@ import {
   monthlyIncomeExpenses,
   topCategories,
 } from "@/lib/analytics/trends";
-import { buildMonthStatus } from "@/lib/plan/month-status";
+import { buildMonthStatus } from "@/lib/budget/month-status";
+import { syncPlannedState } from "@/lib/planned/engine";
 import { incomeConcentration } from "@/lib/analytics/household";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IncomeExpensesChart } from "@/components/reports/income-expenses-chart";
 import { CategoryBars } from "@/components/reports/category-bars";
-import { AvailableCard } from "@/components/plan/available-card";
+import { WeeklyCard } from "@/components/budget/weekly-card";
 import { TrendingUp, Wallet, Tag } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -43,7 +44,12 @@ export default async function DashboardPage() {
   const months = lastNMonths(year, month, TREND_MONTHS);
   const rangeStart = monthRange(months[0].year, months[0].month).start;
 
-  const monthStatusPromise = buildMonthStatus(userId, timezone);
+  const monthStatusPromise = syncPlannedState(
+    userId,
+    timezone,
+    currency,
+    locale,
+  ).then(() => buildMonthStatus(userId, timezone));
   const [accounts, trendTx, spendRows, categories, toCategorize] =
     await Promise.all([
       prisma.bankAccount.findMany({
@@ -68,11 +74,6 @@ export default async function DashboardPage() {
           bankAccountId: true,
           // Category kind so transfers can be excluded from income/expense totals.
           categorization: { select: { category: { select: { kind: true } } } },
-          // Extraordinary split lines are subtracted from income averages.
-          splits: {
-            where: { isExtraordinary: true },
-            select: { amount: true },
-          },
         },
       }),
       prisma.transaction.findMany({
@@ -80,7 +81,6 @@ export default async function DashboardPage() {
         select: {
           amount: true,
           categorization: { select: { categoryId: true } },
-          splits: { select: { amount: true, categoryId: true } },
         },
       }),
       prisma.category.findMany({
@@ -111,10 +111,6 @@ export default async function DashboardPage() {
       direction: t.direction,
       valueDate: t.valueDate.toISOString(),
       categoryKind: t.categorization?.category?.kind ?? null,
-      extraordinaryAmount: t.splits.reduce(
-        (sum, s) => sum + Number(s.amount.toString()),
-        0,
-      ),
     })),
     months,
   );
@@ -138,11 +134,7 @@ export default async function DashboardPage() {
       )
       .map((t) => ({
         holder: holderByAccount.get(t.bankAccountId) ?? "",
-        income: Math.max(
-          0,
-          Math.abs(Number(t.amount.toString())) -
-            t.splits.reduce((sum, s) => sum + Number(s.amount.toString()), 0),
-        ),
+        income: Math.abs(Number(t.amount.toString())),
       })),
   );
 
@@ -165,7 +157,7 @@ export default async function DashboardPage() {
 
       {/* KPI Cards — available-to-spend first: it is THE number. */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <AvailableCard
+        <WeeklyCard
           status={monthStatus}
           currency={currency}
           locale={locale}

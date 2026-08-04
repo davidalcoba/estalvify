@@ -37,6 +37,8 @@ export async function updatePreferences(data: {
 }
 
 export interface PlanningSettingsInput {
+  /** Expected base monthly income (the two salaries) — configuration, never inferred. */
+  baseMonthlyIncome: number | null;
   /** Cash-flow alert threshold (0 = "don't go negative"). */
   lowBalanceThreshold: number;
   /** Savings goal: a fixed monthly amount, a percent of fixed income, or none. */
@@ -58,6 +60,17 @@ export async function updatePlanningSettings(input: PlanningSettingsInput) {
     Math.abs(lowBalanceThreshold) > 1_000_000
   ) {
     throw new Error("Invalid threshold");
+  }
+  let baseMonthlyIncome: number | null = null;
+  if (input.baseMonthlyIncome != null) {
+    if (
+      !Number.isFinite(input.baseMonthlyIncome) ||
+      input.baseMonthlyIncome < 0 ||
+      input.baseMonthlyIncome > 1_000_000
+    ) {
+      throw new Error("Invalid base income");
+    }
+    baseMonthlyIncome = input.baseMonthlyIncome;
   }
 
   let savingsGoalAmount: number | null = null;
@@ -98,6 +111,7 @@ export async function updatePlanningSettings(input: PlanningSettingsInput) {
   await prisma.user.update({
     where: { id: userId },
     data: {
+      baseMonthlyIncome,
       lowBalanceThreshold,
       savingsGoalAmount,
       savingsGoalPercent,

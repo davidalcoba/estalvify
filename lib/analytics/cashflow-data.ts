@@ -1,22 +1,17 @@
-// Assembles the daily cash-flow projection for a user: per-account balances,
-// scheduled events from confirmed recurring series, and a variable-spend rate
-// from recent history. Shared by the Forecast page and the notification cron so
-// the curve the user sees and the alert that fires are the same numbers.
-//
-// The pure math lives in `lib/analytics/cashflow.ts`; this module is the one
-// place that talks to Prisma for it.
+// Assembles the daily cash-flow projection under the v2 model: per-account
+// balances, scheduled events from PENDING planned items (charges on their
+// window's first day — conservative — and incomes on the window's last day),
+// and a variable daily spend rate from the last 90 days of variable
+// transactions. Shared by the "Upcoming charges" page and the notification
+// cron so the curve the user sees and the alert that fires agree.
 
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import {
-  detectRecurringSeries,
-  normalizeMerchantKey,
-  type DetectionInput,
-} from "@/lib/recurring/detect";
+import { normalizeDescriptor } from "@/lib/planned/matching";
+import { resolveWindow, isoDate } from "@/lib/planned/schedule";
 import {
   addDays,
-  scheduleSeries,
   projectAccountDaily,
   consolidateDaily,
   firstBreach,
@@ -26,10 +21,6 @@ import {
   type CashflowBreach,
 } from "./cashflow";
 
-// Keep in sync with the Recurring page / review-count detection window.
-const DETECTION_LOOKBACK_MONTHS = 13;
-// Variable spend rate window. Spec'd on daily averages, not monthly ones: a
-// month is too coarse to feed a per-day curve.
 const VARIABLE_SPEND_WINDOW_DAYS = 90;
 
 export interface AccountCashflow {
@@ -46,10 +37,12 @@ export interface AccountCashflow {
 export interface UpcomingEvent extends ScheduledEvent {
   accountName: string;
   daysAway: number;
+  plannedItemId: string;
+  status: "PENDING" | "MATCHED" | "MISSED";
 }
 
 export interface CashflowData {
-  today: string; // YYYY-MM-DD (user timezone)
+  today: string;
   horizonDays: number;
   threshold: number;
   accounts: AccountCashflow[];
@@ -58,7 +51,6 @@ export interface CashflowData {
   upcomingEvents: UpcomingEvent[];
 }
 
-/** Today's date (YYYY-MM-DD) in a given IANA timezone. */
 function todayInTimezone(timezone: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -75,14 +67,13 @@ export async function buildCashflowData(
 ): Promise<CashflowData> {
   const today = todayInTimezone(timezone);
   const horizonEnd = addDays(today, horizonDays);
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
 
-  const detectionStart = new Date();
-  detectionStart.setUTCMonth(
-    detectionStart.getUTCMonth() - DETECTION_LOOKBACK_MONTHS
-  );
-  detectionStart.setUTCHours(0, 0, 0, 0);
+  const windowStartDate = new Date();
+  windowStartDate.setUTCDate(windowStartDate.getUTCDate() - VARIABLE_SPEND_WINDOW_DAYS);
 
-  const [user, accounts, transactions, confirmed] = await Promise.all([
+  const [user, accounts, planned, matchedRows, series, recentTx] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { lowBalanceThreshold: true },
@@ -92,110 +83,110 @@ export async function buildCashflowData(
       select: {
         id: true,
         name: true,
-        balances: {
-          orderBy: { date: "desc" },
-          take: 1,
-          select: { balance: true },
-        },
+        balances: { orderBy: { date: "desc" }, take: 1, select: { balance: true } },
       },
     }),
-    prisma.transaction.findMany({
-      where: { userId, valueDate: { gte: detectionStart } },
-      select: {
-        amount: true,
-        direction: true,
-        valueDate: true,
-        description: true,
-        remittanceInfo: true,
-        bankAccountId: true,
-        categorization: {
-          select: { category: { select: { kind: true } } },
-        },
+    prisma.plannedItem.findMany({
+      // The current month and everything ahead; the horizon filter happens on
+      // resolved dates below.
+      where: {
+        userId,
+        status: "PENDING",
+        OR: [{ year: { gt: year } }, { year, month: { gte: month } }],
       },
-      orderBy: { valueDate: "asc" },
+      select: {
+        id: true,
+        description: true,
+        direction: true,
+        amount: true,
+        year: true,
+        month: true,
+        dueDay: true,
+        windowFromDay: true,
+        windowToDay: true,
+        anchorMonthEnd: true,
+        bankAccountId: true,
+        status: true,
+      },
+    }),
+    prisma.plannedItem.findMany({
+      where: { userId, matchedTransactionId: { not: null } },
+      select: { matchedTransactionId: true },
     }),
     prisma.recurringSeries.findMany({
-      where: { userId, status: "CONFIRMED" },
+      where: { userId, active: true },
       select: { merchantKey: true },
+    }),
+    prisma.transaction.findMany({
+      where: { userId, direction: "DEBIT", valueDate: { gte: windowStartDate } },
+      select: {
+        id: true,
+        amount: true,
+        bankAccountId: true,
+        description: true,
+        remittanceInfo: true,
+        categorization: { select: { category: { select: { kind: true } } } },
+      },
     }),
   ]);
 
   const threshold = user ? Number(user.lowBalanceThreshold.toString()) : 0;
-  const confirmedKeys = new Set(confirmed.map((s) => s.merchantKey));
 
-  const detectionRows: DetectionInput[] = transactions.map((t) => ({
-    amount: Number(t.amount.toString()),
-    direction: t.direction,
-    valueDate: t.valueDate.toISOString(),
-    description: t.description,
-    remittanceInfo: t.remittanceInfo,
-    bankAccountId: t.bankAccountId,
-  }));
-  const confirmedSeries = detectRecurringSeries(detectionRows).filter((c) =>
-    confirmedKeys.has(c.merchantKey)
-  );
-
-  // Fallback account for a series whose rows carried no account (shouldn't
-  // happen here, but detection allows it): the account with most transactions.
+  // Busiest account fallback for items with no account configured.
   const txCountByAccount = new Map<string, number>();
-  for (const t of transactions) {
-    txCountByAccount.set(
-      t.bankAccountId,
-      (txCountByAccount.get(t.bankAccountId) ?? 0) + 1
-    );
+  for (const t of recentTx) {
+    txCountByAccount.set(t.bankAccountId, (txCountByAccount.get(t.bankAccountId) ?? 0) + 1);
   }
   const busiestAccountId =
-    [...txCountByAccount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    [...txCountByAccount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
+    accounts[0]?.id ??
+    null;
 
-  // Scheduled events per account, from each confirmed series' own rhythm.
-  const eventsByAccount = new Map<string, ScheduledEvent[]>();
-  const confirmedDebitKeys = new Set<string>();
-  for (const series of confirmedSeries) {
-    if (series.direction === "DEBIT") confirmedDebitKeys.add(series.merchantKey);
-    const accountId = series.bankAccountId ?? busiestAccountId;
+  // ── Events from planned items ────────────────────────────────────────────
+  const eventsByAccount = new Map<string, (ScheduledEvent & { plannedItemId: string; status: "PENDING" | "MATCHED" | "MISSED" })[]>();
+  for (const item of planned) {
+    const ym = { year: item.year, month: item.month };
+    const window =
+      item.dueDay != null && !item.anchorMonthEnd
+        ? { fromDay: item.dueDay, toDay: item.dueDay }
+        : resolveWindow(item, ym);
+    // Charges on the window's FIRST day, income on its LAST: both choices are
+    // the conservative side of "will the money be there".
+    const date = isoDate(ym, item.direction === "DEBIT" ? window.fromDay : window.toDay);
+    if (date <= today || date > horizonEnd) continue;
+    const accountId = item.bankAccountId ?? busiestAccountId;
     if (!accountId) continue;
-    const dates = scheduleSeries(
-      {
-        cadence: series.cadence,
-        history: series.history,
-        nextExpected: series.nextExpected,
-      },
-      today,
-      horizonEnd
-    );
     const list = eventsByAccount.get(accountId) ?? [];
-    for (const date of dates) {
-      list.push({
-        label: series.displayName,
-        direction: series.direction,
-        amount: series.averageAmount,
-        date,
-      });
-    }
+    list.push({
+      label: item.description,
+      direction: item.direction,
+      amount: Number(item.amount.toString()),
+      date,
+      plannedItemId: item.id,
+      status: item.status,
+    });
     eventsByAccount.set(accountId, list);
   }
 
-  // Variable daily spend per account over the recent window: DEBIT spend that
-  // is neither a transfer between own accounts nor a scheduled series charge.
-  const windowStart = addDays(today, -VARIABLE_SPEND_WINDOW_DAYS);
+  // ── Variable daily spend per account (exclusion-derived, like everywhere) ─
+  const matchedIds = new Set(matchedRows.map((r) => r.matchedTransactionId));
+  const matchers = series
+    .map((s) => normalizeDescriptor(s.merchantKey))
+    .filter((m) => m.length >= 3);
   const totalDebitByAccount = new Map<string, number>();
-  const recurringDebitByAccount = new Map<string, number>();
-  for (const t of transactions) {
-    if (t.direction !== "DEBIT") continue;
-    const date = t.valueDate.toISOString().slice(0, 10);
-    if (date <= windowStart || date > today) continue;
+  const plannedDebitByAccount = new Map<string, number>();
+  for (const t of recentTx) {
     if (t.categorization?.category?.kind === "TRANSFER") continue;
     const amount = Math.abs(Number(t.amount.toString()));
-    if (!Number.isFinite(amount)) continue;
     totalDebitByAccount.set(
       t.bankAccountId,
       (totalDebitByAccount.get(t.bankAccountId) ?? 0) + amount
     );
-    const key = normalizeMerchantKey(t.description, t.remittanceInfo);
-    if (confirmedDebitKeys.has(key)) {
-      recurringDebitByAccount.set(
+    const descriptor = normalizeDescriptor(`${t.description ?? ""} ${t.remittanceInfo ?? ""}`);
+    if (matchedIds.has(t.id) || matchers.some((m) => descriptor.includes(m))) {
+      plannedDebitByAccount.set(
         t.bankAccountId,
-        (recurringDebitByAccount.get(t.bankAccountId) ?? 0) + amount
+        (plannedDebitByAccount.get(t.bankAccountId) ?? 0) + amount
       );
     }
   }
@@ -206,7 +197,7 @@ export async function buildCashflowData(
       : 0;
     const rate = dailyVariableSpend(
       totalDebitByAccount.get(account.id) ?? 0,
-      recurringDebitByAccount.get(account.id) ?? 0,
+      plannedDebitByAccount.get(account.id) ?? 0,
       VARIABLE_SPEND_WINDOW_DAYS
     );
     return {
@@ -226,16 +217,13 @@ export async function buildCashflowData(
   });
 
   const consolidated = consolidateDaily(projections.map((p) => p.projection));
-
   const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
   const upcomingEvents: UpcomingEvent[] = [...eventsByAccount.entries()]
     .flatMap(([accountId, events]) =>
       events.map((event) => ({
         ...event,
         accountName: accountNameById.get(accountId) ?? "",
-        daysAway: Math.round(
-          (Date.parse(event.date) - Date.parse(today)) / 86_400_000
-        ),
+        daysAway: Math.round((Date.parse(event.date) - Date.parse(today)) / 86_400_000),
       }))
     )
     .sort((a, b) => a.date.localeCompare(b.date));

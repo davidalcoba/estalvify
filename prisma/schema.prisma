@@ -47,6 +47,11 @@ model User {
   // the tracking off.
   savingsAccountId String?
 
+  // The month's expected base income (the two salaries). Configuration, not
+  // inference: at n=1 the number is known (8.262 €). Anything arriving above
+  // it is extraordinary BY DIFFERENCE — no heuristics. Null = not set yet.
+  baseMonthlyIncome Decimal? @db.Decimal(15, 2)
+
   accounts         Account[]
   sessions         Session[]
   bankConnections  BankConnection[]
@@ -54,10 +59,9 @@ model User {
   transactions     Transaction[]
   categories       Category[]
   categoryRules    CategoryRule[]
-  transactionSplits TransactionSplit[]
-  sinkingFunds     SinkingFund[]
   budgets          Budget[]
-  planItems        PlanItem[]
+  plannedItems     PlannedItem[]
+  stockEnvelopes   StockEnvelope[]
   recurringSeries  RecurringSeries[]
   notifications    Notification[]
   mcpAuthCodes     McpAuthCode[]
@@ -257,7 +261,6 @@ model Transaction {
   bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
 
   categorization TransactionCategorization?
-  splits         TransactionSplit[]
 
   @@unique([bankAccountId, externalTransactionId])
   @@index([userId, valueDate])
@@ -265,36 +268,6 @@ model Transaction {
   @@map("transactions")
 }
 
-// A user-authored breakdown of one bank transaction into lines (a cash
-// withdrawal split into what the cash actually bought; a salary split into base
-// and extraordinary). The bank row stays immutable — splits sit next to it, and
-// when they exist they are the truth for category aggregation: the parent's own
-// categorization no longer counts, a line without a category falls back to it.
-// Lines must sum to the parent's amount exactly (enforced in the action).
-model TransactionSplit {
-  id            String @id @default(cuid())
-  transactionId String
-  userId        String
-
-  amount     Decimal @db.Decimal(15, 2) // absolute value, same currency as parent
-  categoryId String? // null = unassigned remainder (keeps the parent's category)
-  note       String?
-
-  // Marks an income line as extraordinary (the April bonus inside the salary
-  // row): excluded from base-income medians and savings-rate calculations.
-  isExtraordinary Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category    Category?   @relation(fields: [categoryId], references: [id])
-
-  @@index([transactionId])
-  @@index([userId])
-  @@map("transaction_splits")
-}
 
 enum TransactionDirection {
   DEBIT // Money out
@@ -334,9 +307,8 @@ model Category {
   sourceCategoryRules   CategoryRule[]              @relation("SourceCategoryRules")
   transactionCategories TransactionCategorization[]
   budgetItems           BudgetItem[]
-  planItems             PlanItem[]
+  plannedItems          PlannedItem[]
   recurringSeries       RecurringSeries[]
-  transactionSplits     TransactionSplit[]
 
   // Almost every page reads the user's categories (OR system defaults).
   @@index([userId])
@@ -465,9 +437,17 @@ model BudgetItem {
   budgetId   String
   categoryId String
 
+  // The month's assignment for the category ("assigned" in the model spec).
   plannedAmount Decimal @db.Decimal(15, 2)
   currency      String  @default("EUR")
   notes         String?
+
+  // false = classic budget, resets every month (groceries, restaurants).
+  // true  = accumulation fund: the unspent remainder rolls into next month
+  //         (IBI, holidays, car, back-to-school). This boolean IS the sinking
+  //         fund - no separate table. The rolled balance is derived from the
+  //         fund's monthly rows (assigned - spent, summed), never stored.
+  rollover Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -480,85 +460,82 @@ model BudgetItem {
 }
 
 // ─────────────────────────────────────────────
-// PLAN - Manual cash-flow planning (expected income & expenses)
+// PLANNED ITEMS - Dated expected charges (the source of truth)
 // ─────────────────────────────────────────────
 
-// A standing planned entry the user enters by hand: an expected income or
-// expense with a cadence. Unlike Budget (one amount per category per month) a
-// category can have several PlanItems (e.g. rent monthly + car tax yearly), and
-// unlike RecurringSeries (auto-detected) these are user-authored. The Plan is the
-// single place to declare intent; the Forecast projects from it and a category's
-// planned monthly total acts as its limit.
-model PlanItem {
+// One expected charge (or income) with a date, in a specific calendar month.
+// Recurring series generate these forward; one-offs (this year's IBI) are typed
+// by hand. Both live in the same list and the same screen. The monthly budget
+// cascade DERIVES from these — they are the single editable source of truth.
+model PlannedItem {
   id     String @id @default(cuid())
   userId String
 
-  label      String? // Optional free-text label (e.g. "Rent", "Salary")
-  direction  TransactionDirection // DEBIT = expense, CREDIT = income
-  categoryId String? // Optional (income is often uncategorized)
+  description String
+  direction   TransactionDirection @default(DEBIT)
+  categoryId  String?
+  amount      Decimal              @db.Decimal(15, 2)
+  currency    String               @default("EUR")
 
-  amount   Decimal @db.Decimal(15, 2)
-  currency String  @default("EUR")
+  // Target calendar month plus when in it the charge lands: an exact day, a
+  // day window (rent wanders between the 1st and the 6th), or the month's last
+  // day (the mortgage — a fixed day number would drop or double a payment
+  // around short months).
+  year           Int
+  month          Int // 1–12
+  dueDay         Int?
+  windowFromDay  Int?
+  windowToDay    Int?
+  anchorMonthEnd Boolean @default(false)
 
-  cadence    PlanCadence
-  dayOfMonth Int? // 1–31 anchor for MONTHLY/QUARTERLY/YEARLY (optional)
-  onDate     DateTime? @db.Date // Specific date for ONE_OFF
-  // Optional last date a periodic item applies (a fixed-term loan, a contract
-  // that expires). Inclusive of its own month: the item counts up to and
-  // including the month it falls in, and nothing after. Null = open-ended.
-  endDate    DateTime? @db.Date
+  // Which account the charge hits (feeds the per-account balance projection).
+  bankAccountId String?
 
-  // Set to a RecurringSeries.merchantKey when this item was created by confirming
-  // a detected series; null for items the user typed. The unique index keeps the
-  // link 1:1, so confirming is idempotent and undoing removes exactly one item
-  // (Postgres treats NULLs as distinct, so manual items are unconstrained).
-  recurringMerchantKey String?
+  // Set when this instance was generated from a recurring series; null = a
+  // hand-typed one-off. One instance per series per month.
+  recurringSeriesId String?
 
-  active Boolean @default(true)
+  status               PlannedStatus @default(PENDING)
+  matchedTransactionId String?       @unique
+  // What actually arrived (deviation vs `amount` drives the price-change alert).
+  matchedAmount        Decimal?      @db.Decimal(15, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category        Category?        @relation(fields: [categoryId], references: [id])
+  recurringSeries RecurringSeries? @relation(fields: [recurringSeriesId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, recurringMerchantKey])
-  @@index([userId])
-  @@map("plan_items")
+  @@unique([recurringSeriesId, year, month])
+  @@index([userId, year, month])
+  @@map("planned_items")
 }
 
-enum PlanCadence {
-  WEEKLY
-  MONTHLY
-  QUARTERLY
-  YEARLY
-  ONE_OFF
+enum PlannedStatus {
+  PENDING // Expected, no transaction seen yet
+  MATCHED // A transaction arrived inside the window and was linked
+  MISSED  // The window closed with no matching transaction
 }
 
 // ─────────────────────────────────────────────
-// SINKING FUNDS - Provisioning for foreseeable non-monthly expenses
+// STOCK ENVELOPES - Labeled split of the savings balance
 // ─────────────────────────────────────────────
 
-// A named pot the user provisions monthly for a foreseeable lump expense (IBI,
-// car maintenance, summer holidays, back-to-school). Internal accounting over
-// the savings balance — no real sub-account exists. The accrued amount is
-// COMPUTED, never cron-updated: initialAmount + monthlyContribution per month
-// elapsed since startDate, capped at targetAmount (lib/plan/sinking-funds.ts).
-// Contributions of unfunded active funds join the month's commitments.
-model SinkingFund {
+// Assignment of EXISTING balance (stock), never of the month's income (flow).
+// Kept strictly out of the monthly assignment cycle: summing stock and flow
+// into one assignable pool would offer the emergency fund to groceries.
+model StockEnvelope {
   id     String @id @default(cuid())
   userId String
 
-  name                String
-  targetAmount        Decimal   @db.Decimal(15, 2)
-  targetDate          DateTime? @db.Date // When the expense is expected (optional)
-  monthlyContribution Decimal   @db.Decimal(15, 2)
+  name   String
+  amount Decimal @db.Decimal(15, 2)
+  // Locked envelopes (emergency fund, operating cushion) are structural — the
+  // UI treats them as not up for grabs.
+  locked Boolean @default(true)
 
-  // Accrual anchor: contributions count from this month (inclusive) onward.
-  startDate     DateTime @db.Date
-  initialAmount Decimal  @default(0) @db.Decimal(15, 2)
-
-  active Boolean @default(true)
+  sortOrder Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -566,55 +543,64 @@ model SinkingFund {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@map("sinking_funds")
+  @@map("stock_envelopes")
 }
 
 // ─────────────────────────────────────────────
-// RECURRING SERIES - Detected recurring payments / subscriptions
+// RECURRING SERIES - Hand-maintained standing charges (manual CRUD)
 // ─────────────────────────────────────────────
 
-// A recurring payment or income stream detected from transaction history
-// (e.g. Netflix monthly, rent, salary). Candidates are detected on the fly from
-// transactions; a row here stores the user's decision (confirm / ignore) plus a
-// snapshot of the detected cadence and amount for future forecasting/alerts.
+// A standing charge or income the user maintains BY HAND (at n=1, configuring
+// fifteen known series is cheaper than inferring them). Each series generates
+// dated PlannedItem instances forward; `merchantKey` is the normalized text the
+// matching engine looks for in a transaction's descriptors to link the arrival.
 model RecurringSeries {
   id     String @id @default(cuid())
   userId String
 
-  // Normalized grouping key derived from the transaction descriptor; stable
-  // across syncs so a user's decision keeps matching the same merchant.
+  // Normalized text matched (accent/case-folded contains) against a
+  // transaction's description + remittanceInfo to recognize this series.
   merchantKey String
-  displayName String // Best human-readable merchant/label seen
-  direction   TransactionDirection // DEBIT (expense) or CREDIT (income)
+  displayName String
+  direction   TransactionDirection
 
-  // Optional category (majority category of the series' transactions at decision time)
   categoryId String?
 
-  status           RecurringStatus
-  cadence          RecurringCadence
-  averageAmount    Decimal          @db.Decimal(15, 2)
-  currency         String           @default("EUR")
-  lastSeenAt       DateTime?        @db.Date
-  nextExpectedDate DateTime?        @db.Date
+  cadence        RecurringCadence
+  expectedAmount Decimal          @db.Decimal(15, 2)
+  currency       String           @default("EUR")
+
+  // When in the month the charge lands: a day window (rent: 1-6) or the last
+  // day of the month (mortgage - a fixed day number would drop or double a
+  // payment around short months). Bimonthly/quarterly/yearly series also carry
+  // their anchor month via nextExpectedDate.
+  windowFromDay  Int?
+  windowToDay    Int?
+  anchorMonthEnd Boolean @default(false)
+
+  // Which account the charge hits / the income lands in. Configuration, not
+  // inference — rent leaves Despeses, Mònica's salary lands in Estalvis.
+  bankAccountId String?
+
+  active           Boolean   @default(true)
+  lastSeenAt       DateTime? @db.Date
+  nextExpectedDate DateTime? @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  plannedItems PlannedItem[]
 
   @@unique([userId, merchantKey])
   @@map("recurring_series")
 }
 
-enum RecurringStatus {
-  CONFIRMED // User confirmed this is a real recurring series
-  IGNORED   // User dismissed it (not recurring / not interesting)
-}
-
 enum RecurringCadence {
   WEEKLY
   MONTHLY
+  BIMONTHLY
   QUARTERLY
   YEARLY
   IRREGULAR

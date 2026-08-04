@@ -1,84 +1,65 @@
-// Recurring page — subscriptions and regular payments detected from bank history.
-// Candidates are detected live from the last ~13 months of transactions; the
-// user's confirm/ignore decisions are stored in RecurringSeries.
+// Recurring — the hand-maintained registry of standing charges and income.
+// Each series generates dated planned items forward (see /forecast) and the
+// matcher links the bank's arrivals back, which is what powers the deviation
+// and missed-charge alerts.
 
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
-import { detectRecurringSeries, type DetectionInput } from "@/lib/recurring/detect";
-import { mergeRecurring, summarizeRecurring } from "@/lib/recurring/recurring-dto";
-import { RecurringView } from "@/components/recurring/recurring-view";
+import { PageHeader } from "@/components/layout/page-header";
+import { SeriesManager, type SeriesVM } from "@/components/recurring/series-manager";
 
 export const metadata: Metadata = { title: "Recurring" };
-
-// How far back to scan for repeating patterns (yearly series need >1 year).
-const LOOKBACK_MONTHS = 13;
 
 export default async function RecurringPage() {
   const session = await auth();
   const userId = session!.user.id;
   const prefs = await getUserPrefs(userId);
 
-  const cutoff = new Date();
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - LOOKBACK_MONTHS);
-  cutoff.setUTCHours(0, 0, 0, 0);
-
-  const [transactions, stored, plannedItems] = await Promise.all([
-    prisma.transaction.findMany({
-      where: { userId, valueDate: { gte: cutoff } },
-      select: {
-        amount: true,
-        direction: true,
-        valueDate: true,
-        description: true,
-        remittanceInfo: true,
-        categorization: {
-          select: {
-            categoryId: true,
-            category: { select: { name: true, color: true } },
-          },
-        },
-      },
-      orderBy: { valueDate: "asc" },
-    }),
+  const [series, categories, accounts] = await Promise.all([
     prisma.recurringSeries.findMany({
       where: { userId },
-      select: { merchantKey: true, status: true },
+      orderBy: [{ direction: "asc" }, { expectedAmount: "desc" }],
     }),
-    // Plan items created from a series — tells each row whether it is in the Plan.
-    prisma.planItem.findMany({
-      where: { userId, recurringMerchantKey: { not: null } },
-      select: { recurringMerchantKey: true },
+    prisma.category.findMany({
+      where: { isActive: true, OR: [{ userId }, { userId: null }] },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, color: true, parentId: true },
+    }),
+    prisma.bankAccount.findMany({
+      where: { userId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
-  const rows: DetectionInput[] = transactions.map((tx) => ({
-    amount: Number(tx.amount.toString()),
-    direction: tx.direction,
-    valueDate: tx.valueDate.toISOString(),
-    description: tx.description,
-    remittanceInfo: tx.remittanceInfo,
-    categoryId: tx.categorization?.categoryId ?? null,
-    categoryName: tx.categorization?.category?.name ?? null,
-    categoryColor: tx.categorization?.category?.color ?? null,
+  const vms: SeriesVM[] = series.map((s) => ({
+    id: s.id,
+    displayName: s.displayName,
+    matcher: s.merchantKey,
+    direction: s.direction,
+    categoryId: s.categoryId,
+    bankAccountId: s.bankAccountId,
+    cadence: s.cadence,
+    expectedAmount: Number(s.expectedAmount.toString()),
+    windowFromDay: s.windowFromDay,
+    windowToDay: s.windowToDay,
+    anchorMonthEnd: s.anchorMonthEnd,
+    active: s.active,
+    lastSeenAt: s.lastSeenAt?.toISOString().slice(0, 10) ?? null,
   }));
 
-  const plannedKeys = plannedItems.flatMap((p) =>
-    p.recurringMerchantKey ? [p.recurringMerchantKey] : []
-  );
-
-  const candidates = detectRecurringSeries(rows);
-  const items = mergeRecurring(candidates, stored, plannedKeys);
-  const summary = summarizeRecurring(items);
-
   return (
-    <RecurringView
-      items={items}
-      summary={summary}
-      currency={prefs.currency}
-      locale={prefs.locale}
-      dateLocale={prefs.language}
-    />
+    <div className="space-y-6">
+      <PageHeader title="Recurring" />
+      <SeriesManager
+        series={vms}
+        categories={categories}
+        accounts={accounts}
+        currency={prefs.currency}
+        locale={prefs.locale}
+      />
+    </div>
   );
 }

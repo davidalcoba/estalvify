@@ -1,6 +1,5 @@
 // Pure daily cash-flow projection: project each account's balance day by day
-// over the next N days from (a) scheduled events — confirmed recurring series
-// and dated plan items — and (b) a daily variable-spend rate derived from
+// over the next N days from (a) scheduled events (the month's planned items) — and (b) a daily variable-spend rate derived from
 // recent history. No Prisma/network — unit-tested in isolation.
 //
 // This exists because the monthly forecast cannot see a calendar squeeze: rent
@@ -8,7 +7,6 @@
 // granularity, and that exact gap is what forces reactive transfers and
 // credit-card settlements. Days, not months.
 
-import type { Cadence, SeriesOccurrence } from "@/lib/recurring/detect";
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
@@ -28,124 +26,6 @@ function toIso(y: number, m: number, d: number): string {
 export function addDays(iso: string, days: number): string {
   const [y, m, d] = parts(iso);
   return toIso(y, m, d + days);
-}
-
-function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-// ── Series scheduling ─────────────────────────────────────────────────────
-
-export type MonthlyAnchor =
-  | { type: "DAY"; day: number }
-  | { type: "MONTH_END" };
-
-/**
- * Where in the month a monthly series charges. Charges that hug the end of the
- * month (a mortgage on the 31st, 30th, 31st…) anchor to "last day of month" —
- * anchoring those to a fixed day number would drop or double a payment around
- * short months. Everything else anchors to the median day (rent wandering
- * between the 1st and the 6th anchors to its middle).
- */
-export function monthlyAnchorFor(history: SeriesOccurrence[]): MonthlyAnchor {
-  const fromEnd: number[] = [];
-  const days: number[] = [];
-  for (const occ of history) {
-    const [y, m, d] = parts(occ.date);
-    fromEnd.push(daysInMonth(y, m) - d);
-    days.push(d);
-  }
-  const median = (v: number[]) => {
-    const s = [...v].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
-  };
-  if (fromEnd.length > 0 && median(fromEnd) <= 2) return { type: "MONTH_END" };
-  return { type: "DAY", day: Math.max(1, Math.round(median(days))) };
-}
-
-export interface SeriesScheduleInput {
-  cadence: Cadence;
-  /** Chronological occurrences; drives the monthly anchor. */
-  history: SeriesOccurrence[];
-  /** Next expected charge (YYYY-MM-DD) from detection. */
-  nextExpected: string;
-}
-
-/**
- * Projected charge dates for a series inside (from, to], both ISO dates.
- * Monthly series repeat on their anchor (median day, or month-end for charges
- * that hug it); other cadences step from `nextExpected`. An overdue
- * `nextExpected` (missed charge) is clamped forward: the projection assumes it
- * will still land, tomorrow at the earliest — dropping it would hide exactly
- * the charge most likely to hurt.
- */
-export function scheduleSeries(
-  input: SeriesScheduleInput,
-  from: string,
-  to: string
-): string[] {
-  const dates: string[] = [];
-  const push = (iso: string) => {
-    if (iso > from && iso <= to) dates.push(iso);
-  };
-
-  if (input.cadence === "MONTHLY") {
-    const anchor = monthlyAnchorFor(input.history);
-    // Walk month by month from the expected month to the horizon's month.
-    let [y, m] = parts(input.nextExpected);
-    const [toY, toM] = parts(to);
-    while (y < toY || (y === toY && m <= toM)) {
-      const day =
-        anchor.type === "MONTH_END"
-          ? daysInMonth(y, m)
-          : Math.min(anchor.day, daysInMonth(y, m));
-      const occurrence = toIso(y, m, day);
-      // A charge whose scheduled day already passed is still owed — assume it
-      // lands tomorrow rather than silently vanishing from the projection.
-      push(occurrence <= from ? addDays(from, 1) : occurrence);
-      m += 1;
-      if (m > 12) {
-        m = 1;
-        y += 1;
-      }
-    }
-    return dedupeSorted(dates);
-  }
-
-  const stepDays = input.cadence === "WEEKLY" ? 7 : null;
-  let current = input.nextExpected;
-  if (current <= from) {
-    // Overdue: assume it lands tomorrow, then resume the normal rhythm.
-    push(addDays(from, 1));
-    current = stepFrom(current, input.cadence);
-    while (current <= from) current = stepFrom(current, input.cadence);
-  }
-  let guard = 0;
-  while (current <= to && guard < 400) {
-    push(current);
-    current = stepDays ? addDays(current, stepDays) : stepFrom(current, input.cadence);
-    guard += 1;
-  }
-  return dedupeSorted(dates);
-}
-
-function stepFrom(iso: string, cadence: Cadence): string {
-  const [y, m, d] = parts(iso);
-  switch (cadence) {
-    case "WEEKLY":
-      return toIso(y, m, d + 7);
-    case "MONTHLY":
-      return toIso(y, m + 1, d);
-    case "QUARTERLY":
-      return toIso(y, m + 3, d);
-    case "YEARLY":
-      return toIso(y + 1, m, d);
-  }
-}
-
-function dedupeSorted(dates: string[]): string[] {
-  return [...new Set(dates)].sort();
 }
 
 // ── Daily projection ──────────────────────────────────────────────────────
