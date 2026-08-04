@@ -1,64 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  budgetNotifications,
   upcomingRecurringNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
   isoYearWeek,
 } from "./generators";
-import type { BudgetRow } from "@/lib/budget/budget-progress";
-
-function row(overrides: Partial<BudgetRow>): BudgetRow {
-  return {
-    categoryId: "food",
-    categoryName: "Food",
-    categoryColor: "#f00",
-    planned: 100,
-    spent: 50,
-    remaining: 50,
-    percent: 50,
-    status: "ok",
-    ...overrides,
-  };
-}
-
-describe("budgetNotifications", () => {
-  it("emits an over-budget warning with a stable dedupeKey", () => {
-    const specs = budgetNotifications(
-      2026,
-      8,
-      [row({ status: "over", planned: 100, spent: 130 })],
-      "EUR",
-      "en-US"
-    );
-    expect(specs).toHaveLength(1);
-    expect(specs[0]).toMatchObject({
-      type: "BUDGET_OVER",
-      severity: "WARNING",
-      dedupeKey: "budget-over:2026-8:food",
-    });
-    expect(specs[0].body).toContain("over");
-  });
-
-  it("emits a near-budget info alert", () => {
-    const specs = budgetNotifications(
-      2026,
-      8,
-      [row({ status: "warning", planned: 100, spent: 90, percent: 90 })],
-      "EUR",
-      "en-US"
-    );
-    expect(specs[0]).toMatchObject({
-      type: "BUDGET_NEAR",
-      severity: "INFO",
-      dedupeKey: "budget-near:2026-8:food",
-    });
-  });
-
-  it("ignores rows that are comfortably within budget", () => {
-    expect(budgetNotifications(2026, 8, [row({ status: "ok" })], "EUR", "en-US")).toEqual([]);
-  });
-});
 
 describe("upcomingRecurringNotifications", () => {
   const series = [

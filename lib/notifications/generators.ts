@@ -3,11 +3,12 @@
 // idempotent. No Prisma/network — unit-tested in isolation.
 
 import type { NotificationType, NotificationSeverity } from "@/app/generated/prisma";
-import type { BudgetRow } from "@/lib/budget/budget-progress";
-import type { ProjectedBalance } from "@/lib/analytics/forecast";
-import { firstBelowThreshold } from "@/lib/analytics/forecast";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { daysBetween } from "@/lib/recurring/detect";
+
+/** Whole-day difference between two ISO dates (UTC). */
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+}
 
 export interface NotificationSpec {
   type: NotificationType;
@@ -16,48 +17,6 @@ export interface NotificationSpec {
   body: string;
   dedupeKey: string;
   metadata?: Record<string, string>;
-}
-
-// Budget alerts for the month: over budget (warning) and nearing budget (info).
-export function budgetNotifications(
-  year: number,
-  month: number,
-  rows: BudgetRow[],
-  currency: string,
-  locale: string
-): NotificationSpec[] {
-  const specs: NotificationSpec[] = [];
-  for (const row of rows) {
-    if (row.status === "over") {
-      const over = row.spent - row.planned;
-      specs.push({
-        type: "BUDGET_OVER",
-        severity: "WARNING",
-        title: `Over budget: ${row.categoryName}`,
-        body: `You've spent ${formatCurrency(row.spent, currency, locale)} of ${formatCurrency(
-          row.planned,
-          currency,
-          locale
-        )} — ${formatCurrency(over, currency, locale)} over.`,
-        dedupeKey: `budget-over:${year}-${month}:${row.categoryId}`,
-        metadata: { categoryId: row.categoryId, year: String(year), month: String(month) },
-      });
-    } else if (row.status === "warning") {
-      specs.push({
-        type: "BUDGET_NEAR",
-        severity: "INFO",
-        title: `Nearing budget: ${row.categoryName}`,
-        body: `You've used ${row.percent}% of your ${row.categoryName} budget (${formatCurrency(
-          row.spent,
-          currency,
-          locale
-        )} of ${formatCurrency(row.planned, currency, locale)}).`,
-        dedupeKey: `budget-near:${year}-${month}:${row.categoryId}`,
-        metadata: { categoryId: row.categoryId, year: String(year), month: String(month) },
-      });
-    }
-  }
-  return specs;
 }
 
 export interface UpcomingRecurringInput {
@@ -96,75 +55,6 @@ export function upcomingRecurringNotifications(
     });
   }
   return specs;
-}
-
-export interface AmountChangeInput {
-  merchantKey: string;
-  displayName: string;
-  latestAmount: number;
-  latestDate: string; // YYYY-MM-DD
-  baselineAmount: number;
-  relativeChange: number; // signed fraction, +0.17 = up 17%
-}
-
-/**
- * A recurring charge came in noticeably above/below its usual amount (an
- * insurance premium silently raised, a promo price expiring). One alert per
- * deviating charge: the key embeds the charge date, so the same deviation never
- * re-alerts but next month's charge gets a fresh look.
- */
-export function recurringAmountChangeNotifications(
-  deviations: AmountChangeInput[],
-  currency: string,
-  locale: string
-): NotificationSpec[] {
-  return deviations.map((d) => {
-    const pct = Math.round(Math.abs(d.relativeChange) * 100);
-    const rose = d.relativeChange > 0;
-    return {
-      type: "RECURRING_AMOUNT_CHANGE" as NotificationType,
-      severity: (rose ? "WARNING" : "INFO") as NotificationSeverity,
-      title: `${d.displayName} ${rose ? "went up" : "went down"} ${pct}%`,
-      body: `The latest charge was ${formatCurrency(d.latestAmount, currency, locale)}, against a usual ${formatCurrency(
-        d.baselineAmount,
-        currency,
-        locale
-      )}.`,
-      dedupeKey: `recurring-amount:${d.merchantKey}:${d.latestDate}`,
-      metadata: { merchantKey: d.merchantKey, date: d.latestDate },
-    };
-  });
-}
-
-export interface MissedSeriesInput {
-  merchantKey: string;
-  displayName: string;
-  direction: "DEBIT" | "CREDIT";
-  averageAmount: number;
-  expectedDate: string; // YYYY-MM-DD
-  daysOverdue: number;
-}
-
-/**
- * A confirmed series' expected charge never arrived — an unpaid bill, a
- * cancelled subscription still confirmed, or a sync quietly broken. One alert
- * per missed occurrence (the key embeds the expected date).
- */
-export function missedRecurringNotifications(
-  missed: MissedSeriesInput[],
-  currency: string,
-  locale: string
-): NotificationSpec[] {
-  return missed.map((m) => ({
-    type: "RECURRING_MISSED" as NotificationType,
-    severity: "WARNING" as NotificationSeverity,
-    title: `Missing: ${m.displayName}`,
-    body: `${
-      m.direction === "CREDIT" ? "An expected income of" : "An expected charge of"
-    } ${formatCurrency(m.averageAmount, currency, locale)} was due on ${m.expectedDate} and hasn't arrived (${m.daysOverdue} days). Check the bill — or the bank sync.`,
-    dedupeKey: `recurring-missed:${m.merchantKey}:${m.expectedDate}`,
-    metadata: { merchantKey: m.merchantKey, expectedDate: m.expectedDate },
-  }));
 }
 
 export interface ConsentInput {
@@ -281,40 +171,6 @@ export function staleTransactionNotifications(
   return specs;
 }
 
-export interface ExtraordinaryIncomeInput {
-  merchantKey: string;
-  displayName: string;
-  latestAmount: number;
-  latestDate: string; // YYYY-MM-DD
-  baselineAmount: number;
-  excess: number;
-}
-
-/**
- * An income arrived far above its usual amount — a bonus or annual variable
- * riding inside the salary row. The ask is explicit: split it and assign it,
- * because an unassigned windfall is absorbed by the month (April's 14.5k
- * changed that month's spending by nothing). One alert per arrival.
- */
-export function extraordinaryIncomeNotifications(
-  inputs: ExtraordinaryIncomeInput[],
-  currency: string,
-  locale: string
-): NotificationSpec[] {
-  return inputs.map((i) => ({
-    type: "EXTRAORDINARY_INCOME" as NotificationType,
-    severity: "INFO" as NotificationSeverity,
-    title: `Extraordinary income: ${i.displayName}`,
-    body: `${formatCurrency(i.latestAmount, currency, locale)} arrived against a usual ${formatCurrency(
-      i.baselineAmount,
-      currency,
-      locale
-    )} — about ${formatCurrency(i.excess, currency, locale)} extra. Split the transaction (base + extraordinary) and assign the excess to savings or a fund; money left unassigned gets spent by the month.`,
-    dedupeKey: `extra-income:${i.merchantKey}:${i.latestDate}`,
-    metadata: { merchantKey: i.merchantKey, date: i.latestDate },
-  }));
-}
-
 export interface SavingsExecutionInput {
   savingsGoal: number; // resolved €, > 0 means a goal is set
   /** Whether an inbound transfer landed on the savings account this month. */
@@ -408,37 +264,3 @@ export function cashflowBreachNotifications(
   });
 }
 
-// Alert when the projected balance is set to fall below a threshold (default 0)
-// within the forecast horizon. One alert for the earliest breaching month.
-export function lowBalanceNotifications(
-  projected: ProjectedBalance[],
-  threshold: number,
-  currency: string,
-  locale: string,
-  language: string
-): NotificationSpec[] {
-  const breach = firstBelowThreshold(projected, threshold);
-  if (!breach) return [];
-
-  const monthLabel = formatDate(
-    new Date(Date.UTC(breach.year, breach.month - 1, 1)),
-    language,
-    "UTC",
-    { month: "long", year: "numeric" }
-  );
-
-  return [
-    {
-      type: "LOW_BALANCE_PROJECTED",
-      severity: "ALERT",
-      title: "Low balance projected",
-      body: `At your recent pace, your balance is projected to reach ${formatCurrency(
-        breach.balance,
-        currency,
-        locale
-      )} by ${monthLabel}.`,
-      dedupeKey: `low-balance:${breach.year}-${breach.month}`,
-      metadata: { year: String(breach.year), month: String(breach.month) },
-    },
-  ];
-}

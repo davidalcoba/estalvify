@@ -12,6 +12,7 @@ import { Check } from "lucide-react";
 type GoalType = "none" | "amount" | "percent";
 
 interface PlanningFormProps {
+  baseMonthlyIncome: number | null;
   lowBalanceThreshold: number;
   savingsGoalAmount: number | null;
   savingsGoalPercent: number | null;
@@ -24,6 +25,7 @@ interface PlanningFormProps {
 // Separate card from regional preferences — these change money behaviour, not
 // formatting.
 export function PlanningForm({
+  baseMonthlyIncome,
   lowBalanceThreshold,
   savingsGoalAmount,
   savingsGoalPercent,
@@ -33,6 +35,9 @@ export function PlanningForm({
 }: PlanningFormProps) {
   const initialType: GoalType =
     savingsGoalAmount != null ? "amount" : savingsGoalPercent != null ? "percent" : "none";
+  const [baseIncome, setBaseIncome] = useState(
+    baseMonthlyIncome != null ? String(baseMonthlyIncome) : ""
+  );
   const [threshold, setThreshold] = useState(String(lowBalanceThreshold));
   const [goalType, setGoalType] = useState<GoalType>(initialType);
   const [goalValue, setGoalValue] = useState(
@@ -57,6 +62,11 @@ export function PlanningForm({
       setError("Threshold must be a number");
       return;
     }
+    const baseIncomeValue = baseIncome.trim() === "" ? null : Number(baseIncome);
+    if (baseIncomeValue != null && !Number.isFinite(baseIncomeValue)) {
+      setError("Base income must be a number");
+      return;
+    }
     const parsedGoal = goalType === "none" ? null : Number(goalValue);
     if (goalType !== "none" && !Number.isFinite(parsedGoal)) {
       setError("Savings goal must be a number");
@@ -66,6 +76,7 @@ export function PlanningForm({
     startTransition(async () => {
       try {
         await updatePlanningSettings({
+          baseMonthlyIncome: baseIncomeValue,
           lowBalanceThreshold: thresholdValue,
           savingsGoalType: goalType,
           savingsGoalValue: parsedGoal,
@@ -86,6 +97,23 @@ export function PlanningForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="base-income">Base monthly income ({currency})</Label>
+            <Input
+              id="base-income"
+              type="number"
+              step="any"
+              min="0"
+              placeholder="8262"
+              value={baseIncome}
+              onChange={(e) => setBaseIncome(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              The two salaries. Configuration, not inference — anything arriving
+              above it is extraordinary by difference and never enters averages.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Monthly savings goal</Label>
             <div className="flex gap-2">

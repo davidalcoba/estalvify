@@ -20,6 +20,7 @@ import {
   ListFilter,
   Repeat,
   LineChart,
+  Shield,
 } from "lucide-react";
 
 import {
@@ -83,7 +84,7 @@ const navItems = [
     label: "Planning",
     items: [
       {
-        title: "Plan",
+        title: "Monthly control",
         url: "/plan",
         icon: PiggyBank,
       },
@@ -93,9 +94,14 @@ const navItems = [
         icon: Repeat,
       },
       {
-        title: "Forecast",
+        title: "Upcoming",
         url: "/forecast",
         icon: LineChart,
+      },
+      {
+        title: "Envelopes",
+        url: "/envelopes",
+        icon: Shield,
       },
       {
         title: "Reports",
