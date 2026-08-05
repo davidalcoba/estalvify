@@ -74,6 +74,10 @@ export function PlannedList({
   });
 
   function save() {
+    if (!draft.categoryId) {
+      setError("Pick a category — the charge lands on that Budget objective");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
