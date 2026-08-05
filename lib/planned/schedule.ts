@@ -45,19 +45,27 @@ export interface SeriesScheduleShape {
   cadence: Cadence;
   /** Anchor for non-monthly cadences: any date (ISO) in a month the series IS due. */
   anchorDate: string | null;
+  /**
+   * Calendar months (1–12) the series NEVER bills, on top of the cadence — a
+   * school that charges monthly except August, an association that skips July.
+   * Without this, the skipped month generates a planned item that can only go
+   * MISSED: a phantom alarm every year. Empty/absent = no skips.
+   */
+  skipMonths?: number[];
   windowFromDay: number | null;
   windowToDay: number | null;
   anchorMonthEnd: boolean;
 }
 
 /**
- * Whether a series is due in `target`. Monthly is always due; bimonthly /
- * quarterly / yearly step from the anchor month. WEEKLY and IRREGULAR never
- * generate planned instances (nothing in the seed needs them; a weekly charge
- * would need per-week instances, which the weekly available view absorbs as
- * variable anyway).
+ * Whether a series is due in `target`. skipMonths veto first; then monthly is
+ * always due, and bimonthly / quarterly / yearly step from the anchor month.
+ * WEEKLY and IRREGULAR never generate planned instances (nothing in the seed
+ * needs them; a weekly charge would need per-week instances, which the weekly
+ * available view absorbs as variable anyway).
  */
 export function isDueInMonth(shape: SeriesScheduleShape, target: YearMonth): boolean {
+  if (shape.skipMonths?.includes(target.month)) return false;
   const step = CADENCE_STEP[shape.cadence];
   if (!step) return false;
   if (step === 1) return true;

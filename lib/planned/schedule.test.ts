@@ -42,6 +42,22 @@ describe("isDueInMonth", () => {
     expect(isDueInMonth(shape, { year: 2027, month: 5 })).toBe(false);
   });
 
+  it("skipMonths vetoes a month regardless of cadence (school skips August)", () => {
+    const escola = {
+      cadence: "MONTHLY" as const,
+      anchorDate: null,
+      skipMonths: [8],
+      windowFromDay: 2,
+      windowToDay: 5,
+      anchorMonthEnd: false,
+    };
+    expect(isDueInMonth(escola, { year: 2026, month: 8 })).toBe(false);
+    expect(isDueInMonth(escola, { year: 2026, month: 7 })).toBe(true);
+    expect(isDueInMonth(escola, { year: 2026, month: 9 })).toBe(true);
+    // Empty list = no skips.
+    expect(isDueInMonth({ ...escola, skipMonths: [] }, { year: 2026, month: 8 })).toBe(true);
+  });
+
   it("weekly and irregular never generate instances", () => {
     expect(
       isDueInMonth(
