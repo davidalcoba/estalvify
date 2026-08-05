@@ -26,7 +26,9 @@ segundo tranche, asumiendo el modelo TPP vía Enable Banking:
   (RFC 7009); rotación de refresh tokens con detección de replay; purga de
   códigos/tokens expirados en el cron.
 - **B6 parcial**: `MCP_JWT_SECRET` preferido con warning en producción al caer
-  a `AUTH_SECRET`, y claim `iss` por deployment (preview ≠ producción).
+  a `AUTH_SECRET`, y claim `iss` por deployment (preview ≠ producción). La
+  variable **está creada en Vercel** (`production` + `preview`, 2026-08-05);
+  los deployments construidos antes siguen en el fallback hasta redeploy.
   Sigue pendiente para self-hosting: `trustHost`/`AUTH_URL` y validación del
   Host header contra allowlist.
 - **B3 parcial**: revocación activa (`lib/auth/revoke.ts`) — el allowlist se

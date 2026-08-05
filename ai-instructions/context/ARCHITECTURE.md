@@ -420,7 +420,8 @@ An MCP (Model Context Protocol) server exposes app actions to MCP clients
 (e.g. Claude), authenticated with an OAuth 2.1 Authorization Server that
 **delegates the human login to the existing Auth.js Google flow**. Personal /
 household scope. Access tokens are self-verifying JWTs (HS256, signed with
-`MCP_JWT_SECRET`, falling back to `AUTH_SECRET` with a production warning);
+`MCP_JWT_SECRET` — set on Vercel for `production` + `preview` since
+2026-08-05 — falling back to `AUTH_SECRET` with a production warning);
 auth codes and refresh tokens are opaque and stored hashed. Tokens carry an
 `iss` claim bound to the deployment target (`estalvify-mcp:<VERCEL_ENV>`), so a
 token minted on preview is not valid against production even when both share a
