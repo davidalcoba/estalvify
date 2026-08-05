@@ -5,8 +5,27 @@ import {
   isProvisionalMonth,
   significantDeviation,
   matchWindow,
+  normalizeDescriptor,
   type PlannedForMatch,
 } from "./matching";
+
+describe("normalizeDescriptor", () => {
+  it("folds gateway asterisks so a merchant-name matcher matches the feed", () => {
+    const d = normalizeDescriptor("PAGO CON TARJETA UBER *ONE MEMBERSHIP");
+    expect(d).toBe("PAGO CON TARJETA UBER ONE MEMBERSHIP");
+    expect(d.includes(normalizeDescriptor("UBER ONE"))).toBe(true);
+  });
+
+  it("folds a dot/apostrophe mismatch to the same normalized form", () => {
+    const feed = normalizeDescriptor("Institut d.Investigacio en Ciencies");
+    const matcher = normalizeDescriptor("Institut d'Investigació");
+    expect(feed.includes(matcher)).toBe(true);
+  });
+
+  it("still strips accents and collapses whitespace", () => {
+    expect(normalizeDescriptor("  Aigües   de  Barcelona ")).toBe("AIGUES DE BARCELONA");
+  });
+});
 
 const rent: PlannedForMatch = {
   id: "rent-sep",

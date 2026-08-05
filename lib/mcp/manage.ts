@@ -574,8 +574,12 @@ export interface SeriesFields {
   active?: boolean;
 }
 
-/** Matchers touching several unrelated root categories over the last year
- *  are recognizing the wrong thing and get blocked at save time. */
+/** A matcher is audited against the last year of history at save time and
+ *  blocked if it recognizes NOTHING (0 hits → the series only ever goes MISSED
+ *  and reads back "healthy" in the UI, the exact trap that hides a typo like a
+ *  missing gateway asterisk) or the WRONG thing (hits spread across unrelated
+ *  root categories, e.g. a rent matcher catching taxis). Rule-linked series
+ *  skip this — the rule's condition tree is the recognition contract. */
 const MATCHER_AUDIT_DAYS = 365;
 const MATCHER_MAX_ROOT_CATEGORIES = 2;
 
@@ -607,6 +611,11 @@ async function assertMatcherIsSpecific(
     if (t.categorization?.status === "APPROVED" && t.categorization.categoryId) {
       roots.add(rootOf(t.categorization.categoryId, parentOf));
     }
+  }
+  if (hits === 0) {
+    throw new Error(
+      `Matcher "${matcher}" matches 0 transactions in the last 12 months — it won't recognize its charge, so every month goes MISSED. Check the bank's real descriptor (gateway asterisks like "UBER *ONE", dots, city/country suffixes) or link a rule instead.`
+    );
   }
   if (roots.size > MATCHER_MAX_ROOT_CATEGORIES) {
     throw new Error(
