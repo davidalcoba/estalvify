@@ -45,11 +45,27 @@ recurrentes, etc.).
 >   **navegable por mes** (`/plan?y=&m=`): un mes pasado se lee cerrado (ritmo
 >   100%, saldo consolidado al cierre de ese mes), uno futuro llega ya asignado
 >   por propagación — nunca se materializan filas en meses pasados.
-> - Se mantienen de v2: **series manuales** (CRUD en /recurring, sin detección),
+> - Se mantienen de v2: **series manuales** (CRUD en /recurring),
 >   **planned_items como fuente de verdad** (motor a 4 meses, `lib/planned/engine.ts`),
 >   **disponible SEMANAL** con contador de operaciones vs mediana de 12 semanas, y la
 >   previsión de caja alimentada por planned items (cargos al inicio de su ventana,
 >   ingresos al final). Ajustes queda reducido a `lowBalanceThreshold`.
+> - **v3.1 — recurring como automatización del monthly.** Una serie es la base
+>   recurrente del objetivo de su categoría: `categoryId` obligatorio, **sin campo
+>   cuenta** en el formulario (la columna sigue; la previsión usa fallback). Cada
+>   objetivo del control mensual = **base** (planned DEBIT del mes, subárbol de
+>   categorías vía `nearestInSet`) + **extra manual** (`budget_items`); un cargo
+>   planificado sin budget item aflora como objetivo base-only en su categoría
+>   raíz. `consumed` acumula TODAS las transacciones EXPENSE del mes del subárbol
+>   (fila expandible: recurrings + transacciones). La **detección vuelve solo como
+>   propuestas** (`lib/recurring/detect.ts`, puro): cadencia casi regular +
+>   importe casi estable (±30%, las facturas varían) ⇒ sugerencia editable en
+>   /recurring con contador; aceptar precarga el formulario, descartar persiste
+>   en `dismissed_recurring_suggestions`. El matching queda como mecánica interna
+>   (avisos MISSED/desviación, reconciliación y fechas de la previsión). **Borrar
+>   una serie retira hacia delante**: sus PENDING desaparecen y sus
+>   MATCHED/MISSED se desvinculan (`recurringSeriesId = null`) — los meses
+>   cerrados nunca se reescriben.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en

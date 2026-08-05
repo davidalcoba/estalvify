@@ -24,7 +24,7 @@ export function CascadeCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">
-          Monthly cascade
+          Cascade
           {status.provisional && (
             <Badge variant="secondary" className="ml-2 align-middle text-xs">
               Provisional

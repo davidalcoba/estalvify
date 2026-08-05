@@ -78,3 +78,34 @@ export function hasChildren(categoryId: string, parentOf: ParentMap): boolean {
   }
   return false;
 }
+
+/**
+ * The nearest ancestor-or-self of `categoryId` contained in `set`, walking up
+ * the parent chain (self first). Null when no ancestor qualifies. Used to roll
+ * a transaction or planned charge up to the category objective that owns it —
+ * a "Supermercado" transaction lands on the "Alimentación" objective unless
+ * "Supermercado" has an objective of its own.
+ */
+export function nearestInSet(
+  categoryId: string,
+  set: ReadonlySet<string>,
+  parentOf: ParentMap
+): string | null {
+  let cursor: string | null = categoryId;
+  for (let steps = 0; cursor !== null && steps <= parentOf.size; steps++) {
+    if (set.has(cursor)) return cursor;
+    cursor = parentOf.get(cursor) ?? null;
+  }
+  return null;
+}
+
+/** The top-level root of `categoryId` (itself when it has no parent). */
+export function rootOf(categoryId: string, parentOf: ParentMap): string {
+  let cursor = categoryId;
+  for (let steps = 0; steps <= parentOf.size; steps++) {
+    const parent = parentOf.get(cursor) ?? null;
+    if (parent === null) return cursor;
+    cursor = parent;
+  }
+  return cursor;
+}

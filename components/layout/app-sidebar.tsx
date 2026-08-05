@@ -82,7 +82,7 @@ const navItems = [
     label: "Planning",
     items: [
       {
-        title: "Monthly control",
+        title: "Budget",
         url: "/plan",
         icon: PiggyBank,
       },

@@ -1,13 +1,15 @@
 "use client";
 
-// Manual CRUD over the recurring-series registry. No detection: at n=1,
-// configuring fifteen known series is cheaper than inferring them. Each series
-// generates dated planned items forward; the matcher text is what links the
-// bank's arrivals back to it.
+// Manual CRUD over the recurring-series registry — the automation layer of
+// the monthly control: each series feeds its category's objective. The system
+// proposes possible recurrings detected in the history (badge-counted below);
+// the user accepts a proposal (editable — amounts are approximate, bills
+// vary) or dismisses it, or creates a series from scratch. No account field:
+// accounts carry no semantics in planning.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Repeat, Trash2 } from "lucide-react";
+import { Loader2, Plus, Repeat, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -20,10 +22,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency } from "@/lib/formatters";
+import type { RecurringSuggestion } from "@/lib/recurring/detect";
 import {
   createSeries,
   updateSeries,
   deleteSeries,
+  dismissRecurringSuggestion,
   type SeriesFields,
 } from "@/app/(app)/recurring/actions";
 
@@ -33,7 +37,6 @@ export interface SeriesVM {
   matcher: string;
   direction: "DEBIT" | "CREDIT";
   categoryId: string | null;
-  bankAccountId: string | null;
   cadence: SeriesFields["cadence"];
   expectedAmount: number;
   windowFromDay: number | null;
@@ -45,8 +48,8 @@ export interface SeriesVM {
 
 interface SeriesManagerProps {
   series: SeriesVM[];
+  suggestions: RecurringSuggestion[];
   categories: Category[];
-  accounts: { id: string; name: string }[];
   currency: string;
   locale: string;
 }
@@ -64,7 +67,6 @@ interface Draft {
   matcher: string;
   direction: "DEBIT" | "CREDIT";
   categoryId: string | null;
-  bankAccountId: string | null;
   cadence: SeriesFields["cadence"];
   expectedAmount: string;
   windowFromDay: string;
@@ -79,7 +81,6 @@ const EMPTY: Draft = {
   matcher: "",
   direction: "DEBIT",
   categoryId: null,
-  bankAccountId: null,
   cadence: "MONTHLY",
   expectedAmount: "",
   windowFromDay: "",
@@ -88,10 +89,17 @@ const EMPTY: Draft = {
   active: true,
 };
 
-export function SeriesManager({ series, categories, accounts, currency, locale }: SeriesManagerProps) {
+export function SeriesManager({
+  series,
+  suggestions,
+  categories,
+  currency,
+  locale,
+}: SeriesManagerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
 
@@ -102,7 +110,6 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
       matcher: s.matcher,
       direction: s.direction,
       categoryId: s.categoryId,
-      bankAccountId: s.bankAccountId,
       cadence: s.cadence,
       expectedAmount: String(s.expectedAmount),
       windowFromDay: s.windowFromDay != null ? String(s.windowFromDay) : "",
@@ -112,14 +119,44 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
     });
   }
 
+  function applySuggestion(s: RecurringSuggestion) {
+    setDraft({
+      id: null,
+      displayName: s.displayName,
+      matcher: s.merchantKey,
+      direction: s.direction,
+      categoryId: s.categoryId,
+      cadence: s.cadence,
+      expectedAmount: String(s.expectedAmount),
+      windowFromDay: s.windowFromDay != null ? String(s.windowFromDay) : "",
+      windowToDay: s.windowToDay != null ? String(s.windowToDay) : "",
+      anchorMonthEnd: false,
+      active: true,
+    });
+  }
+
+  function dismiss(merchantKey: string) {
+    startTransition(async () => {
+      try {
+        await dismissRecurringSuggestion(merchantKey);
+        router.refresh();
+      } catch {
+        // refresh restores truth
+      }
+    });
+  }
+
   function save() {
     if (!draft) return;
+    if (!draft.categoryId) {
+      setError("Pick a category — the series feeds that category's objective");
+      return;
+    }
     const fields: SeriesFields = {
       displayName: draft.displayName,
       matcher: draft.matcher,
       direction: draft.direction,
       categoryId: draft.categoryId,
-      bankAccountId: draft.bankAccountId,
       cadence: draft.cadence,
       expectedAmount: Number(draft.expectedAmount),
       windowFromDay: draft.windowFromDay ? Number(draft.windowFromDay) : null,
@@ -140,13 +177,17 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
     });
   }
 
-  function remove(id: string) {
+  function confirmedRemove() {
+    if (!confirmDelete) return;
+    const { id } = confirmDelete;
     startTransition(async () => {
       try {
         await deleteSeries(id);
+        setConfirmDelete(null);
         router.refresh();
       } catch {
-        // refresh restores truth
+        setConfirmDelete(null);
+        router.refresh();
       }
     });
   }
@@ -156,11 +197,68 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
 
   return (
     <div className="space-y-6">
+      {suggestions.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-4 w-4 text-brand" />
+              Detected
+              <Badge variant="brand" className="h-5 min-w-5 justify-center px-1 text-xs">
+                {suggestions.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {suggestions.map((s) => (
+                <li key={`${s.direction}:${s.merchantKey}`} className="py-2 text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {s.displayName}
+                    </span>
+                    <span
+                      className={`shrink-0 tabular-nums ${
+                        s.direction === "CREDIT" ? "text-success" : ""
+                      }`}
+                    >
+                      ~{fmt(s.expectedAmount)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0"
+                      onClick={() => applySuggestion(s)}
+                      disabled={isPending}
+                    >
+                      Use
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground"
+                      onClick={() => dismiss(s.merchantKey)}
+                      disabled={isPending}
+                      title="Dismiss suggestion"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence} ·{" "}
+                    {s.occurrences}× · last {s.lastDate}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {series.length === 0 ? (
         <EmptyState
           icon={Repeat}
           title="Register your standing charges"
-          description="Rent, mortgage, school, utilities, subscriptions — each series generates its expected charges forward and the app matches arrivals against them."
+          description="Each series feeds its category in the monthly control and shows up in Upcoming."
         >
           <Button onClick={() => setDraft({ ...EMPTY })}>
             <Plus className="mr-2 h-4 w-4" />
@@ -199,7 +297,7 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                             <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
                           )}
                         </button>
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
                           {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
                           {s.anchorMonthEnd
                             ? " · month end"
@@ -217,9 +315,9 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 shrink-0 text-muted-foreground"
-                          onClick={() => remove(s.id)}
+                          onClick={() => setConfirmDelete({ id: s.id, name: s.displayName })}
                           disabled={isPending}
-                          title="Delete series (and its pending planned items)"
+                          title="Delete series"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -257,10 +355,6 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                   />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                The matcher is looked for (accents and case ignored) inside a
-                transaction&apos;s description to link the arrival to this series.
-              </p>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -277,7 +371,7 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sr-amount">Expected amount ({currency})</Label>
+                  <Label htmlFor="sr-amount">Amount ({currency}, approx.)</Label>
                   <Input
                     id="sr-amount"
                     type="number"
@@ -301,29 +395,15 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Account</Label>
-                  <SimpleSelect
-                    value={draft.bankAccountId ?? "none"}
-                    onValueChange={(v) => setDraft({ ...draft, bankAccountId: v === "none" ? null : v })}
-                    options={[
-                      { value: "none", label: "Not set" },
-                      ...accounts.map((a) => ({ value: a.id, label: a.name })),
-                    ]}
-                    ariaLabel="Account"
+                  <Label>Category</Label>
+                  <CategorySelect
+                    defaultValue={draft.categoryId ?? undefined}
+                    onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
+                    categories={categories}
+                    ariaLabel="Series category"
                     className="w-full"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Category {draft.direction === "DEBIT" ? "" : "(optional)"}</Label>
-                <CategorySelect
-                  defaultValue={draft.categoryId ?? undefined}
-                  onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
-                  categories={categories}
-                  ariaLabel="Series category"
-                  className="w-full"
-                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -359,8 +439,7 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                   checked={draft.anchorMonthEnd}
                   onCheckedChange={(c) => setDraft({ ...draft, anchorMonthEnd: c === true })}
                 />
-                Charges on the LAST day of the month (mortgage-style — survives
-                short months)
+                Charges on the LAST day of the month
               </label>
               {draft.id && (
                 <label className="flex items-center gap-2 text-sm">
@@ -368,7 +447,7 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                     checked={draft.active}
                     onCheckedChange={(c) => setDraft({ ...draft, active: c === true })}
                   />
-                  Active (paused series stop generating planned charges)
+                  Active
                 </label>
               )}
 
@@ -380,6 +459,38 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
                 <Button onClick={save} disabled={isPending}>
                   {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Save
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmDelete !== null}
+        onOpenChange={(o) => {
+          if (!o && !isPending) setConfirmDelete(null);
+        }}
+      >
+        <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
+          <DialogTitle>Delete series?</DialogTitle>
+          {confirmDelete && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{confirmDelete.name}</span>{" "}
+                and its pending expected charges are removed.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmDelete(null)}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={confirmedRemove} disabled={isPending}>
+                  {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Delete
                 </Button>
               </div>
             </div>

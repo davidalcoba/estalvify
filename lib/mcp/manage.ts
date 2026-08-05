@@ -571,7 +571,10 @@ async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
   if (!Number.isFinite(fields.expectedAmount) || fields.expectedAmount < 0) {
     throw new Error("Invalid expectedAmount");
   }
-  if (fields.categoryId) await assertOwnedCategory(userId, fields.categoryId);
+  // A series is the recurring base of its category's objective in the monthly
+  // control — without a category it would feed nothing.
+  if (!fields.categoryId) throw new Error("categoryId is required");
+  await assertOwnedCategory(userId, fields.categoryId);
   if (fields.bankAccountId) {
     const account = await prisma.bankAccount.findFirst({
       where: { id: fields.bankAccountId, userId },
@@ -675,8 +678,22 @@ export async function deleteSeriesForUser(userId: string, seriesId: string) {
     select: { id: true },
   });
   if (!existing) throw new Error("Series not found");
-  // Cascade removes its planned instances (matched history included).
-  await prisma.recurringSeries.delete({ where: { id: seriesId } });
+  // Deleting retires the series GOING FORWARD — past months keep their
+  // history. PENDING expectations disappear with it; MATCHED/MISSED
+  // instances are detached instead (they become standalone records of what
+  // happened, keeping their month, amount and status), so a closed month's
+  // base, cascade and performance never rewrite. Without the detach, the FK
+  // cascade would erase them.
+  await prisma.$transaction([
+    prisma.plannedItem.deleteMany({
+      where: { userId, recurringSeriesId: seriesId, status: "PENDING" },
+    }),
+    prisma.plannedItem.updateMany({
+      where: { userId, recurringSeriesId: seriesId },
+      data: { recurringSeriesId: null },
+    }),
+    prisma.recurringSeries.delete({ where: { id: seriesId } }),
+  ]);
   return { deleted: seriesId };
 }
 

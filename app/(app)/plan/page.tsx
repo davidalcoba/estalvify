@@ -1,12 +1,12 @@
-// Monthly control view: the cascade whose bottom line is the expected result
-// (the goal), and the category objectives judged against the month's pace.
+// Budget view: the cascade whose bottom line is the expected result (the
+// goal), and the category objectives judged against the month's pace.
 // Control, not operations — the operating number lives on the dashboard,
 // weekly. Navigable month by month (?y=&m=): past months are read as closed
 // (pace = 100%), future ones arrive already assigned via propagation.
 //
-// Only the cards re-suspend when the month changes — the header and the month
-// nav stay interactive and the skeleton is the navigation feedback (the sync +
-// status build is the slow part, so it lives inside the boundary).
+// The month shell is a client component: changing month swaps the cards to
+// the skeleton on the click itself (useTransition), while the slow work
+// (sync + status build) streams behind the Suspense boundary.
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -16,25 +16,14 @@ import { getUserPrefs } from "@/lib/user-prefs";
 import { buildMonthStatus } from "@/lib/budget/month-status";
 import { currentYearMonth } from "@/lib/analytics/spending";
 import { syncPlannedState } from "@/lib/planned/engine";
-import { PageHeader } from "@/components/layout/page-header";
-import { ListCardSkeleton } from "@/components/layout/skeletons";
+import { MonthShell, BudgetBodySkeleton } from "@/components/budget/month-shell";
 import { CascadeCard } from "@/components/budget/cascade-card";
 import { ObjectivesCard } from "@/components/budget/objectives-card";
-import { MonthNav } from "@/components/budget/month-nav";
 
-export const metadata: Metadata = { title: "Monthly control" };
+export const metadata: Metadata = { title: "Budget" };
 
 interface PageProps {
   searchParams: Promise<{ y?: string; m?: string }>;
-}
-
-function PlanBodySkeleton() {
-  return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <ListCardSkeleton rows={9} titleWidth="w-40" />
-      <ListCardSkeleton rows={6} titleWidth="w-44" />
-    </div>
-  );
 }
 
 async function PlanBody({
@@ -94,21 +83,15 @@ export default async function PlanPage({ searchParams }: PageProps) {
   const isCurrent = target.year === current.year && target.month === current.month;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Monthly control"
-        actions={
-          <MonthNav
-            year={target.year}
-            month={target.month}
-            isCurrent={isCurrent}
-            locale={prefs.locale}
-          />
-        }
-      />
-      <Suspense key={`${target.year}-${target.month}`} fallback={<PlanBodySkeleton />}>
+    <MonthShell
+      year={target.year}
+      month={target.month}
+      isCurrent={isCurrent}
+      locale={prefs.locale}
+    >
+      <Suspense key={`${target.year}-${target.month}`} fallback={<BudgetBodySkeleton />}>
         <PlanBody userId={userId} target={target} prefs={prefs} isCurrent={isCurrent} />
       </Suspense>
-    </div>
+    </MonthShell>
   );
 }
