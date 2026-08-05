@@ -87,7 +87,9 @@ export default async function PlanPage({ searchParams }: PageProps) {
       year={target.year}
       month={target.month}
       isCurrent={isCurrent}
-      locale={prefs.locale}
+      // Dates render with the language preference, not the number locale —
+      // same split Settings applies everywhere else.
+      locale={prefs.language}
     >
       <Suspense key={`${target.year}-${target.month}`} fallback={<BudgetBodySkeleton />}>
         <PlanBody userId={userId} target={target} prefs={prefs} isCurrent={isCurrent} />

@@ -141,7 +141,7 @@ export function ObjectivesCard({
         ) : (
           <>
             {variables.length > 0 && (
-              <ul className="space-y-3">
+              <ul className="space-y-4">
                 {variables.map((o) => {
                   const consumedPct =
                     o.assigned > 0 ? Math.round((o.consumed / o.assigned) * 100) : 0;
@@ -186,13 +186,13 @@ export function ObjectivesCard({
                           {consumedPct}%
                         </span>
                       </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
+                      <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
                         <span className="tabular-nums text-muted-foreground">
                           {fmt(o.consumed)}
                           <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
                         </span>
                       </div>
-                      <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
                           className={`h-full rounded-full ${
                             over ? "bg-destructive" : ahead ? "bg-warning" : "bg-primary"
