@@ -16,6 +16,7 @@ import {
   matchPlannedItems,
   isMissed,
   significantDeviation,
+  normalizeDescriptor,
   type PlannedForMatch,
   type TransactionForMatch,
 } from "./matching";
@@ -309,16 +310,39 @@ export async function runPlannedMatching(
   if (writes.length > 0) await prisma.$transaction(writes);
 }
 
+/** How far back lastSeenAt scans the feed — long enough for any cadence. */
+const LAST_SEEN_LOOKBACK_MONTHS = 18;
+
 /**
- * Keep each active series' nextExpectedDate pointing at its earliest still
- * PENDING occurrence (the window's first day). It advances as items match or
- * miss, and doubles as the anchor for non-monthly cadences.
+ * Recompute each active series' schedule fields FROM REALITY, idempotently:
+ *
+ *  - `nextExpectedDate` = the window-start of the series' earliest still-PENDING
+ *    occurrence. For MONTHLY that derives from windowFromDay/anchorMonthEnd of
+ *    the planned item — no anchorDate needed — and it advances as items match
+ *    or miss.
+ *  - `lastSeenAt` = the value date of the most recent TRANSACTION the series
+ *    actually recognizes (its rule's condition tree, or its matcher text over
+ *    the descriptor). Deriving it from the feed — not from matched planned
+ *    items — is what makes it true: a charge whose month predates the planned
+ *    horizon (e.g. the mortgage) still counts as "last seen", and a series that
+ *    can't recognize anything correctly reads back as null.
+ *
+ * Both are written only when they change.
  */
 export async function refreshSeriesSchedule(userId: string): Promise<void> {
-  const [series, pendingItems] = await Promise.all([
+  const lookback = new Date();
+  lookback.setUTCMonth(lookback.getUTCMonth() - LAST_SEEN_LOOKBACK_MONTHS);
+  const [series, pendingItems, transactions] = await Promise.all([
     prisma.recurringSeries.findMany({
       where: { userId, active: true },
-      select: { id: true, nextExpectedDate: true },
+      select: {
+        id: true,
+        direction: true,
+        merchantKey: true,
+        nextExpectedDate: true,
+        lastSeenAt: true,
+        rule: { select: { conditions: true, isActive: true } },
+      },
     }),
     prisma.plannedItem.findMany({
       where: { userId, status: "PENDING", recurringSeriesId: { not: null } },
@@ -332,8 +356,20 @@ export async function refreshSeriesSchedule(userId: string): Promise<void> {
         anchorMonthEnd: true,
       },
     }),
+    prisma.transaction.findMany({
+      where: { userId, valueDate: { gte: lookback } },
+      select: {
+        valueDate: true,
+        direction: true,
+        amount: true,
+        description: true,
+        remittanceInfo: true,
+        bankAccount: { select: { name: true } },
+      },
+    }),
   ]);
 
+  // nextExpectedDate — earliest PENDING window start per series.
   const earliest = new Map<string, string>();
   for (const p of pendingItems) {
     const ym: YearMonth = { year: p.year, month: p.month };
@@ -347,18 +383,60 @@ export async function refreshSeriesSchedule(userId: string): Promise<void> {
     if (!prev || date < prev) earliest.set(key, date);
   }
 
+  // lastSeenAt — newest recognized transaction per series, from the feed.
+  const feed = transactions.map((t) => ({
+    date: t.valueDate.toISOString().slice(0, 10),
+    descriptor: normalizeDescriptor(`${t.description ?? ""} ${t.remittanceInfo ?? ""}`),
+    raw: {
+      description: t.description,
+      remittanceInfo: t.remittanceInfo,
+      amount: Math.abs(Number(t.amount.toString())),
+      direction: t.direction,
+      accountName: t.bankAccount?.name ?? null,
+    } as MatchableTransaction,
+  }));
+  const lastSeen = new Map<string, string>();
+  for (const s of series) {
+    let recognizes: (tx: (typeof feed)[number]) => boolean;
+    let parsed: ReturnType<typeof parseConditions> | null = null;
+    if (s.rule) {
+      try {
+        parsed = parseConditions(s.rule.conditions);
+      } catch {
+        parsed = null;
+      }
+    }
+    if (parsed) {
+      const group = parsed;
+      recognizes = (tx) => matchesNode(tx.raw, group);
+    } else {
+      const needle = normalizeDescriptor(s.merchantKey);
+      recognizes = (tx) =>
+        tx.raw.direction === s.direction &&
+        needle.length >= 3 &&
+        tx.descriptor.includes(needle);
+    }
+    let best: string | null = null;
+    for (const tx of feed) {
+      if (recognizes(tx) && (!best || tx.date > best)) best = tx.date;
+    }
+    if (best) lastSeen.set(s.id, best);
+  }
+
   const writes: Prisma.PrismaPromise<unknown>[] = [];
   for (const s of series) {
+    const data: { nextExpectedDate?: Date; lastSeenAt?: Date | null } = {};
     const next = earliest.get(s.id);
-    if (!next) continue;
-    const stored = s.nextExpectedDate?.toISOString().slice(0, 10) ?? null;
-    if (stored === next) continue;
-    writes.push(
-      prisma.recurringSeries.update({
-        where: { id: s.id },
-        data: { nextExpectedDate: new Date(`${next}T00:00:00Z`) },
-      })
-    );
+    const storedNext = s.nextExpectedDate?.toISOString().slice(0, 10) ?? null;
+    if (next && next !== storedNext) data.nextExpectedDate = new Date(`${next}T00:00:00Z`);
+
+    const seen = lastSeen.get(s.id) ?? null;
+    const storedSeen = s.lastSeenAt?.toISOString().slice(0, 10) ?? null;
+    if (seen !== storedSeen) data.lastSeenAt = seen ? new Date(`${seen}T00:00:00Z`) : null;
+
+    if (Object.keys(data).length > 0) {
+      writes.push(prisma.recurringSeries.update({ where: { id: s.id }, data }));
+    }
   }
   if (writes.length > 0) await prisma.$transaction(writes);
 }

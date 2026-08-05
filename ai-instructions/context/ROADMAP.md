@@ -74,10 +74,29 @@ recurrentes, etc.).
 >   (`recurring_series.ruleId`): el árbol de condiciones de la regla decide el
 >   reconocimiento y la categoría SE FUERZA a la de la regla — plan y realidad
 >   no pueden divergir. Guardar un matcher lo audita contra 12 meses de
->   histórico y se bloquea si toca >2 categorías raíz. `nextExpectedDate` se
->   mantiene (primer PENDING de la serie) y `lastSeenAt` solo lo escribe un
->   match real. MCP: `update_planned_item` nuevo; `ruleId` en
+>   histórico y se bloquea si toca >2 categorías raíz. `refreshSeriesSchedule`
+>   recalcula el horario DESDE LA REALIDAD en cada sync: `nextExpectedDate` = el
+>   inicio de ventana del primer PENDING (para MONTHLY se deriva de
+>   windowFromDay/anchorMonthEnd, sin anchorDate), y `lastSeenAt` = la fecha de
+>   la transacción más reciente que la serie reconoce (árbol de la regla o
+>   matcher sobre el descriptor) — no un match de planned item, así que un cargo
+>   anterior al horizonte (la hipoteca) cuenta igual, y una serie que no
+>   reconoce nada vuelve a null. MCP: `update_planned_item` nuevo; `ruleId` en
 >   create/update_recurring_series; descripción de get_budgets corregida.
+>   Además, un `ReferenceError` en producción (un `export type` en un módulo
+>   `"use server"` que Turbopack dejaba como referencia en runtime) tumbaba TODAS
+>   las server actions de /recurring — corregido, con un smoke test de contrato
+>   MCP↔handler (`lib/mcp/tools.smoke.test.ts`, una lectura por familia + el
+>   split read/write). Datos de producción alineados: matcher del alquiler
+>   `ALQUILER`→`COMERCIO EDIFICACION` (dejaba de casar taxis), O2→Suministros
+>   Barcelona, Ring enlazado a su regla → Suministros Palafrugell.
+> - **Deuda v3.2 — seguros gemelos vs. matcher único.** El guard de importe se
+>   diseñó para que dos series compartan descriptor y se separen por importe,
+>   pero `@@unique(userId, merchantKey)` impide que compartan el `merchantKey`.
+>   Los dos "BBVA PLAN ESTARSEGURO" (hogar 59,49 / vida 10,97, descriptor
+>   idéntico sin "hogar"/"vida") no pueden llevar el mismo matcher; hoy casan
+>   por categoría+importe, que basta. El cierre correcto es enlazar cada uno a
+>   una regla con condición de importe (como Ring), no forzar el matcher.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
