@@ -37,17 +37,25 @@ export function normalizeRequestedScope(raw: string | null | undefined): string 
 }
 
 /**
- * Scopes carried by a token claim. A token with NO scope claim predates scope
- * enforcement (or was minted from a legacy refresh token) and keeps full
- * access — those tokens expire within the hour, and refusing them would break
- * a working connector on deploy.
+ * Scopes carried by a token claim, for enforcement. Only recognized scopes
+ * count; a claim that carries NONE of them keeps full access. That covers two
+ * cases that must not lock out a working connector:
+ *   - no scope claim at all (token predates scope enforcement), and
+ *   - a legacy/opaque scope value the client sent before we modelled scopes
+ *     (e.g. "mcp") that an old authorize flow stored verbatim and refresh-token
+ *     rotation carries forward.
+ * It mirrors normalizeRequestedScope, so an unknown scope means "full", never
+ * "nothing" — a token that could do nothing is worse than the pre-scope status
+ * quo. A claim that DOES name a known scope (e.g. "read") is honored exactly,
+ * so a genuine read-only grant still can't write.
  */
 export function scopesFromClaim(claim: string | null | undefined): string[] {
-  const scopes = (claim ?? "")
+  const requested = (claim ?? "")
     .split(/\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
-  return scopes.length > 0 ? scopes : [...KNOWN_SCOPES];
+  const known = KNOWN_SCOPES.filter((s) => requested.includes(s));
+  return known.length > 0 ? known : [...KNOWN_SCOPES];
 }
 
 /** Does a granted scope list authorize an operation needing `needed`? */
