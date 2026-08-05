@@ -185,8 +185,26 @@ export async function buildMonthStatus(
   }
   const today = todayInTimezone(timezone);
   const { start, end } = monthRange(year, month);
+  const isCurrentView = ahead === 0;
+  // The 14-week ops lookback only feeds the weekly counters, which are a
+  // current-month concept — when navigating to another month the window
+  // narrows to that month, which is most of what makes navigation fast.
   const opsStart = new Date(start);
   opsStart.setUTCDate(opsStart.getUTCDate() - OPS_LOOKBACK_DAYS);
+  const windowStart = isCurrentView ? opsStart : start;
+
+  // A matched transaction can only land within the tolerance of its item's
+  // month, so the exclusion set is bounded to items whose (year, month) falls
+  // inside the tx window ± one month — not every matched item ever.
+  const matchedMonths: { year: number; month: number }[] = [];
+  {
+    const cursor = new Date(Date.UTC(windowStart.getUTCFullYear(), windowStart.getUTCMonth() - 1, 1));
+    const stop = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 1));
+    while (cursor <= stop) {
+      matchedMonths.push({ year: cursor.getUTCFullYear(), month: cursor.getUTCMonth() + 1 });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+  }
 
   const [plannedMonth, matchedIdsRows, series, txWindow, monthFlows, budgets, categories, accounts] =
     await Promise.all([
@@ -195,7 +213,7 @@ export async function buildMonthStatus(
         select: { direction: true, amount: true, matchedAmount: true, status: true },
       }),
       prisma.plannedItem.findMany({
-        where: { userId, matchedTransactionId: { not: null } },
+        where: { userId, matchedTransactionId: { not: null }, OR: matchedMonths },
         select: { matchedTransactionId: true },
       }),
       prisma.recurringSeries.findMany({
@@ -209,7 +227,7 @@ export async function buildMonthStatus(
         where: {
           userId,
           direction: "DEBIT",
-          valueDate: { gte: opsStart },
+          valueDate: { gte: windowStart, lt: end },
           categorization: {
             is: { status: "APPROVED", category: { is: { kind: "EXPENSE" } } },
           },
@@ -314,28 +332,69 @@ export async function buildMonthStatus(
     .filter((i) => i.rollover)
     .reduce((sum, i) => sum + i.assigned, 0);
 
-  // Spending per category per month for the fund categories (their balances).
+  // Second query wave, all concurrent: fund spend (bounded to the funds'
+  // first assigned month — earlier spend can't touch a balance), the
+  // month-boundary balance snapshots, and the cushion baseline.
   const fundCategoryIds = currentItems.filter((i) => i.rollover).map((i) => i.categoryId);
-  const fundSpend = new Map<string, number>();
-  if (fundCategoryIds.length > 0) {
-    const rows = await prisma.transaction.findMany({
+  let fundEpoch: Date | null = null;
+  for (const list of rolloverHistory.values()) {
+    for (const r of list) {
+      const d = new Date(Date.UTC(r.year, r.month - 1, 1));
+      if (!fundEpoch || d < fundEpoch) fundEpoch = d;
+    }
+  }
+  const baselineStart = new Date(Date.UTC(year, month - 1 - CUSHION_BASELINE_MONTHS, 1));
+  const [fundRows, startSnapshots, endSnapshots, baselineAgg] = await Promise.all([
+    fundCategoryIds.length > 0 && fundEpoch
+      ? prisma.transaction.findMany({
+          where: {
+            userId,
+            direction: "DEBIT",
+            valueDate: { gte: fundEpoch },
+            categorization: {
+              is: { status: "APPROVED", categoryId: { in: fundCategoryIds } },
+            },
+          },
+          select: {
+            amount: true,
+            valueDate: true,
+            categorization: { select: { categoryId: true } },
+          },
+        })
+      : Promise.resolve([]),
+    Promise.all(
+      accounts.map((a) =>
+        prisma.accountBalance.findFirst({
+          where: { bankAccountId: a.id, date: { lt: start } },
+          orderBy: { date: "desc" },
+          select: { balance: true },
+        })
+      )
+    ),
+    Promise.all(
+      accounts.map((a) =>
+        prisma.accountBalance.findFirst({
+          where: { bankAccountId: a.id, date: { lt: end } },
+          orderBy: { date: "desc" },
+          select: { balance: true },
+        })
+      )
+    ),
+    prisma.transaction.aggregate({
+      // Average monthly spend over the trailing full months, for the cushion.
       where: {
         userId,
         direction: "DEBIT",
-        categorization: {
-          is: { status: "APPROVED", categoryId: { in: fundCategoryIds } },
-        },
+        valueDate: { gte: baselineStart, lt: start },
+        NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
       },
-      select: {
-        amount: true,
-        valueDate: true,
-        categorization: { select: { categoryId: true } },
-      },
-    });
-    for (const row of rows) {
-      const key = `${row.categorization!.categoryId}:${row.valueDate.getUTCFullYear()}-${row.valueDate.getUTCMonth() + 1}`;
-      fundSpend.set(key, (fundSpend.get(key) ?? 0) + Math.abs(Number(row.amount.toString())));
-    }
+      _sum: { amount: true },
+    }),
+  ]);
+  const fundSpend = new Map<string, number>();
+  for (const row of fundRows) {
+    const key = `${row.categorization!.categoryId}:${row.valueDate.getUTCFullYear()}-${row.valueDate.getUTCMonth() + 1}`;
+    fundSpend.set(key, (fundSpend.get(key) ?? 0) + Math.abs(Number(row.amount.toString())));
   }
 
   // Consumed in the VIEWED month per category, from the variable set (by date
@@ -430,26 +489,6 @@ export async function buildMonthStatus(
   // no semantics — always the sum of all of them). For the current month the
   // "end" snapshot is simply the latest one; for a past month it is the last
   // snapshot inside it, so navigation shows that month's own delta.
-  const [startSnapshots, endSnapshots] = await Promise.all([
-    Promise.all(
-      accounts.map((a) =>
-        prisma.accountBalance.findFirst({
-          where: { bankAccountId: a.id, date: { lt: start } },
-          orderBy: { date: "desc" },
-          select: { balance: true },
-        })
-      )
-    ),
-    Promise.all(
-      accounts.map((a) =>
-        prisma.accountBalance.findFirst({
-          where: { bankAccountId: a.id, date: { lt: end } },
-          orderBy: { date: "desc" },
-          select: { balance: true },
-        })
-      )
-    ),
-  ]);
   const consolidatedBalance =
     accounts.length > 0 && endSnapshots.some((s) => s !== null)
       ? round(
@@ -469,17 +508,6 @@ export async function buildMonthStatus(
         )
       : null;
 
-  // Average monthly spend over the trailing full months, for the cushion.
-  const baselineStart = new Date(Date.UTC(year, month - 1 - CUSHION_BASELINE_MONTHS, 1));
-  const baselineAgg = await prisma.transaction.aggregate({
-    where: {
-      userId,
-      direction: "DEBIT",
-      valueDate: { gte: baselineStart, lt: start },
-      NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
-    },
-    _sum: { amount: true },
-  });
   const avgMonthlySpend = baselineAgg._sum.amount
     ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
     : 0;

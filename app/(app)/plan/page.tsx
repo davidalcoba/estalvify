@@ -41,12 +41,19 @@ async function PlanBody({
   userId,
   target,
   prefs,
+  isCurrent,
 }: {
   userId: string;
   target: { year: number; month: number };
   prefs: { timezone: string; currency: string; locale: string };
+  isCurrent: boolean;
 }) {
-  await syncPlannedState(userId, prefs.timezone, prefs.currency, prefs.locale);
+  // The planned-state sync (generation + matching) is the expensive step and
+  // only the current month's numbers depend on it being fresh this second —
+  // navigation to other months reads already-settled state, so it skips it.
+  if (isCurrent) {
+    await syncPlannedState(userId, prefs.timezone, prefs.currency, prefs.locale);
+  }
   const [status, categories] = await Promise.all([
     buildMonthStatus(userId, prefs.timezone, target),
     prisma.category.findMany({
@@ -100,7 +107,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         }
       />
       <Suspense key={`${target.year}-${target.month}`} fallback={<PlanBodySkeleton />}>
-        <PlanBody userId={userId} target={target} prefs={prefs} />
+        <PlanBody userId={userId} target={target} prefs={prefs} isCurrent={isCurrent} />
       </Suspense>
     </div>
   );
