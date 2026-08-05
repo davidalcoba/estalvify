@@ -46,9 +46,21 @@ export interface SeriesVM {
   lastSeenAt: string | null;
 }
 
+/** "Make recurring" from a transaction: the form opens prefilled with this. */
+export interface SeriesPrefill {
+  displayName: string;
+  matcher: string;
+  direction: "DEBIT" | "CREDIT";
+  categoryId: string | null;
+  expectedAmount: string;
+  windowFromDay: string;
+  windowToDay: string;
+}
+
 interface SeriesManagerProps {
   series: SeriesVM[];
   suggestions: RecurringSuggestion[];
+  prefill?: SeriesPrefill | null;
   categories: Category[];
   currency: string;
   locale: string;
@@ -92,13 +104,16 @@ const EMPTY: Draft = {
 export function SeriesManager({
   series,
   suggestions,
+  prefill,
   categories,
   currency,
   locale,
 }: SeriesManagerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(
+    prefill ? { ...EMPTY, ...prefill } : null
+  );
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
   // The matcher is internal machinery (arrival recognition); it hides under
@@ -182,7 +197,9 @@ export function SeriesManager({
         if (draft.id) await updateSeries(draft.id, fields);
         else await createSeries(fields);
         setDraft(null);
-        router.refresh();
+        // Drop ?fromTx so a reload doesn't reopen the prefilled form.
+        if (prefill) router.replace("/recurring");
+        else router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save");
       }
