@@ -1,4 +1,4 @@
-// Skeleton shown by Next.js while the Monthly control server component resolves.
+// Skeleton shown by Next.js while the Budget server component resolves.
 
 import {
   PageHeaderSkeleton,
