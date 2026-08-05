@@ -68,9 +68,7 @@ export function WeeklyCard({
           </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          {fmt(weekly.dailyRate)}/day · {fmt(weekly.remainingMonth)} left this
-          month — the rate recalculates daily, so underspending raises it by
-          itself
+          {fmt(weekly.dailyRate)}/day · {fmt(weekly.remainingMonth)} left
         </p>
 
         {status.composition.length > 0 && (
