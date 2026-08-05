@@ -108,16 +108,21 @@ recurrentes, etc.).
 >   solo a los PENDING), para que un recategorizado (O2 → Suministros) no deje
 >   el cargo del mes bajo la categoría vieja; los meses cerrados NUNCA se
 >   reescriben. Añadida categoría **Impuestos** (el IBI de 600 € estaba en
->   Suministros Palafrugell, inflándola). **La planificación empieza en agosto
->   2026** (fecha de siembra): no hay planned items en meses anteriores, así que
->   no hay performance ni MISSED antes de esa fecha — es esperado, no un fallo.
-> - **Deuda v3.3 — varios cargos por periodo (matching agregado).** El modelo
->   asume 1 cargo por planned item, pero algunas categorías reciben varios: AFA
->   Teixidores (3×20 € el mismo día = 60), Escola Gràcia (6 adeudos en julio que
->   suman ~259). Hoy la serie casa uno y deja el resto fuera del plan, así que el
->   bloque de Educación (~320 €/mes) queda mal. Pendiente: que un planned item
->   agregue TODOS los cargos que reconoce dentro de la ventana (`matchedAmount` =
->   suma) hasta cerrar el esperado, en vez de exigir un único cargo.
+>   Suministros Palafrugell, inflándola). **Backfill del histórico**: el plan se
+>   reconstruyó hacia atrás desde las series hasta el primer movimiento (dic
+>   2025), generando los planned items de los meses cerrados y casándolos contra
+>   las transacciones reales (aggregate-aware) — así hay performance y MISSED
+>   histórico verdadero (p. ej. julio: Escola 258,95 € en 6 adeudos), no
+>   inventado. La generación en vivo sigue siendo hacia delante; el backfill es
+>   una reconstrucción puntual.
+> - **v3.3 — varios cargos por periodo (matching agregado).** Resuelto con el
+>   flag opt-in `RecurringSeries.aggregate`: un planned item suma TODOS los
+>   cargos que su matcher/regla reconoce en la ventana (`matchedAmount` = suma,
+>   ids en `PlannedItem.matchedTransactionIds`), sin exigir importes iguales.
+>   Activado en AFA (3×20=60) y Escola (importes dispares → 258,95). Las series
+>   de un solo cargo mantienen el guard v3.2. La diferencia con Escola no era el
+>   agregado sino el horizonte: sus cargos son de julio y no había item de julio
+>   (lo resolvió el backfill).
 > - **Deuda v3.3 — `merchant` limpio en ingesta.** `normalizeDescriptor` ya
 >   pliega el ruido para el matching; falta extraer un campo `merchant` estable
 >   en la ingesta (sin "PAGO CON TARJETA", asteriscos de pasarela, sufijos de
