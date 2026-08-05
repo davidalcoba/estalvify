@@ -74,7 +74,13 @@ recurrentes, etc.).
 >   (`recurring_series.ruleId`): el árbol de condiciones de la regla decide el
 >   reconocimiento y la categoría SE FUERZA a la de la regla — plan y realidad
 >   no pueden divergir. Guardar un matcher lo audita contra 12 meses de
->   histórico y se bloquea si toca >2 categorías raíz. `refreshSeriesSchedule`
+>   histórico y se bloquea si **no casa nada** (0 hits ⇒ la serie solo hace
+>   MISSED pero se ve "sana", el caso que escondía los typos) o si toca >2
+>   categorías raíz. Y `normalizeDescriptor` pliega TODA la puntuación a espacios
+>   (el asterisco de pasarela "UBER *ONE", el punto donde el nombre lleva
+>   apóstrofo "d.Investigacio", los guiones de referencia SEPA) en el descriptor
+>   Y en el matcher, para que un matcher escrito desde el nombre comercial case
+>   el texto crudo del banco. `refreshSeriesSchedule`
 >   recalcula el horario DESDE LA REALIDAD en cada sync: `nextExpectedDate` = el
 >   inicio de ventana del primer PENDING (para MONTHLY se deriva de
 >   windowFromDay/anchorMonthEnd, sin anchorDate), y `lastSeenAt` = la fecha de

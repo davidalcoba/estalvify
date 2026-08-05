@@ -4,12 +4,22 @@
 
 import { isoDate, resolveWindow, type YearMonth } from "./schedule";
 
-/** Accent-fold + uppercase + collapse whitespace (mirrors the rule engine). */
+/**
+ * Accent-fold, uppercase, and fold every run of punctuation to a single space
+ * before collapsing whitespace. Bank descriptors carry noise that splits a
+ * merchant name mid-token — the payment-gateway asterisk ("UBER *ONE
+ * MEMBERSHIP"), a dot where a name has an apostrophe ("Institut d.Investigacio"
+ * vs a matcher written "d'Investigacio"), SEPA reference dashes. Folding all of
+ * it to spaces on BOTH the descriptor and the matcher (they share this function)
+ * lets a matcher written from the merchant's name match the raw feed. Digits are
+ * kept — amounts and account fragments can be part of a descriptor.
+ */
 export function normalizeDescriptor(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toUpperCase()
+    .replace(/[^A-Z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
