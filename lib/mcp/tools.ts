@@ -137,9 +137,12 @@ type ToolExtra = {
 function requireUserId(extra: ToolExtra, scope: KnownScope): string {
   const userId = extra.authInfo?.extra?.userId;
   if (!userId) throw new Error("Unauthenticated");
-  if (!hasScope(extra.authInfo?.scopes ?? [], scope)) {
+  const granted = extra.authInfo?.scopes ?? [];
+  if (!hasScope(granted, scope)) {
     throw new Error(
-      `Insufficient scope: this tool requires the "${scope}" scope`,
+      `Insufficient scope: this tool requires "${scope}" but the token grants ` +
+        `[${granted.join(", ") || "none"}]. Reconnect the MCP integration to ` +
+        `re-consent with the ${scope} scope.`,
     );
   }
   return userId;
