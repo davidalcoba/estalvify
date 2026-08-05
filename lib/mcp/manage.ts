@@ -548,8 +548,12 @@ export type SeriesCadenceInput =
 
 export interface SeriesFields {
   displayName: string;
-  /** Text the matcher looks for in a transaction's descriptors. */
-  matcher: string;
+  /**
+   * Text looked for in a transaction's descriptors to recognize this series'
+   * arrivals. Optional — defaults to displayName, which works whenever the
+   * series is named close to how the bank writes it.
+   */
+  matcher?: string | null;
   direction: "DEBIT" | "CREDIT";
   categoryId?: string | null;
   bankAccountId?: string | null;
@@ -565,9 +569,9 @@ export interface SeriesFields {
 
 async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
   const displayName = fields.displayName?.trim();
-  const matcher = fields.matcher?.trim();
   if (!displayName) throw new Error("displayName is required");
-  if (!matcher || matcher.length < 3) throw new Error("matcher needs at least 3 characters");
+  const matcher = fields.matcher?.trim() || displayName;
+  if (matcher.length < 3) throw new Error("matcher needs at least 3 characters");
   if (!Number.isFinite(fields.expectedAmount) || fields.expectedAmount < 0) {
     throw new Error("Invalid expectedAmount");
   }
@@ -635,13 +639,31 @@ export async function listSeriesForUser(userId: string) {
   }));
 }
 
+function rethrowDuplicateMatcher(err: unknown): never {
+  if (
+    err &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code?: string }).code === "P2002"
+  ) {
+    throw new Error(
+      "Another series already uses this matcher — give it a distinct matcher or name"
+    );
+  }
+  throw err;
+}
+
 export async function createSeriesForUser(userId: string, fields: SeriesFields) {
   const data = await normalizeSeriesFields(userId, fields);
-  const created = await prisma.recurringSeries.create({
-    data: { userId, ...data },
-    select: { id: true },
-  });
-  return { id: created.id };
+  try {
+    const created = await prisma.recurringSeries.create({
+      data: { userId, ...data },
+      select: { id: true },
+    });
+    return { id: created.id };
+  } catch (err) {
+    rethrowDuplicateMatcher(err);
+  }
 }
 
 export async function updateSeriesForUser(
@@ -655,7 +677,11 @@ export async function updateSeriesForUser(
   });
   if (!existing) throw new Error("Series not found");
   const data = await normalizeSeriesFields(userId, fields);
-  await prisma.recurringSeries.update({ where: { id: seriesId }, data });
+  try {
+    await prisma.recurringSeries.update({ where: { id: seriesId }, data });
+  } catch (err) {
+    rethrowDuplicateMatcher(err);
+  }
   // Future PENDING instances mirror the series definition.
   await prisma.plannedItem.updateMany({
     where: { userId, recurringSeriesId: seriesId, status: "PENDING" },

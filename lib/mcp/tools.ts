@@ -428,14 +428,14 @@ export function registerTools(server: McpServer): void {
     "create_recurring_series",
     {
       description:
-        "Register a standing charge or income. matcher: text found (accents/case folded) in " +
+        "Register a standing charge or income. matcher (optional, defaults to displayName): text found (accents/case folded) in " +
         "the transaction's descriptors — e.g. 'ALQUILER', 'O2 FIBRA'. windowFromDay/windowToDay " +
         "model charges with a variable date (rent: 1–6); anchorMonthEnd: true is for charges on " +
         "the month's LAST day (mortgage). anchorDate (YYYY-MM-DD, any date in a due month) " +
         "anchors BIMONTHLY/QUARTERLY/YEARLY cadences.",
       inputSchema: {
         displayName: z.string().max(120),
-        matcher: z.string().min(3).max(120),
+        matcher: z.string().min(3).max(120).optional(),
         direction: z.enum(["DEBIT", "CREDIT"]),
         categoryId: z.string(),
         bankAccountId: z.string().optional(),
@@ -484,7 +484,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         seriesId: z.string(),
         displayName: z.string().max(120),
-        matcher: z.string().min(3).max(120),
+        matcher: z.string().min(3).max(120).optional(),
         direction: z.enum(["DEBIT", "CREDIT"]),
         categoryId: z.string(),
         bankAccountId: z.string().optional(),

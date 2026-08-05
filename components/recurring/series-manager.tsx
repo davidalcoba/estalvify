@@ -101,6 +101,9 @@ export function SeriesManager({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
+  // The matcher is internal machinery (arrival recognition); it hides under
+  // Advanced and only unfolds when it actually differs from the name.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   // Optimistically hidden proposals: dismissing removes the row on the click
   // itself and persists in the background; a failure just brings it back.
   const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
@@ -108,6 +111,7 @@ export function SeriesManager({
   const fmt = (n: number) => formatCurrency(n, currency, locale);
 
   function openEdit(s: SeriesVM) {
+    setAdvancedOpen(s.matcher.trim() !== s.displayName.trim());
     setDraft({
       id: s.id,
       displayName: s.displayName,
@@ -124,6 +128,7 @@ export function SeriesManager({
   }
 
   function applySuggestion(s: RecurringSuggestion) {
+    setAdvancedOpen(false);
     setDraft({
       id: null,
       displayName: s.displayName,
@@ -250,7 +255,7 @@ export function SeriesManager({
           title="Register your recurring charges and income"
           description="Each series feeds its category in the Budget and shows up in Upcoming."
         >
-          <Button onClick={() => setDraft({ ...EMPTY })}>
+          <Button onClick={() => { setAdvancedOpen(false); setDraft({ ...EMPTY }); }}>
             <Plus className="mr-2 h-4 w-4" />
             Add series
           </Button>
@@ -259,7 +264,7 @@ export function SeriesManager({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Series</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setDraft({ ...EMPTY })} disabled={isPending}>
+            <Button variant="ghost" size="sm" onClick={() => { setAdvancedOpen(false); setDraft({ ...EMPTY }); }} disabled={isPending}>
               <Plus className="mr-1 h-3.5 w-3.5" />
               Series
             </Button>
@@ -405,25 +410,14 @@ export function SeriesManager({
           <DialogTitle>{draft?.id ? "Edit series" : "New series"}</DialogTitle>
           {draft && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="sr-name">Name</Label>
-                  <Input
-                    id="sr-name"
-                    placeholder="Alquiler Barcelona"
-                    value={draft.displayName}
-                    onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="sr-matcher">Matcher text</Label>
-                  <Input
-                    id="sr-matcher"
-                    placeholder="ALQUILER"
-                    value={draft.matcher}
-                    onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sr-name">Name</Label>
+                <Input
+                  id="sr-name"
+                  placeholder="Alquiler Barcelona"
+                  value={draft.displayName}
+                  onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -511,6 +505,36 @@ export function SeriesManager({
                 />
                 Charges on the LAST day of the month
               </label>
+
+              <div>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  onClick={() => setAdvancedOpen((o) => !o)}
+                  aria-expanded={advancedOpen}
+                >
+                  <ChevronRight
+                    className={`h-3 w-3 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+                  />
+                  Advanced
+                </button>
+                {advancedOpen && (
+                  <div className="mt-2 space-y-1.5">
+                    <Label htmlFor="sr-matcher">Matcher text</Label>
+                    <Input
+                      id="sr-matcher"
+                      placeholder="Defaults to the name"
+                      value={draft.matcher}
+                      onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Looked for inside the bank&apos;s descriptor to recognize
+                      this series&apos; arrivals. Set it when the bank writes
+                      the charge differently from the name.
+                    </p>
+                  </div>
+                )}
+              </div>
               {draft.id && (
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox
