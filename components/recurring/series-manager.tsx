@@ -301,9 +301,17 @@ export function SeriesManager({
               Add
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {[
+              { label: "Charges", list: rows.filter((s) => s.direction === "DEBIT") },
+              { label: "Income", list: rows.filter((s) => s.direction === "CREDIT") },
+            ]
+              .filter((g) => g.list.length > 0)
+              .map((group, gi) => (
+            <div key={group.label} className={gi > 0 ? "space-y-1 border-t pt-3" : "space-y-1"}>
+            <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
             <ul className="divide-y">
-              {rows.map((s) => {
+              {group.list.map((s) => {
                 const cat = s.categoryId ? categoryById.get(s.categoryId) : null;
                 const timing = s.anchorMonthEnd
                   ? " · month end"
@@ -376,6 +384,8 @@ export function SeriesManager({
                 );
               })}
             </ul>
+            </div>
+              ))}
           </CardContent>
         </Card>
       )}

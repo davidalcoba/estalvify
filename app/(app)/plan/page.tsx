@@ -57,6 +57,7 @@ async function PlanBody({
       <CascadeCard status={status} currency={prefs.currency} locale={prefs.locale} />
       <ObjectivesCard
         objectives={status.objectives}
+        incomeObjectives={status.incomeObjectives}
         monthElapsed={status.monthElapsed}
         categories={categories}
         year={status.year}
