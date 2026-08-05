@@ -33,7 +33,7 @@ export default async function RecurringPage({ searchParams }: PageProps) {
   const detectionStart = new Date();
   detectionStart.setUTCDate(detectionStart.getUTCDate() - DETECTION_LOOKBACK_DAYS);
 
-  const [series, categories, recentTxs, dismissals] = await Promise.all([
+  const [series, categories, recentTxs, dismissals, rules] = await Promise.all([
     prisma.recurringSeries.findMany({
       where: { userId },
       orderBy: [{ direction: "asc" }, { expectedAmount: "desc" }],
@@ -57,6 +57,11 @@ export default async function RecurringPage({ searchParams }: PageProps) {
     prisma.dismissedRecurringSuggestion.findMany({
       where: { userId },
       select: { merchantKey: true },
+    }),
+    prisma.categoryRule.findMany({
+      where: { userId, isActive: true },
+      orderBy: { priority: "asc" },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -114,6 +119,7 @@ export default async function RecurringPage({ searchParams }: PageProps) {
     matcher: s.merchantKey,
     direction: s.direction,
     categoryId: s.categoryId,
+    ruleId: s.ruleId,
     cadence: s.cadence,
     expectedAmount: Number(s.expectedAmount.toString()),
     windowFromDay: s.windowFromDay,
@@ -130,6 +136,7 @@ export default async function RecurringPage({ searchParams }: PageProps) {
         series={vms}
         suggestions={suggestions}
         prefill={prefill}
+        rules={rules}
         categories={categories}
         currency={prefs.currency}
         locale={prefs.locale}

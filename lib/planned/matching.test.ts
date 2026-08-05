@@ -256,6 +256,103 @@ describe("accrual across the month border", () => {
   });
 });
 
+describe("amount guard on descriptor collisions (bug report 2026-08-05)", () => {
+  it("the rent never matches a taxi whose remittance says ALQUILER DE VEHICULOS", () => {
+    const results = matchPlannedItems(
+      [{ ...rent, year: 2026, month: 8 }],
+      [
+        {
+          id: "freenow",
+          date: "2026-08-03",
+          direction: "DEBIT",
+          amount: 19.55,
+          descriptor: "FREE NOW PAGO CON TARJETA EN TRANSPORTE Y ALQUILER DE VEHICULOS",
+          categoryId: "transport",
+        },
+      ]
+    );
+    expect(results).toHaveLength(0);
+  });
+
+  it("twin insurances with one shared descriptor split by amount", () => {
+    const policy = (id: string, amount: number): PlannedForMatch => ({
+      ...rent,
+      id,
+      amount,
+      matcher: "BBVA PLAN ESTARSEGURO",
+      windowFromDay: 3,
+      windowToDay: 5,
+    });
+    const tx = (id: string, amount: number) => ({
+      id,
+      date: "2026-09-04",
+      direction: "DEBIT" as const,
+      amount,
+      descriptor: "BBVA PLAN ESTARSEGURO",
+      categoryId: null,
+    });
+    const results = matchPlannedItems(
+      [policy("hogar", 59.49), policy("vida", 10.97)],
+      [tx("t-vida", 10.97), tx("t-hogar", 59.49)]
+    );
+    const byItem = Object.fromEntries(results.map((r) => [r.itemId, r.transactionId]));
+    expect(byItem["hogar"]).toBe("t-hogar");
+    expect(byItem["vida"]).toBe("t-vida");
+  });
+
+  it("a real price change within the cap still matches (O2 +52%)", () => {
+    const o2: PlannedForMatch = { ...rent, id: "o2", amount: 58, matcher: "O2 FIBRA" };
+    const results = matchPlannedItems(
+      [o2],
+      [
+        {
+          id: "t",
+          date: "2026-09-04",
+          direction: "DEBIT",
+          amount: 88.28,
+          descriptor: "ADEUDO O2 FIBRA",
+          categoryId: null,
+        },
+      ]
+    );
+    expect(results).toHaveLength(1);
+  });
+});
+
+describe("rule-linked recognition", () => {
+  it("uses the item's predicate instead of the matcher text", () => {
+    const item: PlannedForMatch = {
+      ...rent,
+      id: "linked",
+      matcher: "",
+      matches: (tx) => tx.descriptor.includes("COMERCIO EDIFICACION") && tx.amount > 1000,
+    };
+    const results = matchPlannedItems(
+      [item],
+      [
+        {
+          id: "t-rent",
+          date: "2026-09-02",
+          direction: "DEBIT",
+          amount: 1389.17,
+          descriptor: "COMERCIO EDIFICACION E INDUSTRIA, S.L.",
+          categoryId: null,
+        },
+        {
+          id: "t-noise",
+          date: "2026-09-02",
+          direction: "DEBIT",
+          amount: 1389.17,
+          descriptor: "OTRA COSA",
+          categoryId: "housing",
+        },
+      ]
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].transactionId).toBe("t-rent");
+  });
+});
+
 describe("isProvisionalMonth", () => {
   it("plan test #13: provisional while last month's charges can still slide in", () => {
     expect(isProvisionalMonth("2026-08-02")).toBe(true);
