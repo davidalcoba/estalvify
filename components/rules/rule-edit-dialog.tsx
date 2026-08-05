@@ -79,7 +79,7 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
       {/* 720px: wide enough for a whole condition row (field + negate + operator
           + value) without squeezing the value input down to nothing. */}
       <DialogContent
-        className="w-[min(96vw,720px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden"
+        className="max-h-[85vh] gap-0 overflow-hidden pt-8 sm:w-[min(96vw,720px)] sm:max-w-[min(96vw,720px)]"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle>Edit rule</DialogTitle>

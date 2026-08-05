@@ -233,7 +233,7 @@ export function SeriesManager({ series, categories, accounts, currency, locale }
       )}
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
-        <DialogContent className="w-[min(96vw,480px)] max-h-[85vh] overflow-y-auto pt-8 px-6 pb-6">
+        <DialogContent className="pt-8 sm:w-[min(96vw,480px)] sm:max-w-[min(96vw,480px)]">
           <DialogTitle>{draft?.id ? "Edit series" : "New series"}</DialogTitle>
           {draft && (
             <div className="space-y-4">

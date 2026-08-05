@@ -45,7 +45,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { NavItemIcon } from "@/components/layout/nav-progress";
 import { LogoMark } from "@/components/brand/logo";
 
 const navItems = [
@@ -208,9 +207,7 @@ export function AppSidebar({
                         onClick={isMobile ? () => setOpenMobile(false) : undefined}
                       >
                         <Link href={item.url}>
-                          {/* Swaps to a spinner while this route loads, so the
-                              clicked item acknowledges the click immediately. */}
-                          <NavItemIcon icon={item.icon} />
+                          <item.icon />
                           <span>{item.title}</span>
                           {pending > 0 && (
                             <Badge
