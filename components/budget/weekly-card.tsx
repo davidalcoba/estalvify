@@ -31,7 +31,7 @@ export function WeeklyCard({
           <p className="text-sm text-muted-foreground">
             Assign your variable budget per category in{" "}
             <Link href="/plan" className="text-brand underline-offset-2 hover:underline">
-              Monthly control
+              Budget
             </Link>{" "}
             to get the one number that matters: what you can still spend this
             week.

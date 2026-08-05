@@ -111,6 +111,22 @@ export default async function ForecastPage() {
     <div className="space-y-6">
       <PageHeader title="Upcoming" />
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Projected balance · {CASHFLOW_HORIZON_DAYS} days
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BalanceForecastChart
+            data={chartData}
+            currency={currency}
+            locale={locale}
+            threshold={cashflow.threshold}
+          />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {cashflow.accounts.map((account) => (
           <Card key={account.accountId}>
@@ -128,23 +144,17 @@ export default async function ForecastPage() {
               </div>
               {account.breach ? (
                 <p className="text-xs text-destructive">
-                  Projected {formatCurrency(account.breach.balance, currency, locale)} on{" "}
-                  {dayLabel(account.breach.date)} (
-                  {account.breach.daysAway === 1
-                    ? "tomorrow"
-                    : `in ${account.breach.daysAway} days`}
-                  ). A transfer of{" "}
+                  {formatCurrency(account.breach.balance, currency, locale)} on{" "}
+                  {dayLabel(account.breach.date)} · transfer{" "}
                   {formatCurrency(
                     Math.ceil(cashflow.threshold - account.minBalance),
                     currency,
                     locale,
-                  )}{" "}
-                  would keep it covered.
+                  )}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Covers the next {CASHFLOW_HORIZON_DAYS} days · lowest{" "}
-                  {formatCurrency(account.minBalance, currency, locale)} on{" "}
+                  Lowest {formatCurrency(account.minBalance, currency, locale)} ·{" "}
                   {dayLabel(account.minDate)}
                 </p>
               )}
@@ -162,28 +172,6 @@ export default async function ForecastPage() {
         defaultYear={year}
         defaultMonth={month}
       />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Projected balance · next {CASHFLOW_HORIZON_DAYS} days
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BalanceForecastChart
-            data={chartData}
-            currency={currency}
-            locale={locale}
-            threshold={cashflow.threshold}
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            All accounts combined, day by day: planned charges on their
-            window&apos;s first day, expected income on its last, plus your
-            average variable spend. Per-account coverage is above — a combined
-            total can look fine while one account misses rent.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Repeat, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionDetailCard } from "@/components/transactions/shared/transaction-detail-card";
@@ -60,7 +60,7 @@ export function TransactionDetailDialog({
       )}
       <Dialog open={!!transaction} onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogContent
-          className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden"
+          className="max-h-[85vh] gap-0 overflow-hidden pt-8 sm:w-[min(96vw,640px)] sm:max-w-[min(96vw,640px)]"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">Transaction details</DialogTitle>
@@ -89,6 +89,20 @@ export function TransactionDetailDialog({
                   title="Create rule for this transaction"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() => {
+                    onClose();
+                    router.push(`/recurring?fromTx=${transaction.id}`);
+                  }}
+                  disabled={saving}
+                  title="Make recurring — opens the series form prefilled from this transaction"
+                >
+                  <Repeat className="h-4 w-4" />
                 </Button>
               </div>
             </div>

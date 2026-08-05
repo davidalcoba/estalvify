@@ -14,6 +14,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
 import { normalizeDescriptor, isProvisionalMonth } from "@/lib/planned/matching";
+import { nearestInSet, rootOf, type ParentMap } from "@/lib/categories/hierarchy";
 import {
   computeCascade,
   computeActualResult,
@@ -36,10 +37,35 @@ import {
 const OPS_LOOKBACK_DAYS = 98; // 14 weeks: current + 12 complete + margin
 const CUSHION_BASELINE_MONTHS = 6;
 
+export interface ObjectiveRecurring {
+  description: string;
+  amount: number;
+  status: "PENDING" | "MATCHED" | "MISSED";
+}
+
+export interface ObjectiveTransaction {
+  date: string; // YYYY-MM-DD
+  description: string;
+  amount: number;
+}
+
+/**
+ * A monthly-control category objective. At minimum it holds the recurring
+ * charges of its category (`base`, from the month's planned items) plus
+ * whatever is added manually (`extra`, the budget item); `assigned` is the
+ * sum. `consumed` accumulates ALL the month's expense transactions of the
+ * category subtree — a transaction rolls up to the nearest objective that
+ * owns its category.
+ */
 export interface CategoryObjective {
   categoryId: string;
   categoryName: string;
   categoryColor: string;
+  /** Σ recurring charges of the category expected this month. */
+  base: number;
+  /** The manual assignment on top (the budget item; 0 when none). */
+  extra: number;
+  /** base + extra. */
   assigned: number;
   consumed: number;
   /**
@@ -50,6 +76,21 @@ export interface CategoryObjective {
   rollover: boolean;
   /** Accumulated balance across months (rollover only). */
   balance: number | null;
+  /** The recurring charges composing the base. */
+  recurrings: ObjectiveRecurring[];
+  /** The month's transactions accumulated under this objective, newest first. */
+  transactions: ObjectiveTransaction[];
+}
+
+/** Expected income of the month, grouped by category — the Income side of
+ *  the objectives list. Received books per accrual (matched amounts). */
+export interface IncomeObjective {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string;
+  expected: number;
+  received: number;
+  recurrings: ObjectiveRecurring[];
 }
 
 export interface Reconciliation extends ActualResult {
@@ -89,6 +130,7 @@ export interface MonthStatus {
   composition: WeekCompositionRow[];
   variableSpentMonth: number;
   objectives: CategoryObjective[];
+  incomeObjectives: IncomeObjective[];
   reconciliation: Reconciliation;
 }
 
@@ -185,17 +227,42 @@ export async function buildMonthStatus(
   }
   const today = todayInTimezone(timezone);
   const { start, end } = monthRange(year, month);
+  const isCurrentView = ahead === 0;
+  // The 14-week ops lookback only feeds the weekly counters, which are a
+  // current-month concept — when navigating to another month the window
+  // narrows to that month, which is most of what makes navigation fast.
   const opsStart = new Date(start);
   opsStart.setUTCDate(opsStart.getUTCDate() - OPS_LOOKBACK_DAYS);
+  const windowStart = isCurrentView ? opsStart : start;
+
+  // A matched transaction can only land within the tolerance of its item's
+  // month, so the exclusion set is bounded to items whose (year, month) falls
+  // inside the tx window ± one month — not every matched item ever.
+  const matchedMonths: { year: number; month: number }[] = [];
+  {
+    const cursor = new Date(Date.UTC(windowStart.getUTCFullYear(), windowStart.getUTCMonth() - 1, 1));
+    const stop = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 1));
+    while (cursor <= stop) {
+      matchedMonths.push({ year: cursor.getUTCFullYear(), month: cursor.getUTCMonth() + 1 });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+  }
 
   const [plannedMonth, matchedIdsRows, series, txWindow, monthFlows, budgets, categories, accounts] =
     await Promise.all([
       prisma.plannedItem.findMany({
         where: { userId, year, month },
-        select: { direction: true, amount: true, matchedAmount: true, status: true },
+        select: {
+          direction: true,
+          amount: true,
+          matchedAmount: true,
+          status: true,
+          categoryId: true,
+          description: true,
+        },
       }),
       prisma.plannedItem.findMany({
-        where: { userId, matchedTransactionId: { not: null } },
+        where: { userId, matchedTransactionId: { not: null }, OR: matchedMonths },
         select: { matchedTransactionId: true },
       }),
       prisma.recurringSeries.findMany({
@@ -209,7 +276,7 @@ export async function buildMonthStatus(
         where: {
           userId,
           direction: "DEBIT",
-          valueDate: { gte: opsStart },
+          valueDate: { gte: windowStart, lt: end },
           categorization: {
             is: { status: "APPROVED", category: { is: { kind: "EXPENSE" } } },
           },
@@ -250,7 +317,7 @@ export async function buildMonthStatus(
       }),
       prisma.category.findMany({
         where: { OR: [{ userId }, { userId: null }] },
-        select: { id: true, name: true, color: true },
+        select: { id: true, name: true, color: true, parentId: true },
       }),
       prisma.bankAccount.findMany({
         where: { userId, isActive: true },
@@ -314,62 +381,187 @@ export async function buildMonthStatus(
     .filter((i) => i.rollover)
     .reduce((sum, i) => sum + i.assigned, 0);
 
-  // Spending per category per month for the fund categories (their balances).
+  // Second query wave, all concurrent: fund spend (bounded to the funds'
+  // first assigned month — earlier spend can't touch a balance), the
+  // month-boundary balance snapshots, and the cushion baseline.
   const fundCategoryIds = currentItems.filter((i) => i.rollover).map((i) => i.categoryId);
-  const fundSpend = new Map<string, number>();
-  if (fundCategoryIds.length > 0) {
-    const rows = await prisma.transaction.findMany({
+  let fundEpoch: Date | null = null;
+  for (const list of rolloverHistory.values()) {
+    for (const r of list) {
+      const d = new Date(Date.UTC(r.year, r.month - 1, 1));
+      if (!fundEpoch || d < fundEpoch) fundEpoch = d;
+    }
+  }
+  const baselineStart = new Date(Date.UTC(year, month - 1 - CUSHION_BASELINE_MONTHS, 1));
+  const [fundRows, startSnapshots, endSnapshots, baselineAgg] = await Promise.all([
+    fundCategoryIds.length > 0 && fundEpoch
+      ? prisma.transaction.findMany({
+          where: {
+            userId,
+            direction: "DEBIT",
+            valueDate: { gte: fundEpoch },
+            categorization: {
+              is: { status: "APPROVED", categoryId: { in: fundCategoryIds } },
+            },
+          },
+          select: {
+            amount: true,
+            valueDate: true,
+            categorization: { select: { categoryId: true } },
+          },
+        })
+      : Promise.resolve([]),
+    Promise.all(
+      accounts.map((a) =>
+        prisma.accountBalance.findFirst({
+          where: { bankAccountId: a.id, date: { lt: start } },
+          orderBy: { date: "desc" },
+          select: { balance: true },
+        })
+      )
+    ),
+    Promise.all(
+      accounts.map((a) =>
+        prisma.accountBalance.findFirst({
+          where: { bankAccountId: a.id, date: { lt: end } },
+          orderBy: { date: "desc" },
+          select: { balance: true },
+        })
+      )
+    ),
+    prisma.transaction.aggregate({
+      // Average monthly spend over the trailing full months, for the cushion.
       where: {
         userId,
         direction: "DEBIT",
-        categorization: {
-          is: { status: "APPROVED", categoryId: { in: fundCategoryIds } },
-        },
+        valueDate: { gte: baselineStart, lt: start },
+        NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
       },
-      select: {
-        amount: true,
-        valueDate: true,
-        categorization: { select: { categoryId: true } },
-      },
-    });
-    for (const row of rows) {
-      const key = `${row.categorization!.categoryId}:${row.valueDate.getUTCFullYear()}-${row.valueDate.getUTCMonth() + 1}`;
-      fundSpend.set(key, (fundSpend.get(key) ?? 0) + Math.abs(Number(row.amount.toString())));
-    }
+      _sum: { amount: true },
+    }),
+  ]);
+  const fundSpend = new Map<string, number>();
+  for (const row of fundRows) {
+    const key = `${row.categorization!.categoryId}:${row.valueDate.getUTCFullYear()}-${row.valueDate.getUTCMonth() + 1}`;
+    fundSpend.set(key, (fundSpend.get(key) ?? 0) + Math.abs(Number(row.amount.toString())));
   }
 
-  // Consumed in the VIEWED month per category, from the variable set (by date
-  // — the variable spend never carries accrual, plan §4.5).
+  // ── Objectives: recurring base + manual extra ───────────────────────────
+  // A category objective holds AT MINIMUM the recurring charges of its
+  // category, plus the manual assignment. Planned charges whose category has
+  // no budget item surface as a base-only objective at their top-level
+  // category, so every recurring is visible somewhere.
+  const parentOf: ParentMap = new Map(categories.map((c) => [c.id, c.parentId]));
+  const objectiveSet = new Set(currentItems.map((i) => i.categoryId));
+  const plannedDebits = plannedMonth.filter(
+    (p) => p.direction === "DEBIT" && p.categoryId
+  );
+  for (const p of plannedDebits) {
+    if (nearestInSet(p.categoryId!, objectiveSet, parentOf)) continue;
+    objectiveSet.add(rootOf(p.categoryId!, parentOf));
+  }
+  const baseByObjective = new Map<string, number>();
+  const recurringsByObjective = new Map<string, ObjectiveRecurring[]>();
+  for (const p of plannedDebits) {
+    const target = nearestInSet(p.categoryId!, objectiveSet, parentOf);
+    if (!target) continue;
+    const amount = Number(p.amount.toString());
+    baseByObjective.set(target, (baseByObjective.get(target) ?? 0) + amount);
+    const list = recurringsByObjective.get(target) ?? [];
+    list.push({ description: p.description, amount: round(amount), status: p.status });
+    recurringsByObjective.set(target, list);
+  }
+
+  // ALL of the month's expense transactions accumulate under the nearest
+  // objective owning their category (by date — no accrual in the objectives,
+  // plan §4.5). This includes the recurring charges themselves: they consume
+  // against base + extra.
   const monthStartStr = `${year}-${String(month).padStart(2, "0")}-01`;
   const monthEndStr = end.toISOString().slice(0, 10);
-  const consumedByCategory = new Map<string, number>();
-  for (const tx of variableTx) {
-    if (!tx.categoryId || tx.date < monthStartStr || tx.date >= monthEndStr) continue;
-    consumedByCategory.set(
-      tx.categoryId,
-      (consumedByCategory.get(tx.categoryId) ?? 0) + tx.amount
-    );
+  const consumedByObjective = new Map<string, number>();
+  const txsByObjective = new Map<string, ObjectiveTransaction[]>();
+  for (const tx of txWindow) {
+    const date = tx.valueDate.toISOString().slice(0, 10);
+    if (date < monthStartStr || date >= monthEndStr) continue;
+    const catId = tx.categorization?.categoryId;
+    if (!catId) continue;
+    const target = nearestInSet(catId, objectiveSet, parentOf);
+    if (!target) continue;
+    const amount = Math.abs(Number(tx.amount.toString()));
+    consumedByObjective.set(target, (consumedByObjective.get(target) ?? 0) + amount);
+    const list = txsByObjective.get(target) ?? [];
+    list.push({
+      date,
+      description: (tx.description ?? tx.remittanceInfo ?? "").trim().slice(0, 80),
+      amount: round(amount),
+    });
+    txsByObjective.set(target, list);
   }
 
-  const objectives: CategoryObjective[] = currentItems
-    .map((item) => {
-      const cat = categoryById.get(item.categoryId);
-      const balance = item.rollover
+  // Income side: expected income of the month grouped by root category,
+  // received per accrual (matched amounts book in their item's month).
+  const incomeMap = new Map<
+    string,
+    { expected: number; received: number; recurrings: ObjectiveRecurring[] }
+  >();
+  for (const p of plannedMonth) {
+    if (p.direction !== "CREDIT" || !p.categoryId) continue;
+    const target = rootOf(p.categoryId, parentOf);
+    const entry = incomeMap.get(target) ?? { expected: 0, received: 0, recurrings: [] };
+    const amount = Number(p.amount.toString());
+    entry.expected += amount;
+    if (p.status === "MATCHED" && p.matchedAmount != null) {
+      entry.received += Number(p.matchedAmount.toString());
+    }
+    entry.recurrings.push({ description: p.description, amount: round(amount), status: p.status });
+    incomeMap.set(target, entry);
+  }
+  const incomeObjectives: IncomeObjective[] = [...incomeMap.entries()]
+    .map(([categoryId, e]) => {
+      const cat = categoryById.get(categoryId);
+      return {
+        categoryId,
+        categoryName: cat?.name ?? "?",
+        categoryColor: cat?.color ?? "#14b8a6",
+        expected: round(e.expected),
+        received: round(e.received),
+        recurrings: e.recurrings.sort((a, b) => b.amount - a.amount),
+      };
+    })
+    .sort((a, b) => b.expected - a.expected);
+
+  const itemByCategory = new Map(currentItems.map((i) => [i.categoryId, i]));
+  const objectives: CategoryObjective[] = [...objectiveSet]
+    .map((categoryId) => {
+      const item = itemByCategory.get(categoryId);
+      const cat = categoryById.get(categoryId);
+      const base = round(baseByObjective.get(categoryId) ?? 0);
+      const extra = round(item?.assigned ?? 0);
+      const rollover = item?.rollover ?? false;
+      const balance = rollover
         ? rolloverBalance(
-            (rolloverHistory.get(item.categoryId) ?? []).map((r) => ({
+            (rolloverHistory.get(categoryId) ?? []).map((r) => ({
               assigned: r.assigned,
-              spent: fundSpend.get(`${item.categoryId}:${r.year}-${r.month}`) ?? 0,
+              spent: fundSpend.get(`${categoryId}:${r.year}-${r.month}`) ?? 0,
             }))
           )
         : null;
       return {
-        categoryId: item.categoryId,
+        categoryId,
         categoryName: cat?.name ?? "?",
         categoryColor: cat?.color ?? "#6366f1",
-        assigned: round(item.assigned),
-        consumed: round(consumedByCategory.get(item.categoryId) ?? 0),
-        rollover: item.rollover,
+        base,
+        extra,
+        assigned: round(base + extra),
+        consumed: round(consumedByObjective.get(categoryId) ?? 0),
+        rollover,
         balance,
+        recurrings: (recurringsByObjective.get(categoryId) ?? []).sort(
+          (a, b) => b.amount - a.amount
+        ),
+        transactions: (txsByObjective.get(categoryId) ?? []).sort((a, b) =>
+          a.date < b.date ? 1 : -1
+        ),
       };
     })
     .sort((a, b) => Number(a.rollover) - Number(b.rollover) || b.assigned - a.assigned);
@@ -430,26 +622,6 @@ export async function buildMonthStatus(
   // no semantics — always the sum of all of them). For the current month the
   // "end" snapshot is simply the latest one; for a past month it is the last
   // snapshot inside it, so navigation shows that month's own delta.
-  const [startSnapshots, endSnapshots] = await Promise.all([
-    Promise.all(
-      accounts.map((a) =>
-        prisma.accountBalance.findFirst({
-          where: { bankAccountId: a.id, date: { lt: start } },
-          orderBy: { date: "desc" },
-          select: { balance: true },
-        })
-      )
-    ),
-    Promise.all(
-      accounts.map((a) =>
-        prisma.accountBalance.findFirst({
-          where: { bankAccountId: a.id, date: { lt: end } },
-          orderBy: { date: "desc" },
-          select: { balance: true },
-        })
-      )
-    ),
-  ]);
   const consolidatedBalance =
     accounts.length > 0 && endSnapshots.some((s) => s !== null)
       ? round(
@@ -469,17 +641,6 @@ export async function buildMonthStatus(
         )
       : null;
 
-  // Average monthly spend over the trailing full months, for the cushion.
-  const baselineStart = new Date(Date.UTC(year, month - 1 - CUSHION_BASELINE_MONTHS, 1));
-  const baselineAgg = await prisma.transaction.aggregate({
-    where: {
-      userId,
-      direction: "DEBIT",
-      valueDate: { gte: baselineStart, lt: start },
-      NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
-    },
-    _sum: { amount: true },
-  });
   const avgMonthlySpend = baselineAgg._sum.amount
     ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
     : 0;
@@ -520,6 +681,7 @@ export async function buildMonthStatus(
     composition,
     variableSpentMonth,
     objectives,
+    incomeObjectives,
     reconciliation,
   };
 }

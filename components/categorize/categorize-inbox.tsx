@@ -117,7 +117,7 @@ function FocusModal({
       />
     )}
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[min(96vw,640px)] max-h-[85vh] pt-8 px-6 pb-6 gap-0 overflow-hidden">
+      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden pt-8 sm:w-[min(96vw,640px)] sm:max-w-[min(96vw,640px)]">
         <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
 
         <div className="space-y-4 overflow-y-auto pr-2">

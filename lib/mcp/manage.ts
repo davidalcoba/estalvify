@@ -548,8 +548,12 @@ export type SeriesCadenceInput =
 
 export interface SeriesFields {
   displayName: string;
-  /** Text the matcher looks for in a transaction's descriptors. */
-  matcher: string;
+  /**
+   * Text looked for in a transaction's descriptors to recognize this series'
+   * arrivals. Optional — defaults to displayName, which works whenever the
+   * series is named close to how the bank writes it.
+   */
+  matcher?: string | null;
   direction: "DEBIT" | "CREDIT";
   categoryId?: string | null;
   bankAccountId?: string | null;
@@ -565,13 +569,16 @@ export interface SeriesFields {
 
 async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
   const displayName = fields.displayName?.trim();
-  const matcher = fields.matcher?.trim();
   if (!displayName) throw new Error("displayName is required");
-  if (!matcher || matcher.length < 3) throw new Error("matcher needs at least 3 characters");
+  const matcher = fields.matcher?.trim() || displayName;
+  if (matcher.length < 3) throw new Error("matcher needs at least 3 characters");
   if (!Number.isFinite(fields.expectedAmount) || fields.expectedAmount < 0) {
     throw new Error("Invalid expectedAmount");
   }
-  if (fields.categoryId) await assertOwnedCategory(userId, fields.categoryId);
+  // A series is the recurring base of its category's objective in the monthly
+  // control — without a category it would feed nothing.
+  if (!fields.categoryId) throw new Error("categoryId is required");
+  await assertOwnedCategory(userId, fields.categoryId);
   if (fields.bankAccountId) {
     const account = await prisma.bankAccount.findFirst({
       where: { id: fields.bankAccountId, userId },
@@ -632,13 +639,31 @@ export async function listSeriesForUser(userId: string) {
   }));
 }
 
+function rethrowDuplicateMatcher(err: unknown): never {
+  if (
+    err &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code?: string }).code === "P2002"
+  ) {
+    throw new Error(
+      "Another series already uses this matcher — give it a distinct matcher or name"
+    );
+  }
+  throw err;
+}
+
 export async function createSeriesForUser(userId: string, fields: SeriesFields) {
   const data = await normalizeSeriesFields(userId, fields);
-  const created = await prisma.recurringSeries.create({
-    data: { userId, ...data },
-    select: { id: true },
-  });
-  return { id: created.id };
+  try {
+    const created = await prisma.recurringSeries.create({
+      data: { userId, ...data },
+      select: { id: true },
+    });
+    return { id: created.id };
+  } catch (err) {
+    rethrowDuplicateMatcher(err);
+  }
 }
 
 export async function updateSeriesForUser(
@@ -652,7 +677,11 @@ export async function updateSeriesForUser(
   });
   if (!existing) throw new Error("Series not found");
   const data = await normalizeSeriesFields(userId, fields);
-  await prisma.recurringSeries.update({ where: { id: seriesId }, data });
+  try {
+    await prisma.recurringSeries.update({ where: { id: seriesId }, data });
+  } catch (err) {
+    rethrowDuplicateMatcher(err);
+  }
   // Future PENDING instances mirror the series definition.
   await prisma.plannedItem.updateMany({
     where: { userId, recurringSeriesId: seriesId, status: "PENDING" },
@@ -675,8 +704,22 @@ export async function deleteSeriesForUser(userId: string, seriesId: string) {
     select: { id: true },
   });
   if (!existing) throw new Error("Series not found");
-  // Cascade removes its planned instances (matched history included).
-  await prisma.recurringSeries.delete({ where: { id: seriesId } });
+  // Deleting retires the series GOING FORWARD — past months keep their
+  // history. PENDING expectations disappear with it; MATCHED/MISSED
+  // instances are detached instead (they become standalone records of what
+  // happened, keeping their month, amount and status), so a closed month's
+  // base, cascade and performance never rewrite. Without the detach, the FK
+  // cascade would erase them.
+  await prisma.$transaction([
+    prisma.plannedItem.deleteMany({
+      where: { userId, recurringSeriesId: seriesId, status: "PENDING" },
+    }),
+    prisma.plannedItem.updateMany({
+      where: { userId, recurringSeriesId: seriesId },
+      data: { recurringSeriesId: null },
+    }),
+    prisma.recurringSeries.delete({ where: { id: seriesId } }),
+  ]);
   return { deleted: seriesId };
 }
 
@@ -738,7 +781,10 @@ export async function createPlannedItemForUser(
     throw new Error("Invalid amount");
   }
   if (fields.month < 1 || fields.month > 12) throw new Error("Invalid month");
-  if (fields.categoryId) await assertOwnedCategory(userId, fields.categoryId);
+  // Without a category the charge would be orphaned in the Budget — no
+  // objective would own it.
+  if (!fields.categoryId) throw new Error("categoryId is required");
+  await assertOwnedCategory(userId, fields.categoryId);
   const created = await prisma.plannedItem.create({
     data: {
       userId,

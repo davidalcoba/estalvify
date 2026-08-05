@@ -15,7 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/categorize": "Categorize",
   "/insights": "Insights",
   "/rules": "Rules",
-  "/plan": "Plan",
+  "/plan": "Budget",
   "/transactions": "Transactions",
   // More specific route first — the matcher sorts by length, but keep it explicit.
   "/accounts/setup": "Connect Bank",
@@ -42,7 +42,7 @@ export function AppHeader({
       .find(([path]) => pathname.startsWith(path))?.[1] ?? "Estalvify";
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 bg-background">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <h1 className="text-sm font-medium text-foreground">{title}</h1>

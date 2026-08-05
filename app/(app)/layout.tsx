@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
-import { NavProgressBar } from "@/components/layout/nav-progress";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -57,7 +56,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SidebarProvider>
-      <NavProgressBar />
       <AppSidebar
         user={session.user}
         pendingCategorizations={pendingCategorizations}

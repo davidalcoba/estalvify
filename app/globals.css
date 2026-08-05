@@ -144,28 +144,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-/* Indeterminate sweep for the top navigation progress bar (NavProgressBar).
-   The route's duration is unknown, so the bar keeps moving instead of
-   pretending to track real progress. */
-@keyframes nav-progress {
-  0% {
-    transform: translateX(-100%) scaleX(0.4);
-  }
-  50% {
-    transform: translateX(15%) scaleX(0.7);
-  }
-  100% {
-    transform: translateX(100%) scaleX(0.4);
-  }
-}
-
-@utility animate-nav-progress {
-  transform-origin: left;
-  animation: nav-progress 1.4s ease-in-out infinite;
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-    opacity: 0.7;
-  }
-}

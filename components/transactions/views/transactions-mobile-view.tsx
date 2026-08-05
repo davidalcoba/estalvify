@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CreditCard, Loader2, Tag, Zap } from "lucide-react";
+import { Calendar, CreditCard, Loader2, Repeat, Tag, Zap } from "lucide-react";
 import { formatDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -219,6 +219,17 @@ export function TransactionsMobileView({
                     title="Create rule for this transaction"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 shrink-0"
+                    onClick={() => router.push(`/recurring?fromTx=${activeTx.id}`)}
+                    disabled={saving}
+                    title="Make recurring"
+                  >
+                    <Repeat className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
