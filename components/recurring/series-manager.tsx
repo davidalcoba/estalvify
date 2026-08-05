@@ -174,10 +174,19 @@ export function SeriesManager({
     setDetail(null);
     setDismissError(null);
     setHiddenKeys((keys) => [...keys, merchantKey]);
-    dismissRecurringSuggestion(merchantKey).catch(() => {
-      setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
-      setDismissError("Couldn't save the dismissal — reload the page and try again.");
-    });
+    dismissRecurringSuggestion(merchantKey)
+      .then((res) => {
+        if (!res.ok) {
+          setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+          setDismissError(res.error);
+        }
+      })
+      .catch(() => {
+        // The action itself never throws — a rejection means the request
+        // didn't reach it (usually a redeploy invalidated this tab's actions).
+        setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+        setDismissError("App updated — reload the page and retry.");
+      });
   }
 
   function save() {
@@ -202,14 +211,19 @@ export function SeriesManager({
     setError(null);
     startTransition(async () => {
       try {
-        if (draft.id) await updateSeries(draft.id, fields);
-        else await createSeries(fields);
+        const res = draft.id
+          ? await updateSeries(draft.id, fields)
+          : await createSeries(fields);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         setDraft(null);
         // Drop ?fromTx so a reload doesn't reopen the prefilled form.
         if (prefill) router.replace("/recurring");
         else router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+      } catch {
+        setError("App updated — reload the page and retry.");
       }
     });
   }
