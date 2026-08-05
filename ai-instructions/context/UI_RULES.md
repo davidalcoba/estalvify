@@ -134,7 +134,9 @@ overflowing on a 375 px viewport.
 
 Every page under `app/(app)` is a server component behind an authenticated,
 dynamic layout, so a nav click has a visible gap before the new route paints.
-Without feedback the app reads as frozen. Three layers cover it:
+Without feedback the app reads as frozen. **The skeleton IS the feedback** —
+no spinners on nav icons, no top progress bar (both existed and were removed
+by explicit product decision):
 
 - **`loading.tsx` per route — required.** Every route under `app/(app)` that
   renders UI MUST ship a sibling `loading.tsx`. Next renders it the instant the
@@ -143,15 +145,10 @@ Without feedback the app reads as frozen. Three layers cover it:
   generates from the client): the segment is still fetched over the network.
   The only exception is a route that just `redirect()`s (`budget` → `plan`) —
   it renders no UI, and the destination has its own skeleton.
-- **Sidebar spinner.** `components/layout/nav-progress` exports `NavItemIcon`,
-  which swaps a nav item's icon for a spinner while that route loads. It is
-  already wired into `AppSidebar`.
-- **Top progress bar.** `NavProgressBar` renders once in the `(app)` layout and
-  shows a thin indeterminate bar for any pending instrumented link.
-
-To instrument a `<Link>` outside the sidebar, render a component that calls
-`useLinkPending()` as a child of that link; it reports into the shared store
-that drives the top bar.
+- **Same-route navigation (filters, month pickers).** A searchParams change
+  does not re-render `loading.tsx`; wrap the data-dependent section in a
+  `<Suspense key={param}>` with a skeleton fallback so the section swaps
+  immediately while the shell stays interactive (Reports and Plan do this).
 
 ### Keeping a skeleton honest
 

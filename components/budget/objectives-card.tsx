@@ -149,9 +149,9 @@ export function ObjectivesCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">
-          Category objectives
+          Objectives
           <span className="ml-2 align-middle text-xs font-normal text-muted-foreground">
-            {elapsedPct}% of the month elapsed
+            {elapsedPct}% elapsed
           </span>
         </CardTitle>
         <Button
@@ -170,10 +170,7 @@ export function ObjectivesCard({
         {objectives.length === 0 ? (
           <div className="flex items-start gap-3 text-sm text-muted-foreground">
             <Target className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              Assign the variable budget per category — the sum becomes the
-              month&apos;s variable budget in the cascade.
-            </p>
+            <p>Assign a monthly budget per category.</p>
           </div>
         ) : (
           <>

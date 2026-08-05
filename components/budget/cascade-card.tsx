@@ -104,9 +104,7 @@ export function CascadeCard({
         {reconciliation.discrepancy != null &&
           Math.abs(reconciliation.discrepancy) > 1 && (
             <p className="text-xs text-warning">
-              Flows and balance change differ by{" "}
-              {fmt(Math.abs(reconciliation.discrepancy))} — an unsynced account
-              or a sync hole.
+              Flows vs balance gap: {fmt(Math.abs(reconciliation.discrepancy))}
             </p>
           )}
       </CardContent>
