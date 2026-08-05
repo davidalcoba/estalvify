@@ -33,8 +33,11 @@ segundo tranche, asumiendo el modelo TPP vía Enable Banking:
   Host header contra allowlist.
 - **B3 parcial**: revocación activa (`lib/auth/revoke.ts`) — el allowlist se
   enforça en sesiones vivas (proxy) y en cada refresh MCP, así que quitar un
-  email corta el acceso al siguiente request / ≤1 h. El modelo de alta
-  (signup/tenant) sigue siendo la decisión de producto pendiente.
+  email corta el acceso al siguiente request / ≤1 h. Además el **registro está
+  cerrado por defecto**: el sign-in solo acepta usuarios que ya existen en BD
+  (`ALLOW_SIGNUP`, fail-closed, solo para bootstrap de una BD vacía), así que
+  login y registro dejaron de ser la misma puerta. El modelo de alta
+  (signup/tenant abierto) sigue siendo la decisión de producto pendiente.
 - **Nuevo — capa GDPR**: export de datos (`/api/export` +
   `lib/account/export-user.ts`), borrado de cuenta con revocación PSD2
   (`lib/account/delete-user.ts`, Settings → Privacy & data), páginas legales

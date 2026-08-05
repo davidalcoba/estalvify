@@ -6,6 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import Google from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 import { isEmailAllowed } from "@/lib/auth/allowed-emails";
+import { isSignupAllowed } from "@/lib/auth/signup-policy";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -21,17 +22,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/login",
   },
   callbacks: {
-    // Restrict who can sign in. When ALLOWED_EMAILS is set (comma-separated),
-    // only matching Google accounts may authenticate — this locks both the app
-    // and the MCP API (which delegates to the same login) to the owner. When
-    // unset, sign-in stays open (previous behaviour). Entries can be exact
-    // addresses, whole domains, or wildcards; the matching rules live in
-    // `lib/auth/allowed-emails.ts`, which is pure and unit-tested.
-    signIn({ profile, user }) {
-      return isEmailAllowed(
-        profile?.email ?? user?.email,
-        process.env.ALLOWED_EMAILS,
-      );
+    // Two independent gates, both fail-closed on their own axis:
+    //
+    // 1) ALLOWED_EMAILS — who may authenticate at all (app + MCP, which shares
+    //    the login). Comma-separated; exact addresses, domains or wildcards;
+    //    matching in `lib/auth/allowed-emails.ts` (pure, unit-tested). Unset
+    //    keeps sign-in open on this axis (historical default).
+    //
+    // 2) Signup policy — whether sign-in may CREATE a user. The Prisma adapter
+    //    auto-provisions a User row on first sign-in, making login and
+    //    registration the same door; with ALLOW_SIGNUP unset (the default,
+    //    `lib/auth/signup-policy.ts`) sign-in only matches users that already
+    //    exist in the database, so registration is closed no matter what the
+    //    allowlist says. Set ALLOW_SIGNUP=true only to bootstrap a fresh
+    //    database (first login has no row to match), then turn it back off.
+    async signIn({ profile, user }) {
+      const email = profile?.email ?? user?.email;
+      if (!isEmailAllowed(email, process.env.ALLOWED_EMAILS)) return false;
+      if (isSignupAllowed(process.env.ALLOW_SIGNUP)) return true;
+      if (!email) return false;
+      const existing = await prisma.user.findFirst({
+        // Case-insensitive: Google normalizes to lowercase, but a hand-seeded
+        // or imported row may not be, and a case mismatch here means lockout.
+        where: { email: { equals: email, mode: "insensitive" } },
+        select: { id: true },
+      });
+      return existing !== null;
     },
     // Expose user.id in the session object
     session({ session, user }) {

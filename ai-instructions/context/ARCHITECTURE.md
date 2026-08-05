@@ -498,6 +498,17 @@ signing secret.
 
 ### Access control
 
+- **Registration is closed by default**: the Prisma adapter auto-provisions a
+  `User` row on first sign-in — login and registration are the same door — so
+  the `signIn` callback additionally requires that a user with that email
+  **already exists** in the database unless `ALLOW_SIGNUP` is explicitly
+  truthy (`lib/auth/signup-policy.ts`, pure + tested, fail-closed on typos).
+  With only the owner's row in the table, nobody else can enter even if the
+  allowlist were opened by mistake — the two gates fail independently. The
+  flag's one legitimate use is bootstrapping a fresh database (first login has
+  no row to match): set it, log in once, unset it. The existence check is
+  case-insensitive, because a hand-seeded row with different casing would
+  otherwise lock the owner out.
 - **Sign-in allowlist**: when `ALLOWED_EMAILS` is set, the Auth.js `signIn`
   callback (`auth.ts`) only lets matching Google accounts in — locking both the
   app and the MCP (which shares the login) to the owner. This is the decisive
