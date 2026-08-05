@@ -10,13 +10,17 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
-import { isDueInMonth, monthsForward, type YearMonth } from "./schedule";
+import { isDueInMonth, monthsForward, resolveWindow, isoDate } from "./schedule";
+import type { YearMonth } from "./schedule";
 import {
   matchPlannedItems,
   isMissed,
   significantDeviation,
   type PlannedForMatch,
+  type TransactionForMatch,
 } from "./matching";
+import { matchesNode, type MatchableTransaction } from "@/lib/rules/rule-matcher";
+import { parseConditions } from "@/lib/rules/rule-dto";
 import { formatCurrency } from "@/lib/formatters";
 
 const GENERATION_HORIZON_MONTHS = 4;
@@ -138,7 +142,13 @@ export async function runPlannedMatching(
       windowToDay: true,
       anchorMonthEnd: true,
       recurringSeriesId: true,
-      recurringSeries: { select: { merchantKey: true, displayName: true } },
+      recurringSeries: {
+        select: {
+          merchantKey: true,
+          displayName: true,
+          rule: { select: { conditions: true, isActive: true } },
+        },
+      },
     },
   });
   if (pending.length === 0) return;
@@ -155,6 +165,7 @@ export async function runPlannedMatching(
         amount: true,
         description: true,
         remittanceInfo: true,
+        bankAccount: { select: { name: true } },
         categorization: { select: { categoryId: true } },
       },
     }),
@@ -165,11 +176,42 @@ export async function runPlannedMatching(
   ]);
   const claimedIds = new Set(claimed.map((c) => c.matchedTransactionId));
 
+  // Rule-linked recognition: the predicate evaluates the rule's condition
+  // tree over the raw transaction fields (looked up by id — the pure matcher
+  // only carries the combined descriptor).
+  const matchableById = new Map<string, MatchableTransaction>(
+    transactions.map((t) => [
+      t.id,
+      {
+        description: t.description,
+        remittanceInfo: t.remittanceInfo,
+        amount: Math.abs(Number(t.amount.toString())),
+        direction: t.direction,
+        accountName: t.bankAccount?.name ?? null,
+      },
+    ])
+  );
+  const predicateFor = (
+    rule: { conditions: unknown; isActive: boolean } | null | undefined
+  ): ((tx: TransactionForMatch) => boolean) | undefined => {
+    if (!rule) return undefined;
+    try {
+      const group = parseConditions(rule.conditions);
+      return (tx) => {
+        const raw = matchableById.get(tx.id);
+        return raw ? matchesNode(raw, group) : false;
+      };
+    } catch {
+      return undefined; // unparseable rule → fall back to the matcher text
+    }
+  };
+
   const items: PlannedForMatch[] = pending.map((p) => ({
     id: p.id,
     direction: p.direction,
     amount: Number(p.amount.toString()),
     matcher: p.recurringSeries?.merchantKey ?? p.description,
+    matches: predicateFor(p.recurringSeries?.rule),
     categoryId: p.categoryId,
     year: p.year,
     month: p.month,
@@ -267,6 +309,60 @@ export async function runPlannedMatching(
   if (writes.length > 0) await prisma.$transaction(writes);
 }
 
+/**
+ * Keep each active series' nextExpectedDate pointing at its earliest still
+ * PENDING occurrence (the window's first day). It advances as items match or
+ * miss, and doubles as the anchor for non-monthly cadences.
+ */
+export async function refreshSeriesSchedule(userId: string): Promise<void> {
+  const [series, pendingItems] = await Promise.all([
+    prisma.recurringSeries.findMany({
+      where: { userId, active: true },
+      select: { id: true, nextExpectedDate: true },
+    }),
+    prisma.plannedItem.findMany({
+      where: { userId, status: "PENDING", recurringSeriesId: { not: null } },
+      select: {
+        recurringSeriesId: true,
+        year: true,
+        month: true,
+        dueDay: true,
+        windowFromDay: true,
+        windowToDay: true,
+        anchorMonthEnd: true,
+      },
+    }),
+  ]);
+
+  const earliest = new Map<string, string>();
+  for (const p of pendingItems) {
+    const ym: YearMonth = { year: p.year, month: p.month };
+    const window =
+      p.dueDay != null && !p.anchorMonthEnd
+        ? { fromDay: p.dueDay, toDay: p.dueDay }
+        : resolveWindow(p, ym);
+    const date = isoDate(ym, window.fromDay);
+    const key = p.recurringSeriesId!;
+    const prev = earliest.get(key);
+    if (!prev || date < prev) earliest.set(key, date);
+  }
+
+  const writes: Prisma.PrismaPromise<unknown>[] = [];
+  for (const s of series) {
+    const next = earliest.get(s.id);
+    if (!next) continue;
+    const stored = s.nextExpectedDate?.toISOString().slice(0, 10) ?? null;
+    if (stored === next) continue;
+    writes.push(
+      prisma.recurringSeries.update({
+        where: { id: s.id },
+        data: { nextExpectedDate: new Date(`${next}T00:00:00Z`) },
+      })
+    );
+  }
+  if (writes.length > 0) await prisma.$transaction(writes);
+}
+
 /** Generation + matching in one call — what cron and pages actually use. */
 export async function syncPlannedState(
   userId: string,
@@ -276,4 +372,5 @@ export async function syncPlannedState(
 ): Promise<void> {
   await ensurePlannedItems(userId, timezone);
   await runPlannedMatching(userId, timezone, currency, locale);
+  await refreshSeriesSchedule(userId);
 }

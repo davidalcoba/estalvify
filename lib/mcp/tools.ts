@@ -29,6 +29,7 @@ import {
   deleteSeriesForUser,
   listPlannedItemsForUser,
   createPlannedItemForUser,
+  updatePlannedItemForUser,
   deletePlannedItemForUser,
   upsertBudgetItemForUser,
   deleteBudgetItemForUser,
@@ -368,8 +369,8 @@ export function registerTools(server: McpServer): void {
       description:
         "Get the user's LEGACY monthly budgets (per-category planned amounts). The Budget " +
         "feature was replaced by the Plan (/budget redirects to /plan) and these tables are " +
-        "no longer written by the app — use list_plan_items / create_plan_item / " +
-        "update_plan_item / delete_plan_item for planning instead.",
+        "no longer written by the app — use list_planned_items / create_planned_item / " +
+        "update_planned_item / delete_planned_item for planning instead.",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
@@ -436,8 +437,9 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         displayName: z.string().max(120),
         matcher: z.string().min(3).max(120).optional(),
+        ruleId: z.string().optional(),
         direction: z.enum(["DEBIT", "CREDIT"]),
-        categoryId: z.string(),
+        categoryId: z.string().optional(),
         bankAccountId: z.string().optional(),
         cadence: z.enum(["WEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "YEARLY", "IRREGULAR"]),
         expectedAmount: z.number().min(0),
@@ -448,7 +450,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (
-      { displayName, matcher, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate },
+      { displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate },
       extra,
     ) => {
       const userId = requireUserId(extra as ToolExtra);
@@ -457,6 +459,7 @@ export function registerTools(server: McpServer): void {
           await createSeriesForUser(userId, {
             displayName,
             matcher,
+            ruleId: ruleId ?? null,
             direction,
             categoryId: categoryId ?? null,
             bankAccountId: bankAccountId ?? null,
@@ -485,8 +488,9 @@ export function registerTools(server: McpServer): void {
         seriesId: z.string(),
         displayName: z.string().max(120),
         matcher: z.string().min(3).max(120).optional(),
+        ruleId: z.string().optional(),
         direction: z.enum(["DEBIT", "CREDIT"]),
-        categoryId: z.string(),
+        categoryId: z.string().optional(),
         bankAccountId: z.string().optional(),
         cadence: z.enum(["WEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "YEARLY", "IRREGULAR"]),
         expectedAmount: z.number().min(0),
@@ -498,7 +502,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (
-      { seriesId, displayName, matcher, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate, active },
+      { seriesId, displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate, active },
       extra,
     ) => {
       const userId = requireUserId(extra as ToolExtra);
@@ -507,6 +511,7 @@ export function registerTools(server: McpServer): void {
           await updateSeriesForUser(userId, seriesId, {
             displayName,
             matcher,
+            ruleId: ruleId ?? null,
             direction,
             categoryId: categoryId ?? null,
             bankAccountId: bankAccountId ?? null,
@@ -604,6 +609,49 @@ export function registerTools(server: McpServer): void {
         );
       } catch (err) {
         return errorResult(err, "create_planned_item failed");
+      }
+    },
+  );
+
+  server.registerTool(
+    "update_planned_item",
+    {
+      description:
+        "Edit a hand-typed one-off planned item (e.g. this year's IBI changed amount). " +
+        "Only PENDING one-offs: series instances are engine-owned (edit the series) and " +
+        "matched history never rewrites. Omitted fields stay unchanged.",
+      inputSchema: {
+        plannedItemId: z.string(),
+        description: z.string().max(120).optional(),
+        categoryId: z.string().optional(),
+        amount: z.number().positive().optional(),
+        year: z.number().int().optional(),
+        month: z.number().int().min(1).max(12).optional(),
+        dueDay: z.number().int().min(1).max(31).nullable().optional(),
+        windowFromDay: z.number().int().min(1).max(31).nullable().optional(),
+        windowToDay: z.number().int().min(1).max(31).nullable().optional(),
+      },
+    },
+    async (
+      { plannedItemId, description, categoryId, amount, year, month, dueDay, windowFromDay, windowToDay },
+      extra,
+    ) => {
+      const userId = requireUserId(extra as ToolExtra);
+      try {
+        return json(
+          await updatePlannedItemForUser(userId, plannedItemId, {
+            description,
+            categoryId,
+            amount,
+            year,
+            month,
+            dueDay,
+            windowFromDay,
+            windowToDay,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "update_planned_item failed");
       }
     },
   );

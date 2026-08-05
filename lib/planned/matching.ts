@@ -31,6 +31,14 @@ export const MISSED_GRACE_DAYS = MATCH_LAG_DAYS;
 export const AMOUNT_TOLERANCE = 0.25;
 /** Relative deviation of a matched amount that triggers a price-change alert. */
 export const DEVIATION_THRESHOLD = 0.15;
+/**
+ * Hard cap on the relative deviation a descriptor match may carry. Bank
+ * descriptors collide ("TRANSPORTE Y ALQUILER DE VEHICULOS" contains
+ * ALQUILER; both insurances read "BBVA PLAN ESTARSEGURO") — the amount is
+ * what tells a 1.389 € rent from a 19 € taxi and the 59 € policy from the
+ * 11 € one. Generous enough to survive a real price change (O2: +52%).
+ */
+export const MAX_MATCH_DEVIATION = 0.75;
 
 export interface PlannedForMatch {
   id: string;
@@ -38,6 +46,12 @@ export interface PlannedForMatch {
   amount: number;
   /** Normalized text to look for in descriptors (series matcher or description). */
   matcher: string;
+  /**
+   * Rule-linked series: the rule's condition tree decides recognition instead
+   * of the matcher text (the caller builds the predicate). Amount guards and
+   * FIFO still apply on top.
+   */
+  matches?: (tx: TransactionForMatch) => boolean;
   categoryId: string | null;
   year: number;
   month: number;
@@ -120,28 +134,38 @@ export function matchPlannedItems(
     const { start, end } = matchWindow(item);
     const matcher = normalizeDescriptor(item.matcher);
 
-    let best: { tx: TransactionForMatch; strong: boolean } | null = null;
+    let best: { tx: TransactionForMatch; strong: boolean; dev: number } | null = null;
     for (const tx of transactions) {
       if (usedTx.has(tx.id)) continue;
       if (tx.direction !== item.direction) continue;
       if (tx.date < start || tx.date > end) continue;
 
-      const strong =
-        matcher.length >= 3 && normalizeDescriptor(tx.descriptor).includes(matcher);
-      const amountOk =
-        item.amount > 0 &&
-        Math.abs(tx.amount - item.amount) / item.amount <= AMOUNT_TOLERANCE;
+      const dev =
+        item.amount > 0 ? Math.abs(tx.amount - item.amount) / item.amount : 0;
+      const recognized = item.matches
+        ? item.matches(tx)
+        : matcher.length >= 3 && normalizeDescriptor(tx.descriptor).includes(matcher);
+      // Descriptor recognition alone is not enough — the amount must be in
+      // the same league, or the rent matches a taxi (see MAX_MATCH_DEVIATION).
+      const strong = recognized && dev <= MAX_MATCH_DEVIATION;
       const weak =
-        !strong && item.categoryId !== null && tx.categoryId === item.categoryId && amountOk;
+        !strong &&
+        !item.matches &&
+        item.categoryId !== null &&
+        tx.categoryId === item.categoryId &&
+        item.amount > 0 &&
+        dev <= AMOUNT_TOLERANCE;
       if (!strong && !weak) continue;
 
-      // FIFO tie-break: the earliest arrival wins.
+      // Preference: strong beats weak, then the closest amount (what tells
+      // twin merchants apart), then FIFO — the earliest arrival wins.
       if (
         !best ||
         (strong && !best.strong) ||
-        (strong === best.strong && tx.date < best.tx.date)
+        (strong === best.strong && dev < best.dev - 1e-9) ||
+        (strong === best.strong && Math.abs(dev - best.dev) <= 1e-9 && tx.date < best.tx.date)
       ) {
-        best = { tx, strong };
+        best = { tx, strong, dev };
       }
     }
 
