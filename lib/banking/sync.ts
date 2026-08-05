@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getBalances, getTransactions } from "./enable-banking";
 import type { EnableBankingTransaction } from "./enable-banking";
 import { buildExternalId, parseRemittanceFields } from "./transaction-parse";
+import { extractMerchant } from "./merchant";
 import {
   isAuthError,
   isRateLimitError,
@@ -159,6 +160,7 @@ export async function syncAccount(
               direction: tx.credit_debit_indicator === "CRDT" ? "CREDIT" : "DEBIT",
               valueDate: tx.value_date ? new Date(tx.value_date) : (tx.booking_date ? new Date(tx.booking_date) : today),
               description: parsed.description ?? tx.note ?? null,
+              merchant: extractMerchant(parsed.description ?? tx.note ?? null, parsed.remittanceInfo),
               // Store only the last 4 digits — full IBANs are personal data
               creditorIban: tx.creditor_account?.iban?.slice(-4) ?? null,
               debtorIban: tx.debtor_account?.iban?.slice(-4) ?? null,

@@ -234,6 +234,11 @@ model Transaction {
 
   // Descriptors from bank (raw, do not modify)
   description          String?
+  // Clean merchant name extracted from the noisy raw descriptor (gateway
+  // asterisks, "PAGO CON TARJETA" scaffolding, city/country suffixes, reference
+  // numbers) — for display (Detected list) and detection grouping. Matching
+  // still runs over description/remittanceInfo via normalizeDescriptor.
+  merchant             String?
   // Last 4 digits of counterparty IBANs only — full IBANs are never stored (privacy)
   creditorIban         String?
   debtorIban           String?
