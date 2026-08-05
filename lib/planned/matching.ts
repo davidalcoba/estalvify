@@ -62,6 +62,15 @@ export interface PlannedForMatch {
    * FIFO still apply on top.
    */
   matches?: (tx: TransactionForMatch) => boolean;
+  /**
+   * A period that carries SEVERAL charges of this series (school fees split
+   * into base + activities + materials; association dues billed as separate
+   * SEPA debits). When true the item absorbs every recognized arrival in the
+   * window and matchedAmount is their sum — the per-transaction amount guard is
+   * skipped, so recognition rests entirely on a specific matcher or a rule.
+   * When false (the default) the item expects a single charge, guard and all.
+   */
+  aggregate?: boolean;
   categoryId: string | null;
   year: number;
   month: number;
@@ -108,23 +117,35 @@ export function matchWindow(item: PlannedForMatch): MatchWindow {
 
 export interface MatchResult {
   itemId: string;
+  /** Primary matched transaction (earliest) — anchors the unique FK. */
   transactionId: string;
+  /** Every transaction absorbed by this item (≥1). */
+  transactionIds: string[];
+  /** SUM of the absorbed transactions' amounts. */
   matchedAmount: number;
-  /** Signed relative deviation vs the expected amount (null when expected is 0). */
+  /** Signed relative deviation of the SUM vs the expected amount (null when expected is 0). */
   deviation: number | null;
 }
 
 /**
- * Match PENDING items against candidate transactions. Strong signal is the
- * descriptor containing the item's matcher; the fallback for matcher-less
- * one-offs is same category + amount within tolerance. Each transaction links
- * at most one item and vice versa.
+ * Match PENDING items against candidate transactions. Two recognition paths:
  *
- * FIFO: items are processed oldest budget month first and each takes the
- * EARLIEST matching arrival, so when two charges of the same series land in
- * one calendar month (the delayed one and the current one), the first pairs
- * with July's planned item and the second with August's — instead of August
- * eating both and July reading zero.
+ *  - Strong (series with a matcher or a linked rule): AGGREGATE. A period can
+ *    carry several charges of the same series — school fees split into base +
+ *    activities + materials, association dues billed as separate SEPA debits.
+ *    So the item absorbs EVERY transaction its matcher/rule recognizes inside
+ *    the window and matchedAmount is their sum. There is no per-transaction
+ *    amount guard here: recognition is the specific matcher (audited at save
+ *    time to reject a 0-hit or scattered matcher) or the rule's condition tree
+ *    (which carries its own amount band, so the twin BBVA policies never mix).
+ *    A single-charge series simply sums one transaction — unchanged behaviour.
+ *  - Weak (hand-typed one-off, no matcher/rule): the single closest arrival by
+ *    same category + amount within tolerance.
+ *
+ * Each transaction links at most one item. FIFO: items are processed oldest
+ * budget month first, so when a delayed charge and the current one share a
+ * calendar month, July's item claims the earlier and August's the later
+ * instead of August eating both.
  */
 export function matchPlannedItems(
   items: PlannedForMatch[],
@@ -140,24 +161,50 @@ export function matchPlannedItems(
       (a.windowFromDay ?? a.dueDay ?? 1) - (b.windowFromDay ?? b.dueDay ?? 1)
   );
 
+  const push = (item: PlannedForMatch, txs: TransactionForMatch[]): void => {
+    const byDate = [...txs].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const tx of byDate) usedTx.add(tx.id);
+    const sum = Math.round(byDate.reduce((s, tx) => s + tx.amount, 0) * 100) / 100;
+    results.push({
+      itemId: item.id,
+      transactionId: byDate[0].id,
+      transactionIds: byDate.map((tx) => tx.id),
+      matchedAmount: sum,
+      deviation:
+        item.amount > 0 ? Math.round(((sum - item.amount) / item.amount) * 1000) / 1000 : null,
+    });
+  };
+
   for (const item of ordered) {
     const { start, end } = matchWindow(item);
     const matcher = normalizeDescriptor(item.matcher);
-
-    let best: { tx: TransactionForMatch; strong: boolean; dev: number } | null = null;
-    for (const tx of transactions) {
-      if (usedTx.has(tx.id)) continue;
-      if (tx.direction !== item.direction) continue;
-      if (tx.date < start || tx.date > end) continue;
-
-      const dev =
-        item.amount > 0 ? Math.abs(tx.amount - item.amount) / item.amount : 0;
-      const recognized = item.matches
+    const inWindow = (tx: TransactionForMatch) =>
+      !usedTx.has(tx.id) &&
+      tx.direction === item.direction &&
+      tx.date >= start &&
+      tx.date <= end;
+    const recognizes = (tx: TransactionForMatch) =>
+      item.matches
         ? item.matches(tx)
         : matcher.length >= 3 && normalizeDescriptor(tx.descriptor).includes(matcher);
-      // Descriptor recognition alone is not enough — the amount must be in
-      // the same league, or the rent matches a taxi (see MAX_MATCH_DEVIATION).
-      const strong = recognized && dev <= MAX_MATCH_DEVIATION;
+
+    // Aggregate series: sum every recognized arrival in the window. Recognition
+    // is the specific matcher (audited at save) or the rule, so no per-tx guard.
+    if (item.aggregate) {
+      const claimed = transactions.filter((tx) => inWindow(tx) && recognizes(tx));
+      if (claimed.length > 0) push(item, claimed);
+      continue;
+    }
+
+    // Single-charge series (default): the best individual arrival. Strong =
+    // recognized AND amount in the same league (guards rent≠taxi, twin policies
+    // by amount); weak = category + amount for matcher-less one-offs. Closest
+    // amount wins, then FIFO.
+    let best: { tx: TransactionForMatch; strong: boolean; dev: number } | null = null;
+    for (const tx of transactions) {
+      if (!inWindow(tx)) continue;
+      const dev = item.amount > 0 ? Math.abs(tx.amount - item.amount) / item.amount : 0;
+      const strong = recognizes(tx) && dev <= MAX_MATCH_DEVIATION;
       const weak =
         !strong &&
         !item.matches &&
@@ -166,9 +213,6 @@ export function matchPlannedItems(
         item.amount > 0 &&
         dev <= AMOUNT_TOLERANCE;
       if (!strong && !weak) continue;
-
-      // Preference: strong beats weak, then the closest amount (what tells
-      // twin merchants apart), then FIFO — the earliest arrival wins.
       if (
         !best ||
         (strong && !best.strong) ||
@@ -178,19 +222,7 @@ export function matchPlannedItems(
         best = { tx, strong, dev };
       }
     }
-
-    if (best) {
-      usedTx.add(best.tx.id);
-      results.push({
-        itemId: item.id,
-        transactionId: best.tx.id,
-        matchedAmount: best.tx.amount,
-        deviation:
-          item.amount > 0
-            ? Math.round(((best.tx.amount - item.amount) / item.amount) * 1000) / 1000
-            : null,
-      });
-    }
+    if (best) push(item, [best.tx]);
   }
   return results;
 }

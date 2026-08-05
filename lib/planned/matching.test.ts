@@ -338,6 +338,75 @@ describe("amount guard on descriptor collisions (bug report 2026-08-05)", () => 
   });
 });
 
+describe("aggregate series (several charges per period)", () => {
+  const afa = (): PlannedForMatch => ({
+    ...rent,
+    id: "afa-aug",
+    amount: 60,
+    matcher: "TEIXIDORES",
+    aggregate: true,
+    year: 2026,
+    month: 8,
+    windowFromDay: 1,
+    windowToDay: 6,
+  });
+  const debit = (id: string, amount: number, date = "2026-08-03") => ({
+    id,
+    date,
+    direction: "DEBIT" as const,
+    amount,
+    descriptor: "AFA TEIXIDORES DE GRACIA",
+    categoryId: "education",
+  });
+
+  it("sums three same-day dues into one matched total", () => {
+    const results = matchPlannedItems(
+      [afa()],
+      [debit("a", 20), debit("b", 20), debit("c", 20)]
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].matchedAmount).toBe(60);
+    expect(results[0].transactionIds).toHaveLength(3);
+    expect(results[0].transactionId).toBe("a"); // earliest anchors
+    expect(results[0].deviation).toBe(0);
+  });
+
+  it("absorbs small fractions the single-charge amount guard would reject (school ≈259)", () => {
+    const escola: PlannedForMatch = {
+      ...afa(),
+      id: "escola",
+      amount: 259,
+      matcher: "ESCOLA GRACIA",
+    };
+    const tx = (id: string, amount: number) => ({
+      id,
+      date: "2026-08-03",
+      direction: "DEBIT" as const,
+      amount,
+      descriptor: "ESCOLA GRACIA",
+      categoryId: "education",
+    });
+    const results = matchPlannedItems(
+      [escola],
+      [tx("t1", 106.5), tx("t2", 104.45), tx("t3", 20), tx("t4", 20), tx("t5", 4), tx("t6", 4)]
+    );
+    expect(results[0].matchedAmount).toBe(258.95);
+    expect(results[0].transactionIds).toHaveLength(6);
+  });
+
+  it("a non-aggregate series still takes a single charge and keeps the amount guard", () => {
+    // Same three 20€ dues, but aggregate off: only one is claimed (guard would
+    // even reject them vs 60, but 20/60 dev=0.67 < 0.75 so one strong match).
+    const single: PlannedForMatch = { ...afa(), aggregate: false };
+    const results = matchPlannedItems(
+      [single],
+      [debit("a", 20), debit("b", 20), debit("c", 20)]
+    );
+    expect(results[0].transactionIds).toHaveLength(1);
+    expect(results[0].matchedAmount).toBe(20);
+  });
+});
+
 describe("rule-linked recognition", () => {
   it("uses the item's predicate instead of the matcher text", () => {
     const item: PlannedForMatch = {

@@ -482,8 +482,14 @@ model PlannedItem {
   recurringSeriesId String?
 
   status               PlannedStatus @default(PENDING)
+  // The primary matched transaction (earliest in the window) — kept unique so a
+  // transaction anchors at most one planned item. When a period carries several
+  // charges of the same series (school fees, association dues), the rest are in
+  // matchedTransactionIds and matchedAmount is their SUM.
   matchedTransactionId String?       @unique
-  // What actually arrived (deviation vs `amount` drives the price-change alert).
+  matchedTransactionIds String[]     @default([])
+  // What actually arrived (SUM across matchedTransactionIds; deviation vs
+  // `amount` drives the price-change alert).
   matchedAmount        Decimal?      @db.Decimal(15, 2)
 
   createdAt DateTime @default(now())
@@ -543,6 +549,12 @@ model RecurringSeries {
   windowFromDay  Int?
   windowToDay    Int?
   anchorMonthEnd Boolean @default(false)
+
+  // Some periods carry SEVERAL charges of the same series (school fees split
+  // into base + activities + materials; association dues as separate SEPA
+  // debits). When true, each planned instance sums every recognized arrival in
+  // its window instead of expecting one charge. Default false = single charge.
+  aggregate Boolean @default(false)
 
   // Which account the charge hits / the income lands in. Configuration, not
   // inference — rent leaves Despeses, Mònica's salary lands in Estalvis.
