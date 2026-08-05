@@ -30,11 +30,12 @@ import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency } from "@/lib/formatters";
-import type { CategoryObjective } from "@/lib/budget/month-status";
+import type { CategoryObjective, IncomeObjective } from "@/lib/budget/month-status";
 import { upsertBudgetObjective, removeBudgetObjective } from "@/app/(app)/plan/actions";
 
 interface ObjectivesCardProps {
   objectives: CategoryObjective[];
+  incomeObjectives: IncomeObjective[];
   /** 0–1, how much of the month has elapsed — the pace reference. */
   monthElapsed: number;
   categories: Category[];
@@ -54,6 +55,7 @@ interface Draft {
 
 export function ObjectivesCard({
   objectives,
+  incomeObjectives,
   monthElapsed,
   categories,
   year,
@@ -133,6 +135,84 @@ export function ObjectivesCard({
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        {incomeObjectives.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">Income</p>
+            <ul className="space-y-4">
+              {incomeObjectives.map((o) => {
+                const receivedPct =
+                  o.expected > 0 ? Math.round((o.received / o.expected) * 100) : 0;
+                const key = `income:${o.categoryId}`;
+                const isOpen = expandedId === key;
+                return (
+                  <li key={key} className="text-sm">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-1 text-left font-medium"
+                        onClick={() => setExpandedId(isOpen ? null : key)}
+                        aria-expanded={isOpen}
+                      >
+                        <ChevronRight
+                          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                            isOpen ? "rotate-90" : ""
+                          }`}
+                        />
+                        <span
+                          className="inline-block h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: o.categoryColor }}
+                        />
+                        <span className="min-w-0 truncate">{o.categoryName}</span>
+                      </button>
+                      <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
+                        {fmt(o.received)}
+                        <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
+                      </span>
+                      <span
+                        className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${
+                          receivedPct >= 100 ? "text-success" : "text-muted-foreground"
+                        }`}
+                      >
+                        {receivedPct}%
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
+                      <span className="tabular-nums text-muted-foreground">
+                        {fmt(o.received)}
+                        <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
+                      </span>
+                    </div>
+                    <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                      {/* Inverted polarity: filling up is good — income arriving. */}
+                      <div
+                        className="h-full rounded-full bg-success"
+                        style={{ width: `${Math.min(100, receivedPct)}%` }}
+                      />
+                    </div>
+
+                    {isOpen && o.recurrings.length > 0 && (
+                      <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-3 text-xs">
+                        {o.recurrings.map((r, i) => (
+                          <li key={i} className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-muted-foreground">
+                              <Repeat className="mr-1 inline h-3 w-3" />
+                              {r.description}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {r.status === "MATCHED" ? "✓ " : ""}
+                              {fmt(r.amount)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         {objectives.length === 0 ? (
           <div className="flex items-start gap-3 text-sm text-muted-foreground">
             <Target className="mt-0.5 h-4 w-4 shrink-0" />
@@ -141,7 +221,9 @@ export function ObjectivesCard({
         ) : (
           <>
             {variables.length > 0 && (
-              <ul className="space-y-3">
+              <div className={incomeObjectives.length > 0 ? "space-y-3 border-t pt-3" : "space-y-3"}>
+              <p className="text-xs font-medium text-muted-foreground">Charges</p>
+              <ul className="space-y-4">
                 {variables.map((o) => {
                   const consumedPct =
                     o.assigned > 0 ? Math.round((o.consumed / o.assigned) * 100) : 0;
@@ -186,13 +268,13 @@ export function ObjectivesCard({
                           {consumedPct}%
                         </span>
                       </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
+                      <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
                         <span className="tabular-nums text-muted-foreground">
                           {fmt(o.consumed)}
                           <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
                         </span>
                       </div>
-                      <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
                           className={`h-full rounded-full ${
                             over ? "bg-destructive" : ahead ? "bg-warning" : "bg-primary"
@@ -296,6 +378,7 @@ export function ObjectivesCard({
                   );
                 })}
               </ul>
+              </div>
             )}
 
             {funds.length > 0 && (

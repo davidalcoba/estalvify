@@ -82,6 +82,17 @@ export interface CategoryObjective {
   transactions: ObjectiveTransaction[];
 }
 
+/** Expected income of the month, grouped by category — the Income side of
+ *  the objectives list. Received books per accrual (matched amounts). */
+export interface IncomeObjective {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string;
+  expected: number;
+  received: number;
+  recurrings: ObjectiveRecurring[];
+}
+
 export interface Reconciliation extends ActualResult {
   expectedResult: number;
   performance: number;
@@ -119,6 +130,7 @@ export interface MonthStatus {
   composition: WeekCompositionRow[];
   variableSpentMonth: number;
   objectives: CategoryObjective[];
+  incomeObjectives: IncomeObjective[];
   reconciliation: Reconciliation;
 }
 
@@ -486,6 +498,38 @@ export async function buildMonthStatus(
     txsByObjective.set(target, list);
   }
 
+  // Income side: expected income of the month grouped by root category,
+  // received per accrual (matched amounts book in their item's month).
+  const incomeMap = new Map<
+    string,
+    { expected: number; received: number; recurrings: ObjectiveRecurring[] }
+  >();
+  for (const p of plannedMonth) {
+    if (p.direction !== "CREDIT" || !p.categoryId) continue;
+    const target = rootOf(p.categoryId, parentOf);
+    const entry = incomeMap.get(target) ?? { expected: 0, received: 0, recurrings: [] };
+    const amount = Number(p.amount.toString());
+    entry.expected += amount;
+    if (p.status === "MATCHED" && p.matchedAmount != null) {
+      entry.received += Number(p.matchedAmount.toString());
+    }
+    entry.recurrings.push({ description: p.description, amount: round(amount), status: p.status });
+    incomeMap.set(target, entry);
+  }
+  const incomeObjectives: IncomeObjective[] = [...incomeMap.entries()]
+    .map(([categoryId, e]) => {
+      const cat = categoryById.get(categoryId);
+      return {
+        categoryId,
+        categoryName: cat?.name ?? "?",
+        categoryColor: cat?.color ?? "#14b8a6",
+        expected: round(e.expected),
+        received: round(e.received),
+        recurrings: e.recurrings.sort((a, b) => b.amount - a.amount),
+      };
+    })
+    .sort((a, b) => b.expected - a.expected);
+
   const itemByCategory = new Map(currentItems.map((i) => [i.categoryId, i]));
   const objectives: CategoryObjective[] = [...objectiveSet]
     .map((categoryId) => {
@@ -637,6 +681,7 @@ export async function buildMonthStatus(
     composition,
     variableSpentMonth,
     objectives,
+    incomeObjectives,
     reconciliation,
   };
 }
