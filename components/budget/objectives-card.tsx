@@ -122,13 +122,14 @@ export function ObjectivesCard({
         <Button
           variant="ghost"
           size="sm"
+          className="-my-1 h-8"
           onClick={() =>
             setDraft({ categoryId: null, assigned: "", rollover: false, existing: false })
           }
           disabled={isPending}
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
-          Objective
+          Add
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -176,34 +177,19 @@ export function ObjectivesCard({
                           <span className="min-w-0 truncate">{o.categoryName}</span>
                         </button>
                         <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
-                          {fmt(o.consumed)} / {fmt(o.assigned)}
+                          {fmt(o.consumed)}
+                          <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
                         </span>
                         <span
-                          className={`hidden w-20 shrink-0 text-right text-xs tabular-nums sm:inline ${pctTone}`}
+                          className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${pctTone}`}
                         >
-                          {consumedPct}% · {elapsedPct}%
+                          {consumedPct}%
                         </span>
-                        {o.extra > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0 text-muted-foreground"
-                            onClick={() =>
-                              setConfirm({ categoryId: o.categoryId, name: o.categoryName })
-                            }
-                            disabled={isPending}
-                            title="Remove objective (this month onward)"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
                       </div>
                       <div className="mt-0.5 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
                         <span className="tabular-nums text-muted-foreground">
-                          {fmt(o.consumed)} / {fmt(o.assigned)}
-                        </span>
-                        <span className={`tabular-nums ${pctTone}`}>
-                          {consumedPct}% · {elapsedPct}%
+                          {fmt(o.consumed)}
+                          <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
                         </span>
                       </div>
                       <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -271,7 +257,21 @@ export function ObjectivesCard({
                             </ul>
                           )}
 
-                          <div className="flex justify-end border-t pt-2">
+                          <div className="flex justify-end gap-2 border-t pt-2">
+                            {o.extra > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-destructive hover:text-destructive"
+                                onClick={() =>
+                                  setConfirm({ categoryId: o.categoryId, name: o.categoryName })
+                                }
+                                disabled={isPending}
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Remove manual
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -437,12 +437,14 @@ export function ObjectivesCard({
         }}
       >
         <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
-          <DialogTitle>Remove objective?</DialogTitle>
+          <DialogTitle>Remove manual amount?</DialogTitle>
           {confirm && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
+              The manual amount of{" "}
               <span className="font-medium text-foreground">{confirm.name}</span>{" "}
-              stops counting from this month on. Past months keep it.
+              stops counting from this month on. Its recurring charges stay,
+              and past months keep everything.
             </p>
             <div className="flex items-center justify-end gap-2">
               <Button

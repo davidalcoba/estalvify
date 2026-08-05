@@ -19,6 +19,11 @@ export interface TxForDetection {
 
 export type SuggestedCadence = "MONTHLY" | "BIMONTHLY" | "QUARTERLY" | "YEARLY";
 
+export interface SuggestionOccurrence {
+  date: string; // YYYY-MM-DD
+  amount: number;
+}
+
 export interface RecurringSuggestion {
   /** Matcher text the series would use (normalized descriptor prefix). */
   merchantKey: string;
@@ -34,6 +39,8 @@ export interface RecurringSuggestion {
   categoryId: string | null;
   occurrences: number;
   lastDate: string;
+  /** The transactions behind the proposal, newest first (capped). */
+  transactions: SuggestionOccurrence[];
 }
 
 const MIN_OCCURRENCES = 3;
@@ -159,6 +166,9 @@ export function detectRecurringSuggestions(
       categoryId,
       occurrences: group.length,
       lastDate: byDateDesc[0].date,
+      transactions: byDateDesc
+        .slice(0, 12)
+        .map((t) => ({ date: t.date, amount: round(t.amount) })),
     });
   }
 

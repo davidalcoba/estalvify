@@ -407,6 +407,20 @@ export function SeriesManager({
                   </dd>
                 </div>
               </dl>
+
+              {detail.transactions.length > 0 && (
+                <ul className="max-h-40 space-y-1 overflow-y-auto border-t pt-2 text-xs">
+                  {detail.transactions.map((t, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-2 text-muted-foreground"
+                    >
+                      <span className="tabular-nums">{t.date}</span>
+                      <span className="tabular-nums">{fmt(t.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="flex items-center justify-end gap-2">
                 <Button
                   variant="outline"
