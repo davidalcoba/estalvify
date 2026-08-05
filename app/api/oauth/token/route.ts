@@ -11,7 +11,10 @@ import {
   consumeAuthCode,
   getValidRefreshToken,
   createRefreshToken,
+  rotateRefreshToken,
 } from "@/lib/mcp/store";
+import { prisma } from "@/lib/prisma";
+import { isEmailAllowed } from "@/lib/auth/allowed-emails";
 import {
   signAccessToken,
   verifyPkce,
@@ -23,6 +26,7 @@ import {
   clientSecretMatches,
 } from "@/lib/mcp/clients";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/mcp/http";
+import { consumeRateLimit, clientIp } from "@/lib/rate-limit";
 
 /** Parse either form-encoded (OAuth default) or JSON bodies into a flat map. */
 async function readParams(request: NextRequest): Promise<Record<string, string>> {
@@ -79,6 +83,11 @@ async function issueTokens(userId: string, clientId: string, scope?: string) {
 }
 
 export async function POST(request: NextRequest) {
+  // Per-IP window: bounds client-secret and code/refresh-token guessing.
+  if (!(await consumeRateLimit("oauth-token", clientIp(request)))) {
+    return oauthError("slow_down", "Too many requests — retry later", 429);
+  }
+
   let params: Record<string, string>;
   try {
     params = await readParams(request);
@@ -129,7 +138,30 @@ export async function POST(request: NextRequest) {
     if (!record || record.clientId !== clientId) {
       return oauthError("invalid_grant", "Refresh token invalid or expired");
     }
-    // Non-rotating for the MVP: issue a fresh access token, keep the refresh.
+
+    // Re-check the sign-in allowlist at refresh time. Sign-in only gates the
+    // Auth.js flow, so without this a user removed from ALLOWED_EMAILS keeps
+    // minting MCP access tokens for another 30 days. Denied here means their
+    // MCP access ends with the current access token (≤ 1 hour).
+    const user = await prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { email: true },
+    });
+    if (!user || !isEmailAllowed(user.email, process.env.ALLOWED_EMAILS)) {
+      await prisma.mcpRefreshToken.update({
+        where: { id: record.id },
+        data: { revokedAt: new Date() },
+      });
+      return oauthError("invalid_grant", "Grant is no longer authorized");
+    }
+
+    // Rotation (OAuth 2.1): every refresh retires the presented token and
+    // issues a replacement. A replayed (already-rotated) token loses the
+    // atomic claim inside rotateRefreshToken and gets invalid_grant.
+    const nextRefreshToken = await rotateRefreshToken(record);
+    if (!nextRefreshToken) {
+      return oauthError("invalid_grant", "Refresh token invalid or expired");
+    }
     const accessToken = await signAccessToken({
       userId: record.userId,
       clientId: record.clientId,
@@ -139,6 +171,7 @@ export async function POST(request: NextRequest) {
       access_token: accessToken,
       token_type: "Bearer",
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
+      refresh_token: nextRefreshToken,
       scope: record.scope ?? undefined,
     });
   }

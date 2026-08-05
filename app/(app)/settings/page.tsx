@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
+import { PrivacyDataCard } from "@/components/settings/privacy-data-card";
 import { seedDefaultCategories } from "./actions";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -62,6 +63,7 @@ function SettingsLayout({
   categories,
 }: {
   user: {
+    email?: string | null;
     timezone?: string | null;
     currency?: string | null;
     locale?: string | null;
@@ -93,6 +95,8 @@ function SettingsLayout({
         />
 
         <CategoryManager initialCategories={categories} />
+
+        <PrivacyDataCard email={user?.email ?? ""} />
       </div>
     </div>
   );

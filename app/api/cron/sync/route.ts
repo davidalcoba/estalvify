@@ -13,6 +13,7 @@ import { send } from "@vercel/queue";
 import { expireStaleConsents } from "@/lib/banking/connection-status";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 import { generateNotificationsForUser } from "@/lib/notifications/generate";
+import { purgeExpiredRecords } from "@/lib/retention";
 
 /** Constant-time bearer check that fails closed when the secret is unset. An
  * absent CRON_SECRET must never authenticate — otherwise the header
@@ -45,6 +46,15 @@ export async function GET(request: NextRequest) {
   // Drop connections with an expired PSD2 consent out of the sync rotation —
   // they would only 401. They resurface once the user reconnects.
   await expireStaleConsents();
+
+  // Retention purge (expired sessions/codes/tokens, old notifications,
+  // stale rate-limit rows). Best-effort — a failed purge must not block the
+  // sync; the next run retries the same rows.
+  try {
+    await purgeExpiredRecords();
+  } catch (err) {
+    console.warn("[cron/sync] Retention purge failed:", err);
+  }
 
   const activeConnections = await prisma.bankConnection.findMany({
     where: { status: "ACTIVE" },

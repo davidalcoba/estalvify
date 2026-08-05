@@ -9,6 +9,7 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { verifyAccessToken } from "@/lib/mcp/oauth";
 import { registerTools } from "@/lib/mcp/tools";
+import { scopesFromClaim } from "@/lib/mcp/scopes";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -24,7 +25,9 @@ async function verifyToken(
   return {
     token: bearerToken,
     clientId: claims.clientId,
-    scopes: claims.scope ? claims.scope.split(" ") : [],
+    // Legacy tokens without a scope claim keep full access (they expire within
+    // the hour); tools enforce read/write against this list.
+    scopes: scopesFromClaim(claims.scope),
     extra: { userId: claims.userId },
   };
 }

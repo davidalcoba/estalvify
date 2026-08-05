@@ -666,6 +666,23 @@ enum SyncStatus {
 }
 
 // ─────────────────────────────────────────────
+// RATE LIMITS - Fixed-window counters (lib/rate-limit.ts)
+// ─────────────────────────────────────────────
+
+// One row per (limiter, caller) pair, e.g. "oauth-token:203.0.113.7". Postgres
+// is the shared store because serverless invocations share nothing else — an
+// in-memory counter would reset on every cold start. Stale rows are purged by
+// the daily retention job.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(1)
+
+  @@index([windowStart])
+  @@map("rate_limits")
+}
+
+// ─────────────────────────────────────────────
 // MCP - OAuth 2.1 Authorization Server (for the MCP API)
 // See lib/mcp/oauth.ts for the crypto primitives.
 // ─────────────────────────────────────────────

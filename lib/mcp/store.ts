@@ -134,3 +134,43 @@ export async function getValidRefreshToken(token: string) {
   if (record.expiresAt.getTime() <= Date.now()) return null;
   return record;
 }
+
+/**
+ * Revoke a refresh token presented by a client (RFC 7009). Scoped to the
+ * authenticated client so one client cannot revoke another's tokens. Returns
+ * quietly whether or not anything matched — the RFC requires 200 either way,
+ * so an attacker cannot use the endpoint as a token-validity oracle.
+ */
+export async function revokeRefreshToken(
+  token: string,
+  clientId: string,
+): Promise<void> {
+  await prisma.mcpRefreshToken.updateMany({
+    where: { tokenHash: hashToken(token), clientId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
+/**
+ * Atomically retire a refresh token and mint its replacement (rotation).
+ * The revocation is guarded on `revokedAt: null`, so a replayed token loses
+ * the race and gets nothing — the caller must treat a null return as an
+ * invalid grant.
+ */
+export async function rotateRefreshToken(record: {
+  id: string;
+  clientId: string;
+  userId: string;
+  scope: string | null;
+}): Promise<string | null> {
+  const claimed = await prisma.mcpRefreshToken.updateMany({
+    where: { id: record.id, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  if (claimed.count !== 1) return null;
+  return createRefreshToken({
+    clientId: record.clientId,
+    userId: record.userId,
+    scope: record.scope ?? undefined,
+  });
+}

@@ -2,13 +2,14 @@
 //
 // Human authentication is delegated to the existing Auth.js Google session:
 // unauthenticated users are bounced to /login with a callbackUrl that returns
-// here after sign-in. For this personal/household deployment we auto-approve
-// (no scope-consent screen) once a valid session exists.
+// here after sign-in. Once a session exists the user is sent to the consent
+// screen (/oauth/consent), which shows the client and the scopes being granted
+// and mints the authorization code on explicit approval.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createAuthCode, ensureClientRow } from "@/lib/mcp/store";
 import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
+import { consumeRateLimit, clientIp } from "@/lib/rate-limit";
 
 /** Redirect back to the client with an OAuth error (RFC 6749 §4.1.2.1). */
 function errorRedirect(
@@ -25,6 +26,11 @@ function errorRedirect(
 }
 
 export async function GET(request: NextRequest) {
+  // Reachable anonymously (it bounces to /login itself), so bound it per IP.
+  if (!(await consumeRateLimit("oauth-authorize", clientIp(request)))) {
+    return new NextResponse("Too many requests", { status: 429 });
+  }
+
   const p = request.nextUrl.searchParams;
   const clientId = p.get("client_id");
   const redirectUri = p.get("redirect_uri");
@@ -77,26 +83,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 4) Auto-approve: mint a single-use, PKCE-bound authorization code.
-  //    A static client is configuration rather than a registration, so it has no
-  //    row yet — and the code table has a foreign key to one. See ensureClientRow.
-  if (client.isStatic) {
-    await ensureClientRow({
-      clientId: client.clientId,
-      redirectUris: client.redirectUris,
-    });
-  }
-  const code = await createAuthCode({
-    clientId,
-    userId: session.user.id,
-    redirectUri,
-    codeChallenge,
-    codeChallengeMethod,
-    scope,
-  });
-
-  const redirect = new URL(redirectUri);
-  redirect.searchParams.set("code", code);
-  if (state) redirect.searchParams.set("state", state);
-  return NextResponse.redirect(redirect);
+  // 4) Send the user to the consent screen with the validated request. The
+  //    screen re-validates everything server-side before minting the code, so
+  //    these params are display+transport, not trusted state.
+  const consent = new URL("/oauth/consent", request.nextUrl.origin);
+  consent.searchParams.set("client_id", clientId);
+  consent.searchParams.set("redirect_uri", redirectUri);
+  consent.searchParams.set("code_challenge", codeChallenge);
+  consent.searchParams.set("code_challenge_method", codeChallengeMethod);
+  if (state) consent.searchParams.set("state", state);
+  if (scope) consent.searchParams.set("scope", scope);
+  return NextResponse.redirect(consent);
 }
