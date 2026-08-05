@@ -14,20 +14,45 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-/** Secret used to sign MCP access tokens. Falls back to AUTH_SECRET so we don't
- *  introduce a second required secret for the personal/MVP setup. */
+/** Secret used to sign MCP access tokens.
+ *
+ * MCP_JWT_SECRET is the intended variable: a dedicated secret keeps the MCP
+ * token domain separate from Auth.js (`AUTH_SECRET`) so either can rotate
+ * without invalidating the other. The AUTH_SECRET fallback survives for the
+ * personal/MVP setup, but it now warns loudly on production so the coupling
+ * is a visible debt instead of a silent default. */
+let warnedAboutFallback = false;
+
 function getJwtSecret(): Uint8Array {
-  const secret = process.env.MCP_JWT_SECRET ?? process.env.AUTH_SECRET;
-  if (!secret) {
+  const dedicated = process.env.MCP_JWT_SECRET;
+  if (dedicated) return new TextEncoder().encode(dedicated);
+  const fallback = process.env.AUTH_SECRET;
+  if (!fallback) {
     throw new Error(
       "MCP_JWT_SECRET (or AUTH_SECRET) must be set to sign MCP access tokens",
     );
   }
-  return new TextEncoder().encode(secret);
+  if (process.env.VERCEL_ENV === "production" && !warnedAboutFallback) {
+    warnedAboutFallback = true;
+    console.warn(
+      "[mcp/oauth] MCP_JWT_SECRET is unset — signing MCP tokens with AUTH_SECRET. " +
+        "Set a dedicated MCP_JWT_SECRET so app sessions and MCP tokens rotate independently.",
+    );
+  }
+  return new TextEncoder().encode(fallback);
 }
 
 /** Audience claim identifying the MCP resource these tokens are valid for. */
 export const MCP_AUDIENCE = "estalvify-mcp";
+
+/** Issuer claim, distinct per deployment target. Deployments often share a
+ *  secret (e.g. the same var on `production` and `preview`); binding tokens to
+ *  the environment that minted them keeps a preview token from being replayed
+ *  against production. Tokens signed before this claim existed fail
+ *  verification — they expire within the hour and the refresh flow re-issues. */
+export function getTokenIssuer(): string {
+  return `estalvify-mcp:${process.env.VERCEL_ENV ?? "development"}`;
+}
 
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
 export const AUTH_CODE_TTL_SECONDS = 60; // 1 minute
@@ -100,6 +125,7 @@ export async function signAccessToken(
   return new SignJWT({ scope: claims.scope, client_id: claims.clientId })
     .setProtectedHeader({ alg: "HS256", typ: "at+jwt" })
     .setSubject(claims.userId)
+    .setIssuer(getTokenIssuer())
     .setAudience(MCP_AUDIENCE)
     .setIssuedAt(now)
     .setExpirationTime(now + ttlSeconds)
@@ -116,6 +142,7 @@ export async function verifyAccessToken(
   try {
     const { payload } = await jwtVerify(token, getJwtSecret(), {
       audience: MCP_AUDIENCE,
+      issuer: getTokenIssuer(),
     });
     const p = payload as JWTPayload & { scope?: string; client_id?: string };
     if (!p.sub || !p.client_id) return null;

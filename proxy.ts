@@ -5,14 +5,35 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isEmailAllowed } from "@/lib/auth/allowed-emails";
+import { revokeUserAccess } from "@/lib/auth/revoke";
 
 export async function proxy(request: NextRequest) {
   const session = await auth();
   const { pathname } = request.nextUrl;
 
+  // Enforce ALLOWED_EMAILS on LIVE sessions, not just at sign-in. Sign-in is
+  // the only place Auth.js consults the allowlist, so without this a removed
+  // user keeps a working 30-day session. The check is pure string matching —
+  // no extra query — and the revocation (delete the DB session rows, revoke
+  // MCP refresh tokens) only runs in the already-exceptional disallowed case.
+  // With the session rows gone, the next request carries a cookie that
+  // resolves to nothing, so this cannot loop.
+  if (
+    session?.user &&
+    !isEmailAllowed(session.user.email, process.env.ALLOWED_EMAILS)
+  ) {
+    await revokeUserAccess(session.user.id);
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   // Public routes that don't need an Auth.js session.
   const isPublicPath =
     pathname.startsWith("/login") ||
+    // Legal pages must be readable BEFORE signing in — the login screen links
+    // to them as the terms the user accepts.
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/banking/callback") ||

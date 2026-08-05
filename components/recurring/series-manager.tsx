@@ -28,8 +28,9 @@ import {
   updateSeries,
   deleteSeries,
   dismissRecurringSuggestion,
-  type SeriesFields,
 } from "@/app/(app)/recurring/actions";
+// A "use server" module can't export a type, so take it from the source.
+import type { SeriesFields } from "@/lib/mcp/manage";
 
 export interface SeriesVM {
   id: string;
@@ -37,6 +38,7 @@ export interface SeriesVM {
   matcher: string;
   direction: "DEBIT" | "CREDIT";
   categoryId: string | null;
+  ruleId: string | null;
   cadence: SeriesFields["cadence"];
   expectedAmount: number;
   windowFromDay: number | null;
@@ -61,6 +63,7 @@ interface SeriesManagerProps {
   series: SeriesVM[];
   suggestions: RecurringSuggestion[];
   prefill?: SeriesPrefill | null;
+  rules: { id: string; name: string }[];
   categories: Category[];
   currency: string;
   locale: string;
@@ -79,6 +82,7 @@ interface Draft {
   matcher: string;
   direction: "DEBIT" | "CREDIT";
   categoryId: string | null;
+  ruleId: string | null;
   cadence: SeriesFields["cadence"];
   expectedAmount: string;
   windowFromDay: string;
@@ -93,6 +97,7 @@ const EMPTY: Draft = {
   matcher: "",
   direction: "DEBIT",
   categoryId: null,
+  ruleId: null,
   cadence: "MONTHLY",
   expectedAmount: "",
   windowFromDay: "",
@@ -105,6 +110,7 @@ export function SeriesManager({
   series,
   suggestions,
   prefill,
+  rules,
   categories,
   currency,
   locale,
@@ -130,13 +136,14 @@ export function SeriesManager({
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
   function openEdit(s: SeriesVM) {
-    setAdvancedOpen(s.matcher.trim() !== s.displayName.trim());
+    setAdvancedOpen(s.ruleId !== null || s.matcher.trim() !== s.displayName.trim());
     setDraft({
       id: s.id,
       displayName: s.displayName,
       matcher: s.matcher,
       direction: s.direction,
       categoryId: s.categoryId,
+      ruleId: s.ruleId,
       cadence: s.cadence,
       expectedAmount: String(s.expectedAmount),
       windowFromDay: s.windowFromDay != null ? String(s.windowFromDay) : "",
@@ -154,6 +161,7 @@ export function SeriesManager({
       matcher: s.merchantKey,
       direction: s.direction,
       categoryId: s.categoryId,
+      ruleId: null,
       cadence: s.cadence,
       expectedAmount: String(s.expectedAmount),
       windowFromDay: s.windowFromDay != null ? String(s.windowFromDay) : "",
@@ -167,15 +175,27 @@ export function SeriesManager({
     setDetail(null);
     setDismissError(null);
     setHiddenKeys((keys) => [...keys, merchantKey]);
-    dismissRecurringSuggestion(merchantKey).catch(() => {
-      setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
-      setDismissError("Couldn't save the dismissal — reload the page and try again.");
-    });
+    dismissRecurringSuggestion(merchantKey)
+      .then((res) => {
+        if (!res.ok) {
+          setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+          setDismissError(res.error);
+        }
+      })
+      .catch((err: unknown) => {
+        // The action itself never throws — a rejection means the request
+        // didn't reach it. Show the transport error verbatim: its text tells
+        // apart a network failure, a non-RSC response and a server throw.
+        setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+        setDismissError(
+          `Request failed: ${err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)}`,
+        );
+      });
   }
 
   function save() {
     if (!draft) return;
-    if (!draft.categoryId) {
+    if (!draft.categoryId && !draft.ruleId) {
       setError("Pick a category — the series feeds that category's objective");
       return;
     }
@@ -184,6 +204,7 @@ export function SeriesManager({
       matcher: draft.matcher,
       direction: draft.direction,
       categoryId: draft.categoryId,
+      ruleId: draft.ruleId,
       cadence: draft.cadence,
       expectedAmount: Number(draft.expectedAmount),
       windowFromDay: draft.windowFromDay ? Number(draft.windowFromDay) : null,
@@ -194,14 +215,21 @@ export function SeriesManager({
     setError(null);
     startTransition(async () => {
       try {
-        if (draft.id) await updateSeries(draft.id, fields);
-        else await createSeries(fields);
+        const res = draft.id
+          ? await updateSeries(draft.id, fields)
+          : await createSeries(fields);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         setDraft(null);
         // Drop ?fromTx so a reload doesn't reopen the prefilled form.
         if (prefill) router.replace("/recurring");
         else router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+        setError(
+          `Request failed: ${err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)}`,
+        );
       }
     });
   }
@@ -529,13 +557,14 @@ export function SeriesManager({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Category</Label>
+                  <Label>Category{draft.ruleId ? " (from rule)" : ""}</Label>
                   <CategorySelect
                     defaultValue={draft.categoryId ?? undefined}
                     onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
                     categories={categories}
                     ariaLabel="Series category"
                     className="w-full"
+                    disabled={draft.ruleId !== null}
                   />
                 </div>
               </div>
@@ -589,19 +618,42 @@ export function SeriesManager({
                   Advanced
                 </button>
                 {advancedOpen && (
-                  <div className="mt-2 space-y-1.5">
-                    <Label htmlFor="sr-matcher">Matcher text</Label>
-                    <Input
-                      id="sr-matcher"
-                      placeholder="Defaults to the name"
-                      value={draft.matcher}
-                      onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Looked for inside the bank&apos;s descriptor to recognize
-                      this series&apos; arrivals. Set it when the bank writes
-                      the charge differently from the name.
-                    </p>
+                  <div className="mt-2 space-y-4">
+                    <div className="space-y-1.5">
+                      <Label>Rule</Label>
+                      <SimpleSelect
+                        value={draft.ruleId ?? "none"}
+                        onValueChange={(v) =>
+                          setDraft({ ...draft, ruleId: v === "none" ? null : v })
+                        }
+                        options={[
+                          { value: "none", label: "No rule — use the matcher text" },
+                          ...rules.map((r) => ({ value: r.id, label: r.name })),
+                        ]}
+                        ariaLabel="Recognition rule"
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Reuses the rule&apos;s conditions to recognize arrivals;
+                        the category comes from the rule.
+                      </p>
+                    </div>
+                    {!draft.ruleId && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="sr-matcher">Matcher text</Label>
+                        <Input
+                          id="sr-matcher"
+                          placeholder="Defaults to the name"
+                          value={draft.matcher}
+                          onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Looked for inside the bank&apos;s descriptor. Set it
+                          when the bank writes the charge differently from the
+                          name.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

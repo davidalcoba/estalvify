@@ -8,7 +8,8 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
 import type { CategoryKind } from "@/app/generated/prisma";
-import { wouldCreateCycle, hasChildren, subtreeIds } from "@/lib/categories/hierarchy";
+import { wouldCreateCycle, hasChildren, subtreeIds, rootOf } from "@/lib/categories/hierarchy";
+import { normalizeDescriptor } from "@/lib/planned/matching";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { nextRulePriority, reorderRulesForUser, runRules } from "@/lib/rules/apply";
 import type { RuleRunReport } from "@/lib/rules/apply";
@@ -554,6 +555,12 @@ export interface SeriesFields {
    * series is named close to how the bank writes it.
    */
   matcher?: string | null;
+  /**
+   * Preferred recognition: reuse an existing categorization rule's condition
+   * tree (amount, word boundaries, regex). When set, the series' category is
+   * forced to the rule's, so plan and reality can never disagree.
+   */
+  ruleId?: string | null;
   direction: "DEBIT" | "CREDIT";
   categoryId?: string | null;
   bankAccountId?: string | null;
@@ -567,6 +574,47 @@ export interface SeriesFields {
   active?: boolean;
 }
 
+/** Matchers touching several unrelated root categories over the last year
+ *  are recognizing the wrong thing and get blocked at save time. */
+const MATCHER_AUDIT_DAYS = 365;
+const MATCHER_MAX_ROOT_CATEGORIES = 2;
+
+async function assertMatcherIsSpecific(
+  userId: string,
+  matcher: string,
+  direction: "DEBIT" | "CREDIT"
+): Promise<void> {
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - MATCHER_AUDIT_DAYS);
+  const [txs, parentOf] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { userId, direction, valueDate: { gte: since } },
+      select: {
+        description: true,
+        remittanceInfo: true,
+        categorization: { select: { categoryId: true, status: true } },
+      },
+    }),
+    loadParentMap(userId),
+  ]);
+  const needle = normalizeDescriptor(matcher);
+  const roots = new Set<string>();
+  let hits = 0;
+  for (const t of txs) {
+    const descriptor = normalizeDescriptor(`${t.description ?? ""} ${t.remittanceInfo ?? ""}`);
+    if (!descriptor.includes(needle)) continue;
+    hits++;
+    if (t.categorization?.status === "APPROVED" && t.categorization.categoryId) {
+      roots.add(rootOf(t.categorization.categoryId, parentOf));
+    }
+  }
+  if (roots.size > MATCHER_MAX_ROOT_CATEGORIES) {
+    throw new Error(
+      `Matcher "${matcher}" hits ${hits} transactions across ${roots.size} unrelated categories — make it more specific or link a rule`
+    );
+  }
+}
+
 async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
   const displayName = fields.displayName?.trim();
   if (!displayName) throw new Error("displayName is required");
@@ -575,10 +623,34 @@ async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
   if (!Number.isFinite(fields.expectedAmount) || fields.expectedAmount < 0) {
     throw new Error("Invalid expectedAmount");
   }
+
+  // Rule link: recognition comes from the rule's condition tree and the
+  // category is FORCED to the rule's — a single source of truth, so the plan
+  // and the categorized reality can never file the charge differently.
+  let ruleId: string | null = null;
+  let categoryId = fields.categoryId ?? null;
+  if (fields.ruleId) {
+    const rule = await prisma.categoryRule.findFirst({
+      where: { id: fields.ruleId, userId },
+      select: { id: true, categoryId: true, isActive: true },
+    });
+    if (!rule) throw new Error("Rule not found");
+    if (!rule.isActive) throw new Error("Rule is inactive — reactivate it first");
+    ruleId = rule.id;
+    categoryId = rule.categoryId;
+  }
+
   // A series is the recurring base of its category's objective in the monthly
   // control — without a category it would feed nothing.
-  if (!fields.categoryId) throw new Error("categoryId is required");
-  await assertOwnedCategory(userId, fields.categoryId);
+  if (!categoryId) throw new Error("categoryId is required");
+  await assertOwnedCategory(userId, categoryId);
+
+  // Matcher sanity: run it against the last year of history. A matcher that
+  // touches several unrelated root categories is recognizing the wrong thing
+  // (the "ALQUILER matches taxis" bug) and gets blocked at save time.
+  if (!ruleId) {
+    await assertMatcherIsSpecific(userId, matcher, fields.direction);
+  }
   if (fields.bankAccountId) {
     const account = await prisma.bankAccount.findFirst({
       where: { id: fields.bankAccountId, userId },
@@ -601,7 +673,8 @@ async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
     displayName: displayName.slice(0, 120),
     merchantKey: matcher.slice(0, 120),
     direction: fields.direction,
-    categoryId: fields.categoryId ?? null,
+    categoryId,
+    ruleId,
     bankAccountId: fields.bankAccountId ?? null,
     cadence: fields.cadence,
     expectedAmount: fields.expectedAmount,
@@ -802,6 +875,53 @@ export async function createPlannedItemForUser(
     select: { id: true },
   });
   return { id: created.id };
+}
+
+/** Edit a hand-typed one-off (the IBI's amount changed). Series instances are
+ *  engine-owned and PENDING-only edits keep matched history untouched. */
+export async function updatePlannedItemForUser(
+  userId: string,
+  plannedItemId: string,
+  fields: Partial<Omit<PlannedOneOffFields, "direction" | "bankAccountId">>,
+) {
+  const existing = await prisma.plannedItem.findFirst({
+    where: { id: plannedItemId, userId },
+    select: { recurringSeriesId: true, status: true },
+  });
+  if (!existing) throw new Error("Planned item not found");
+  if (existing.recurringSeriesId) {
+    throw new Error("This instance is generated from a recurring series; edit the series instead");
+  }
+  if (existing.status !== "PENDING") {
+    throw new Error("Only PENDING items can be edited — matched history stays as it happened");
+  }
+
+  const data: Prisma.PlannedItemUpdateInput = {};
+  if (fields.description !== undefined) {
+    const description = fields.description?.trim();
+    if (!description) throw new Error("description cannot be empty");
+    data.description = description.slice(0, 120);
+  }
+  if (fields.amount !== undefined) {
+    if (!Number.isFinite(fields.amount) || fields.amount <= 0) throw new Error("Invalid amount");
+    data.amount = fields.amount;
+  }
+  if (fields.year !== undefined) data.year = fields.year;
+  if (fields.month !== undefined) {
+    if (fields.month < 1 || fields.month > 12) throw new Error("Invalid month");
+    data.month = fields.month;
+  }
+  if (fields.dueDay !== undefined) data.dueDay = fields.dueDay;
+  if (fields.windowFromDay !== undefined) data.windowFromDay = fields.windowFromDay;
+  if (fields.windowToDay !== undefined) data.windowToDay = fields.windowToDay;
+  if (fields.categoryId !== undefined) {
+    if (!fields.categoryId) throw new Error("categoryId is required");
+    await assertOwnedCategory(userId, fields.categoryId);
+    data.category = { connect: { id: fields.categoryId } };
+  }
+
+  await prisma.plannedItem.update({ where: { id: plannedItemId }, data });
+  return { id: plannedItemId };
 }
 
 export async function deletePlannedItemForUser(userId: string, plannedItemId: string) {

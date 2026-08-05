@@ -340,6 +340,7 @@ model CategoryRule {
   category              Category                    @relation("TargetCategoryRules", fields: [categoryId], references: [id])
   sourceCategory        Category?                   @relation("SourceCategoryRules", fields: [sourceCategoryId], references: [id])
   transactionCategories TransactionCategorization[]
+  recurringSeries       RecurringSeries[]
 
   // Rules are loaded per user, ordered by priority, on every run and list.
   @@index([userId, priority])
@@ -524,6 +525,13 @@ model RecurringSeries {
 
   categoryId String?
 
+  // Preferred recognition: point at a categorization rule and reuse its
+  // condition tree (amount, word boundaries, regex — already tuned and
+  // tested). The category then comes from the rule, so plan and reality can
+  // never file the same charge under two categories. merchantKey stays as the
+  // fallback for series without a rule.
+  ruleId String?
+
   cadence        RecurringCadence
   expectedAmount Decimal          @db.Decimal(15, 2)
   currency       String           @default("EUR")
@@ -549,6 +557,7 @@ model RecurringSeries {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   category     Category?     @relation(fields: [categoryId], references: [id])
+  rule         CategoryRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   plannedItems PlannedItem[]
 
   @@unique([userId, merchantKey])
@@ -654,6 +663,23 @@ enum SyncStatus {
   SUCCESS
   PARTIAL // Some accounts failed
   FAILED
+}
+
+// ─────────────────────────────────────────────
+// RATE LIMITS - Fixed-window counters (lib/rate-limit.ts)
+// ─────────────────────────────────────────────
+
+// One row per (limiter, caller) pair, e.g. "oauth-token:203.0.113.7". Postgres
+// is the shared store because serverless invocations share nothing else — an
+// in-memory counter would reset on every cold start. Stale rows are purged by
+// the daily retention job.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(1)
+
+  @@index([windowStart])
+  @@map("rate_limits")
 }
 
 // ─────────────────────────────────────────────

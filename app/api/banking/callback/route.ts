@@ -13,8 +13,15 @@ import { prisma } from "@/lib/prisma";
 import { send } from "@vercel/queue";
 import { exchangeCodeForSession } from "@/lib/banking/enable-banking";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
+import { consumeRateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
+  // Anonymous endpoint (`state` is the security mechanism) that drives Enable
+  // Banking API calls — keep guessing and floods bounded per IP.
+  if (!(await consumeRateLimit("banking-callback", clientIp(request)))) {
+    return new NextResponse("Too many requests", { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");

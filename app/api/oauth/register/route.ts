@@ -7,6 +7,7 @@ import { z } from "zod";
 import { registerClient } from "@/lib/mcp/store";
 import { isDcrDisabled } from "@/lib/mcp/clients";
 import { corsPreflight, jsonWithCors, oauthError } from "@/lib/mcp/http";
+import { consumeRateLimit, clientIp } from "@/lib/rate-limit";
 
 const registerSchema = z.object({
   redirect_uris: z.array(z.string().url()).min(1),
@@ -25,6 +26,11 @@ export async function POST(request: NextRequest) {
       "Dynamic client registration is disabled; use the configured client_id.",
       403,
     );
+  }
+
+  // Anonymous endpoint that writes a row per call — keep floods bounded.
+  if (!(await consumeRateLimit("oauth-register", clientIp(request)))) {
+    return oauthError("slow_down", "Too many requests — retry later", 429);
   }
 
   let body: unknown;

@@ -29,6 +29,7 @@ import {
   deleteSeriesForUser,
   listPlannedItemsForUser,
   createPlannedItemForUser,
+  updatePlannedItemForUser,
   deletePlannedItemForUser,
   upsertBudgetItemForUser,
   deleteBudgetItemForUser,
@@ -47,6 +48,7 @@ import {
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
+import { hasScope, type KnownScope } from "@/lib/mcp/scopes";
 
 // Rule conditions (see lib/rules/rule-dto.ts). A leaf is {field, operator,
 // value, negate?}; groups nest with op AND/OR.
@@ -121,11 +123,25 @@ function errorResult(err: unknown, fallback: string): CallToolResult {
 }
 
 // Minimal shape of the auth context we attach in verifyToken.
-type ToolExtra = { authInfo?: { extra?: { userId?: string } } };
+type ToolExtra = {
+  authInfo?: { scopes?: string[]; extra?: { userId?: string } };
+};
 
-function requireUserId(extra: ToolExtra): string {
+/**
+ * Resolve the acting user AND enforce the token's scope in one place. Every
+ * tool declares whether it reads or writes; a token granted only `read` gets
+ * an error from write tools instead of silently full access. The scopes on
+ * authInfo are set by verifyToken (app/api/mcp/route.ts), which already
+ * defaults legacy scope-less tokens to full access.
+ */
+function requireUserId(extra: ToolExtra, scope: KnownScope): string {
   const userId = extra.authInfo?.extra?.userId;
   if (!userId) throw new Error("Unauthenticated");
+  if (!hasScope(extra.authInfo?.scopes ?? [], scope)) {
+    throw new Error(
+      `Insufficient scope: this tool requires the "${scope}" scope`,
+    );
+  }
   return userId;
 }
 
@@ -193,7 +209,7 @@ export function registerTools(server: McpServer): void {
       },
       extra,
     ) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
 
       let scope: { ids: string[]; name: string; isActive: boolean } | null = null;
       try {
@@ -305,7 +321,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {},
     },
     async (_args, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       const cats = await prisma.category.findMany({
         where: { OR: [{ userId }, { userId: null }], isActive: true },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -331,7 +347,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {},
     },
     async (_args, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       const accounts = await prisma.bankAccount.findMany({
         where: { userId, isActive: true },
         select: {
@@ -368,15 +384,15 @@ export function registerTools(server: McpServer): void {
       description:
         "Get the user's LEGACY monthly budgets (per-category planned amounts). The Budget " +
         "feature was replaced by the Plan (/budget redirects to /plan) and these tables are " +
-        "no longer written by the app — use list_plan_items / create_plan_item / " +
-        "update_plan_item / delete_plan_item for planning instead.",
+        "no longer written by the app — use list_planned_items / create_planned_item / " +
+        "update_planned_item / delete_planned_item for planning instead.",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
       },
     },
     async ({ year, month }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       const budgets = await prisma.budget.findMany({
         where: { userId, ...(year ? { year } : {}), ...(month ? { month } : {}) },
         orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -419,7 +435,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {},
     },
     async (_args, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       return json(await listSeriesForUser(userId));
     },
   );
@@ -436,8 +452,9 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         displayName: z.string().max(120),
         matcher: z.string().min(3).max(120).optional(),
+        ruleId: z.string().optional(),
         direction: z.enum(["DEBIT", "CREDIT"]),
-        categoryId: z.string(),
+        categoryId: z.string().optional(),
         bankAccountId: z.string().optional(),
         cadence: z.enum(["WEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "YEARLY", "IRREGULAR"]),
         expectedAmount: z.number().min(0),
@@ -448,15 +465,16 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (
-      { displayName, matcher, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate },
+      { displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate },
       extra,
     ) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await createSeriesForUser(userId, {
             displayName,
             matcher,
+            ruleId: ruleId ?? null,
             direction,
             categoryId: categoryId ?? null,
             bankAccountId: bankAccountId ?? null,
@@ -485,8 +503,9 @@ export function registerTools(server: McpServer): void {
         seriesId: z.string(),
         displayName: z.string().max(120),
         matcher: z.string().min(3).max(120).optional(),
+        ruleId: z.string().optional(),
         direction: z.enum(["DEBIT", "CREDIT"]),
-        categoryId: z.string(),
+        categoryId: z.string().optional(),
         bankAccountId: z.string().optional(),
         cadence: z.enum(["WEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "YEARLY", "IRREGULAR"]),
         expectedAmount: z.number().min(0),
@@ -498,15 +517,16 @@ export function registerTools(server: McpServer): void {
       },
     },
     async (
-      { seriesId, displayName, matcher, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate, active },
+      { seriesId, displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, anchorDate, active },
       extra,
     ) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await updateSeriesForUser(userId, seriesId, {
             displayName,
             matcher,
+            ruleId: ruleId ?? null,
             direction,
             categoryId: categoryId ?? null,
             bankAccountId: bankAccountId ?? null,
@@ -533,7 +553,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: { seriesId: z.string() },
     },
     async ({ seriesId }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await deleteSeriesForUser(userId, seriesId));
       } catch (err) {
@@ -557,7 +577,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ year, month }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       return json(await listPlannedItemsForUser(userId, { year, month }));
     },
   );
@@ -586,7 +606,7 @@ export function registerTools(server: McpServer): void {
       { description, direction, categoryId, bankAccountId, amount, year, month, dueDay, windowFromDay, windowToDay },
       extra,
     ) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await createPlannedItemForUser(userId, {
@@ -609,6 +629,49 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "update_planned_item",
+    {
+      description:
+        "Edit a hand-typed one-off planned item (e.g. this year's IBI changed amount). " +
+        "Only PENDING one-offs: series instances are engine-owned (edit the series) and " +
+        "matched history never rewrites. Omitted fields stay unchanged.",
+      inputSchema: {
+        plannedItemId: z.string(),
+        description: z.string().max(120).optional(),
+        categoryId: z.string().optional(),
+        amount: z.number().positive().optional(),
+        year: z.number().int().optional(),
+        month: z.number().int().min(1).max(12).optional(),
+        dueDay: z.number().int().min(1).max(31).nullable().optional(),
+        windowFromDay: z.number().int().min(1).max(31).nullable().optional(),
+        windowToDay: z.number().int().min(1).max(31).nullable().optional(),
+      },
+    },
+    async (
+      { plannedItemId, description, categoryId, amount, year, month, dueDay, windowFromDay, windowToDay },
+      extra,
+    ) => {
+      const userId = requireUserId(extra as ToolExtra, "write");
+      try {
+        return json(
+          await updatePlannedItemForUser(userId, plannedItemId, {
+            description,
+            categoryId,
+            amount,
+            year,
+            month,
+            dueDay,
+            windowFromDay,
+            windowToDay,
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "update_planned_item failed");
+      }
+    },
+  );
+
+  server.registerTool(
     "delete_planned_item",
     {
       description:
@@ -617,7 +680,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: { plannedItemId: z.string() },
     },
     async ({ plannedItemId }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await deletePlannedItemForUser(userId, plannedItemId));
       } catch (err) {
@@ -644,7 +707,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ categoryId, year, month, assigned, rollover }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await upsertBudgetItemForUser(userId, { categoryId, year, month, assigned, rollover }),
@@ -669,7 +732,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ categoryId, year, month }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await deleteBudgetItemForUser(userId, { categoryId, year, month }));
       } catch (err) {
@@ -691,7 +754,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ categoryId, transactionIds, search }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         const count = await bulkCategorizeForUser(userId, categoryId, {
           transactionIds,
@@ -723,7 +786,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ connectionId }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       const connections = await prisma.bankConnection.findMany({
         where: {
           userId,
@@ -761,7 +824,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ name, color, parentId, kind }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await createCategoryForUser(userId, { name, color, parentId, kind }));
       } catch (err) {
@@ -796,7 +859,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ categoryId, name, color, kind, parentId, isActive }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await updateCategoryForUser(userId, categoryId, {
@@ -844,7 +907,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ categoryId, reassignToCategoryId, force }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await deleteCategoryForUser(userId, categoryId, { reassignToCategoryId, force }),
@@ -870,7 +933,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {},
     },
     async (_args, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       return json(await listRulesForUser(userId));
     },
   );
@@ -918,7 +981,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ name, conditions, categoryId, sourceCategoryId, priority }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await createRuleForUser(userId, {
@@ -954,7 +1017,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ ruleId, name, conditions, categoryId, isActive }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(
           await updateRuleForUser(userId, ruleId, {
@@ -986,7 +1049,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ ruleIds }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await reorderRulesForUser(userId, ruleIds));
       } catch (err) {
@@ -1009,7 +1072,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ ruleId }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await deleteRuleForUser(userId, ruleId));
       } catch (err) {
@@ -1033,7 +1096,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ conditions, sourceCategoryId, limit }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "read");
       try {
         return json(
           await testConditions(
@@ -1063,7 +1126,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ ruleId }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         return json(await undoRuleRun(userId, ruleId));
       } catch (err) {
@@ -1092,7 +1155,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ ruleId, dryRun, force }, extra) => {
-      const userId = requireUserId(extra as ToolExtra);
+      const userId = requireUserId(extra as ToolExtra, "write");
       try {
         const report = ruleId
           ? await runRuleForUser(userId, ruleId, { dryRun, force })

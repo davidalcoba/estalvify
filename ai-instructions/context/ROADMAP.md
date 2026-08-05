@@ -66,6 +66,18 @@ recurrentes, etc.).
 >   una serie retira hacia delante**: sus PENDING desaparecen y sus
 >   MATCHED/MISSED se desvinculan (`recurringSeriesId = null`) — los meses
 >   cerrados nunca se reescriben.
+> - **v3.2 — matching endurecido (informe test_rule 2026-08-05).** Un match por
+>   descriptor exige además importe en la misma liga (`MAX_MATCH_DEVIATION`
+>   ±75% — el alquiler no matchea un taxi de 19 €) y entre candidatos gana la
+>   menor desviación (separa los dos seguros "BBVA PLAN ESTARSEGURO" por
+>   importe), luego FIFO. Una serie puede **enlazar una regla**
+>   (`recurring_series.ruleId`): el árbol de condiciones de la regla decide el
+>   reconocimiento y la categoría SE FUERZA a la de la regla — plan y realidad
+>   no pueden divergir. Guardar un matcher lo audita contra 12 meses de
+>   histórico y se bloquea si toca >2 categorías raíz. `nextExpectedDate` se
+>   mantiene (primer PENDING de la serie) y `lastSeenAt` solo lo escribe un
+>   match real. MCP: `update_planned_item` nuevo; `ruleId` en
+>   create/update_recurring_series; descripción de get_budgets corregida.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
