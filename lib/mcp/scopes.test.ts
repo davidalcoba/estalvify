@@ -36,8 +36,20 @@ describe("scopesFromClaim", () => {
     expect(scopesFromClaim("")).toEqual(["read", "write"]);
   });
 
-  it("parses a present claim literally", () => {
+  it("honors a claim that names known scopes", () => {
     expect(scopesFromClaim("read")).toEqual(["read"]);
+    expect(scopesFromClaim("write read")).toEqual(["read", "write"]);
+  });
+
+  it("treats an unknown-only claim as full access (legacy 'mcp' value)", () => {
+    // A refresh token minted before scopes existed carried the client's raw
+    // requested scope (e.g. "mcp"); rotation keeps it. It must not lock reads.
+    expect(scopesFromClaim("mcp")).toEqual(["read", "write"]);
+    expect(scopesFromClaim("claudeai offline_access")).toEqual(["read", "write"]);
+  });
+
+  it("drops unknown scopes when a known one is present", () => {
+    expect(scopesFromClaim("read mcp")).toEqual(["read"]);
   });
 });
 
