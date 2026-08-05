@@ -569,6 +569,12 @@ export interface SeriesFields {
   windowFromDay?: number | null;
   windowToDay?: number | null;
   anchorMonthEnd?: boolean;
+  /**
+   * When the period carries several charges of this series (school fees,
+   * association dues), sum every recognized arrival in the window instead of
+   * expecting one. Needs a specific matcher or a rule. Default false.
+   */
+  aggregate?: boolean;
   /** Anchor month for non-monthly cadences (any date in a due month). */
   anchorDate?: string | null; // YYYY-MM-DD
   active?: boolean;
@@ -690,6 +696,7 @@ async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
     windowFromDay: day(fields.windowFromDay),
     windowToDay: day(fields.windowToDay),
     anchorMonthEnd: fields.anchorMonthEnd ?? false,
+    aggregate: fields.aggregate ?? false,
     ...(nextExpectedDate ? { nextExpectedDate } : {}),
     ...(fields.active !== undefined ? { active: fields.active } : {}),
   };
@@ -715,6 +722,7 @@ export async function listSeriesForUser(userId: string) {
     windowFromDay: s.windowFromDay,
     windowToDay: s.windowToDay,
     anchorMonthEnd: s.anchorMonthEnd,
+    aggregate: s.aggregate,
     active: s.active,
     lastSeenAt: s.lastSeenAt?.toISOString().slice(0, 10) ?? null,
     nextExpectedDate: s.nextExpectedDate?.toISOString().slice(0, 10) ?? null,
@@ -764,7 +772,7 @@ export async function updateSeriesForUser(
   } catch (err) {
     rethrowDuplicateMatcher(err);
   }
-  // Future PENDING instances mirror the series definition.
+  // Future PENDING instances mirror the full series definition.
   await prisma.plannedItem.updateMany({
     where: { userId, recurringSeriesId: seriesId, status: "PENDING" },
     data: {
@@ -776,6 +784,24 @@ export async function updateSeriesForUser(
       windowToDay: data.windowToDay,
       anchorMonthEnd: data.anchorMonthEnd,
     },
+  });
+  // Category attribution follows the series for ALREADY-MATCHED instances in
+  // the current (open) month and beyond — otherwise a recategorized series
+  // (e.g. O2 moved to Suministros) leaves this month's matched charge filed
+  // under the old category and the per-category comparison never reconciles.
+  // Amount/window on a MATCHED item describe the real charge, so those stay.
+  // Strictly-past months are closed and never rewritten.
+  const now = new Date();
+  const cy = now.getUTCFullYear();
+  const cm = now.getUTCMonth() + 1;
+  await prisma.plannedItem.updateMany({
+    where: {
+      userId,
+      recurringSeriesId: seriesId,
+      status: "MATCHED",
+      OR: [{ year: { gt: cy } }, { year: cy, month: { gte: cm } }],
+    },
+    data: { categoryId: data.categoryId },
   });
   return { id: seriesId };
 }

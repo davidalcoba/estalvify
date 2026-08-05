@@ -147,6 +147,7 @@ export async function runPlannedMatching(
         select: {
           merchantKey: true,
           displayName: true,
+          aggregate: true,
           rule: { select: { conditions: true, isActive: true } },
         },
       },
@@ -171,11 +172,13 @@ export async function runPlannedMatching(
       },
     }),
     prisma.plannedItem.findMany({
-      where: { userId, matchedTransactionId: { not: null } },
-      select: { matchedTransactionId: true },
+      where: { userId, status: "MATCHED" },
+      select: { matchedTransactionIds: true },
     }),
   ]);
-  const claimedIds = new Set(claimed.map((c) => c.matchedTransactionId));
+  // A matched item can hold several transactions (aggregate matching), so the
+  // claimed set is the union across all of them.
+  const claimedIds = new Set(claimed.flatMap((c) => c.matchedTransactionIds));
 
   // Rule-linked recognition: the predicate evaluates the rule's condition
   // tree over the raw transaction fields (looked up by id — the pure matcher
@@ -213,6 +216,7 @@ export async function runPlannedMatching(
     amount: Number(p.amount.toString()),
     matcher: p.recurringSeries?.merchantKey ?? p.description,
     matches: predicateFor(p.recurringSeries?.rule),
+    aggregate: p.recurringSeries?.aggregate ?? false,
     categoryId: p.categoryId,
     year: p.year,
     month: p.month,
@@ -245,6 +249,7 @@ export async function runPlannedMatching(
         data: {
           status: "MATCHED",
           matchedTransactionId: match.transactionId,
+          matchedTransactionIds: match.transactionIds,
           matchedAmount: match.matchedAmount,
         },
       })
