@@ -51,6 +51,7 @@ export default async function RecurringPage({ searchParams }: PageProps) {
         direction: true,
         description: true,
         remittanceInfo: true,
+        merchant: true,
         categorization: { select: { categoryId: true, status: true } },
       },
     }),
@@ -71,6 +72,7 @@ export default async function RecurringPage({ searchParams }: PageProps) {
       amount: Math.abs(Number(tx.amount.toString())),
       direction: tx.direction,
       descriptor: `${tx.description ?? ""} ${tx.remittanceInfo ?? ""}`,
+      merchant: tx.merchant,
       categoryId:
         tx.categorization?.status === "APPROVED" ? tx.categorization.categoryId : null,
     })),
