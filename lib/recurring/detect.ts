@@ -14,6 +14,8 @@ export interface TxForDetection {
   amount: number; // absolute
   direction: "DEBIT" | "CREDIT";
   descriptor: string; // description + remittanceInfo, raw
+  /** Clean merchant name for display; falls back to the raw descriptor. */
+  merchant?: string | null;
   categoryId: string | null;
 }
 
@@ -157,7 +159,9 @@ export function detectRecurringSuggestions(
 
     suggestions.push({
       merchantKey: key,
-      displayName: byDateDesc[0].descriptor.trim().replace(/\s+/g, " ").slice(0, 60),
+      displayName: (byDateDesc[0].merchant?.trim() || byDateDesc[0].descriptor.trim())
+        .replace(/\s+/g, " ")
+        .slice(0, 60),
       direction: group[0].direction,
       cadence: match.cadence,
       expectedAmount: round(medAmount),
