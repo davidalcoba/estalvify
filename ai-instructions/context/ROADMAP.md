@@ -74,9 +74,14 @@ recurrentes, etc.).
 >   (`recurring_series.ruleId`): el árbol de condiciones de la regla decide el
 >   reconocimiento y la categoría SE FUERZA a la de la regla — plan y realidad
 >   no pueden divergir. Guardar un matcher lo audita contra 12 meses de
->   histórico y se bloquea si toca >2 categorías raíz. `nextExpectedDate` se
->   mantiene (primer PENDING de la serie) y `lastSeenAt` solo lo escribe un
->   match real. MCP: `update_planned_item` nuevo; `ruleId` en
+>   histórico y se bloquea si toca >2 categorías raíz. `refreshSeriesSchedule`
+>   recalcula el horario DESDE LA REALIDAD en cada sync: `nextExpectedDate` = el
+>   inicio de ventana del primer PENDING (para MONTHLY se deriva de
+>   windowFromDay/anchorMonthEnd, sin anchorDate), y `lastSeenAt` = la fecha de
+>   la transacción más reciente que la serie reconoce (árbol de la regla o
+>   matcher sobre el descriptor) — no un match de planned item, así que un cargo
+>   anterior al horizonte (la hipoteca) cuenta igual, y una serie que no
+>   reconoce nada vuelve a null. MCP: `update_planned_item` nuevo; `ruleId` en
 >   create/update_recurring_series; descripción de get_budgets corregida.
 >   Además, un `ReferenceError` en producción (un `export type` en un módulo
 >   `"use server"` que Turbopack dejaba como referencia en runtime) tumbaba TODAS
