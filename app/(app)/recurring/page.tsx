@@ -9,18 +9,26 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
-import { detectRecurringSuggestions } from "@/lib/recurring/detect";
+import { detectRecurringSuggestions, suggestionKey } from "@/lib/recurring/detect";
 import { PageHeader } from "@/components/layout/page-header";
-import { SeriesManager, type SeriesVM } from "@/components/recurring/series-manager";
+import {
+  SeriesManager,
+  type SeriesVM,
+  type SeriesPrefill,
+} from "@/components/recurring/series-manager";
 
 export const metadata: Metadata = { title: "Recurring" };
 
 const DETECTION_LOOKBACK_DAYS = 210; // 7 months: 3 quarterly hits fit
 
-export default async function RecurringPage() {
+interface PageProps {
+  searchParams: Promise<{ fromTx?: string }>;
+}
+
+export default async function RecurringPage({ searchParams }: PageProps) {
   const session = await auth();
   const userId = session!.user.id;
-  const prefs = await getUserPrefs(userId);
+  const [prefs, params] = await Promise.all([getUserPrefs(userId), searchParams]);
 
   const detectionStart = new Date();
   detectionStart.setUTCDate(detectionStart.getUTCDate() - DETECTION_LOOKBACK_DAYS);
@@ -67,6 +75,39 @@ export default async function RecurringPage() {
     }
   );
 
+  // "Make recurring" from a transaction: the tx knows the real bank
+  // descriptor, so the form arrives with the matcher already right.
+  let prefill: SeriesPrefill | null = null;
+  if (params.fromTx) {
+    const tx = await prisma.transaction.findFirst({
+      where: { id: params.fromTx, userId },
+      select: {
+        description: true,
+        remittanceInfo: true,
+        direction: true,
+        amount: true,
+        valueDate: true,
+        categorization: { select: { categoryId: true, status: true } },
+      },
+    });
+    if (tx) {
+      const descriptor = `${tx.description ?? ""} ${tx.remittanceInfo ?? ""}`
+        .replace(/\s+/g, " ")
+        .trim();
+      const day = tx.valueDate.getUTCDate();
+      prefill = {
+        displayName: descriptor.slice(0, 60),
+        matcher: suggestionKey(descriptor),
+        direction: tx.direction,
+        categoryId:
+          tx.categorization?.status === "APPROVED" ? tx.categorization.categoryId : null,
+        expectedAmount: String(Math.abs(Number(tx.amount.toString()))),
+        windowFromDay: String(Math.max(1, day - 2)),
+        windowToDay: String(Math.min(31, day + 2)),
+      };
+    }
+  }
+
   const vms: SeriesVM[] = series.map((s) => ({
     id: s.id,
     displayName: s.displayName,
@@ -88,6 +129,7 @@ export default async function RecurringPage() {
       <SeriesManager
         series={vms}
         suggestions={suggestions}
+        prefill={prefill}
         categories={categories}
         currency={prefs.currency}
         locale={prefs.locale}

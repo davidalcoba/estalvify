@@ -46,9 +46,21 @@ export interface SeriesVM {
   lastSeenAt: string | null;
 }
 
+/** "Make recurring" from a transaction: the form opens prefilled with this. */
+export interface SeriesPrefill {
+  displayName: string;
+  matcher: string;
+  direction: "DEBIT" | "CREDIT";
+  categoryId: string | null;
+  expectedAmount: string;
+  windowFromDay: string;
+  windowToDay: string;
+}
+
 interface SeriesManagerProps {
   series: SeriesVM[];
   suggestions: RecurringSuggestion[];
+  prefill?: SeriesPrefill | null;
   categories: Category[];
   currency: string;
   locale: string;
@@ -92,22 +104,33 @@ const EMPTY: Draft = {
 export function SeriesManager({
   series,
   suggestions,
+  prefill,
   categories,
   currency,
   locale,
 }: SeriesManagerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(
+    prefill ? { ...EMPTY, ...prefill } : null
+  );
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
+  // The matcher is internal machinery (arrival recognition); it hides under
+  // Advanced and only unfolds when it actually differs from the name.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   // Optimistically hidden proposals: dismissing removes the row on the click
-  // itself and persists in the background; a failure just brings it back.
+  // itself and persists in the background; a failure brings it back WITH a
+  // visible message (a silent rollback reads as a haunted UI — typically it
+  // means the tab predates the current deployment and needs a reload).
   const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
+  const [dismissError, setDismissError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
 
   function openEdit(s: SeriesVM) {
+    setAdvancedOpen(s.matcher.trim() !== s.displayName.trim());
     setDraft({
       id: s.id,
       displayName: s.displayName,
@@ -124,6 +147,7 @@ export function SeriesManager({
   }
 
   function applySuggestion(s: RecurringSuggestion) {
+    setAdvancedOpen(false);
     setDraft({
       id: null,
       displayName: s.displayName,
@@ -141,9 +165,11 @@ export function SeriesManager({
 
   function dismiss(merchantKey: string) {
     setDetail(null);
+    setDismissError(null);
     setHiddenKeys((keys) => [...keys, merchantKey]);
     dismissRecurringSuggestion(merchantKey).catch(() => {
       setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+      setDismissError("Couldn't save the dismissal — reload the page and try again.");
     });
   }
 
@@ -171,7 +197,9 @@ export function SeriesManager({
         if (draft.id) await updateSeries(draft.id, fields);
         else await createSeries(fields);
         setDraft(null);
-        router.refresh();
+        // Drop ?fromTx so a reload doesn't reopen the prefilled form.
+        if (prefill) router.replace("/recurring");
+        else router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save");
       }
@@ -240,6 +268,9 @@ export function SeriesManager({
                 </li>
               ))}
             </ul>
+            {dismissError && (
+              <p className="mt-2 text-xs text-destructive">{dismissError}</p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -250,7 +281,7 @@ export function SeriesManager({
           title="Register your recurring charges and income"
           description="Each series feeds its category in the Budget and shows up in Upcoming."
         >
-          <Button onClick={() => setDraft({ ...EMPTY })}>
+          <Button onClick={() => { setAdvancedOpen(false); setDraft({ ...EMPTY }); }}>
             <Plus className="mr-2 h-4 w-4" />
             Add series
           </Button>
@@ -259,71 +290,91 @@ export function SeriesManager({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Series</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setDraft({ ...EMPTY })} disabled={isPending}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-my-1 h-8"
+              onClick={() => { setAdvancedOpen(false); setDraft({ ...EMPTY }); }}
+              disabled={isPending}
+            >
               <Plus className="mr-1 h-3.5 w-3.5" />
-              Series
+              Add
             </Button>
           </CardHeader>
           <CardContent>
             <ul className="divide-y">
-              {rows.map((s) => (
-                <li key={s.id} className="py-2 text-sm">
-                  {/* One line on desktop; on mobile the cadence and amount
-                      wrap to a second line so the name keeps the width. */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
-                      onClick={() => openEdit(s)}
-                    >
-                      {s.displayName}
-                      {!s.active && (
-                        <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
-                      )}
-                    </button>
-                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                      {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
-                      {s.anchorMonthEnd
-                        ? " · month end"
-                        : s.windowFromDay != null
-                          ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
-                          : ""}
-                    </span>
+              {rows.map((s) => {
+                const cat = s.categoryId ? categoryById.get(s.categoryId) : null;
+                const timing = s.anchorMonthEnd
+                  ? " · month end"
+                  : s.windowFromDay != null
+                    ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
+                    : "";
+                const chip = cat && (
+                  <span className="inline-flex min-w-0 shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                     <span
-                      className={`hidden w-24 shrink-0 text-right tabular-nums sm:inline ${s.direction === "CREDIT" ? "text-success" : ""}`}
-                    >
-                      {s.direction === "CREDIT" ? "+" : "−"}
-                      {fmt(s.expectedAmount)}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-muted-foreground"
-                      onClick={() => setConfirmDelete({ id: s.id, name: s.displayName })}
-                      disabled={isPending}
-                      title="Delete series"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs sm:hidden">
-                    <span className="text-muted-foreground">
-                      {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
-                      {s.anchorMonthEnd
-                        ? " · month end"
-                        : s.windowFromDay != null
-                          ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
-                          : ""}
-                    </span>
-                    <span
-                      className={`tabular-nums ${s.direction === "CREDIT" ? "text-success" : ""}`}
-                    >
-                      {s.direction === "CREDIT" ? "+" : "−"}
-                      {fmt(s.expectedAmount)}
-                    </span>
-                  </div>
-                </li>
-              ))}
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                    <span className="max-w-28 truncate">{cat.name}</span>
+                  </span>
+                );
+                return (
+                  <li key={s.id} className="py-2 text-sm">
+                    {/* One line on desktop; on mobile the chip, cadence and
+                        amount wrap to a second line so the name keeps the
+                        width. */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+                        onClick={() => openEdit(s)}
+                      >
+                        {s.displayName}
+                        {!s.active && (
+                          <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
+                        )}
+                      </button>
+                      <span className="hidden sm:inline-flex">{chip}</span>
+                      <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                        {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
+                        {timing}
+                      </span>
+                      <span
+                        className={`hidden w-24 shrink-0 text-right tabular-nums sm:inline ${s.direction === "CREDIT" ? "text-success" : ""}`}
+                      >
+                        {s.direction === "CREDIT" ? "+" : "−"}
+                        {fmt(s.expectedAmount)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground"
+                        onClick={() => setConfirmDelete({ id: s.id, name: s.displayName })}
+                        disabled={isPending}
+                        title="Delete series"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between gap-2 text-xs sm:hidden">
+                      <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                        {chip}
+                        <span className="truncate">
+                          {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
+                          {timing}
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 tabular-nums ${s.direction === "CREDIT" ? "text-success" : ""}`}
+                      >
+                        {s.direction === "CREDIT" ? "+" : "−"}
+                        {fmt(s.expectedAmount)}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>
@@ -373,6 +424,20 @@ export function SeriesManager({
                   </dd>
                 </div>
               </dl>
+
+              {detail.transactions.length > 0 && (
+                <ul className="max-h-40 space-y-1 overflow-y-auto border-t pt-2 text-xs">
+                  {detail.transactions.map((t, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-2 text-muted-foreground"
+                    >
+                      <span className="tabular-nums">{t.date}</span>
+                      <span className="tabular-nums">{fmt(t.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="flex items-center justify-end gap-2">
                 <Button
                   variant="outline"
@@ -405,25 +470,14 @@ export function SeriesManager({
           <DialogTitle>{draft?.id ? "Edit series" : "New series"}</DialogTitle>
           {draft && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="sr-name">Name</Label>
-                  <Input
-                    id="sr-name"
-                    placeholder="Alquiler Barcelona"
-                    value={draft.displayName}
-                    onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="sr-matcher">Matcher text</Label>
-                  <Input
-                    id="sr-matcher"
-                    placeholder="ALQUILER"
-                    value={draft.matcher}
-                    onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sr-name">Name</Label>
+                <Input
+                  id="sr-name"
+                  placeholder="Alquiler Barcelona"
+                  value={draft.displayName}
+                  onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -511,6 +565,36 @@ export function SeriesManager({
                 />
                 Charges on the LAST day of the month
               </label>
+
+              <div>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  onClick={() => setAdvancedOpen((o) => !o)}
+                  aria-expanded={advancedOpen}
+                >
+                  <ChevronRight
+                    className={`h-3 w-3 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+                  />
+                  Advanced
+                </button>
+                {advancedOpen && (
+                  <div className="mt-2 space-y-1.5">
+                    <Label htmlFor="sr-matcher">Matcher text</Label>
+                    <Input
+                      id="sr-matcher"
+                      placeholder="Defaults to the name"
+                      value={draft.matcher}
+                      onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Looked for inside the bank&apos;s descriptor to recognize
+                      this series&apos; arrivals. Set it when the bank writes
+                      the charge differently from the name.
+                    </p>
+                  </div>
+                )}
+              </div>
               {draft.id && (
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox
