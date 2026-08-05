@@ -9,7 +9,10 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
 import type { CategoryKind, PlannedStatus } from "@/app/generated/prisma";
 import { wouldCreateCycle, hasChildren, subtreeIds, rootOf } from "@/lib/categories/hierarchy";
-import { normalizeDescriptor } from "@/lib/planned/matching";
+import { normalizeDescriptor, matchWindow, windowStatusFor } from "@/lib/planned/matching";
+import type { PlannedForMatch } from "@/lib/planned/matching";
+import { matchesNode, type MatchableTransaction } from "@/lib/rules/rule-matcher";
+import { parseConditions } from "@/lib/rules/rule-dto";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { nextRulePriority, reorderRulesForUser, runRules } from "@/lib/rules/apply";
 import type { RuleRunReport } from "@/lib/rules/apply";
@@ -883,25 +886,129 @@ export async function listPlannedItemsForUser(
     orderBy: [{ year: "asc" }, { month: "asc" }, { windowFromDay: "asc" }],
     include: { category: { select: { name: true } } },
   });
-  return items.map((p) => ({
-    id: p.id,
-    description: p.description,
-    direction: p.direction,
-    categoryId: p.categoryId,
-    category: p.category?.name ?? null,
-    amount: Number(p.amount.toString()),
-    year: p.year,
-    month: p.month,
-    dueDay: p.dueDay,
-    windowFromDay: p.windowFromDay,
-    windowToDay: p.windowToDay,
-    anchorMonthEnd: p.anchorMonthEnd,
-    recurringSeriesId: p.recurringSeriesId,
-    status: p.status,
-    matchedTransactionId: p.matchedTransactionId,
-    matchedTransactionIds: p.matchedTransactionIds,
-    matchedAmount: p.matchedAmount ? Number(p.matchedAmount.toString()) : null,
-  }));
+
+  // Recognition diagnostics for series-backed items. `matchedTransactionIds:
+  // []` alone is ambiguous — it can't tell "the matcher recognizes nothing
+  // ever" (broken series) from "the matcher works but this period's charge
+  // hasn't arrived" (fine) from "the window closed empty" (a real MISS). So
+  // each series item reports how many transactions its matcher/rule recognizes
+  // in this period's window and across the whole history, plus where today
+  // sits relative to the window.
+  const seriesIds = [...new Set(items.map((p) => p.recurringSeriesId).filter(Boolean))] as string[];
+  const recognizerBySeries = new Map<
+    string,
+    (tx: { descriptor: string; raw: MatchableTransaction }) => boolean
+  >();
+  let feed: { date: string; descriptor: string; raw: MatchableTransaction }[] = [];
+  if (seriesIds.length > 0) {
+    const [seriesRows, txs] = await Promise.all([
+      prisma.recurringSeries.findMany({
+        where: { id: { in: seriesIds } },
+        select: {
+          id: true,
+          direction: true,
+          merchantKey: true,
+          rule: { select: { conditions: true } },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: { userId },
+        select: {
+          valueDate: true,
+          direction: true,
+          amount: true,
+          description: true,
+          remittanceInfo: true,
+          bankAccount: { select: { name: true } },
+        },
+      }),
+    ]);
+    feed = txs.map((t) => ({
+      date: t.valueDate.toISOString().slice(0, 10),
+      descriptor: normalizeDescriptor(`${t.description ?? ""} ${t.remittanceInfo ?? ""}`),
+      raw: {
+        description: t.description,
+        remittanceInfo: t.remittanceInfo,
+        amount: Math.abs(Number(t.amount.toString())),
+        direction: t.direction,
+        accountName: t.bankAccount?.name ?? null,
+      },
+    }));
+    for (const s of seriesRows) {
+      let parsed: ReturnType<typeof parseConditions> | null = null;
+      if (s.rule) {
+        try {
+          parsed = parseConditions(s.rule.conditions);
+        } catch {
+          parsed = null;
+        }
+      }
+      if (parsed) {
+        const group = parsed;
+        recognizerBySeries.set(s.id, (tx) => matchesNode(tx.raw, group));
+      } else {
+        const needle = normalizeDescriptor(s.merchantKey);
+        recognizerBySeries.set(
+          s.id,
+          (tx) =>
+            tx.raw.direction === s.direction &&
+            needle.length >= 3 &&
+            tx.descriptor.includes(needle),
+        );
+      }
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+
+  return items.map((p) => {
+    const recognizes = p.recurringSeriesId
+      ? recognizerBySeries.get(p.recurringSeriesId)
+      : undefined;
+    const windowShape = {
+      year: p.year,
+      month: p.month,
+      dueDay: p.dueDay,
+      windowFromDay: p.windowFromDay,
+      windowToDay: p.windowToDay,
+      anchorMonthEnd: p.anchorMonthEnd,
+    };
+    let candidatesInWindow: number | null = null;
+    let seriesHistoricMatches: number | null = null;
+    if (recognizes) {
+      const { start, end } = matchWindow(windowShape as PlannedForMatch);
+      let inWindow = 0;
+      let historic = 0;
+      for (const tx of feed) {
+        if (!recognizes(tx)) continue;
+        historic++;
+        if (tx.date >= start && tx.date <= end) inWindow++;
+      }
+      candidatesInWindow = inWindow;
+      seriesHistoricMatches = historic;
+    }
+    return {
+      id: p.id,
+      description: p.description,
+      direction: p.direction,
+      categoryId: p.categoryId,
+      category: p.category?.name ?? null,
+      amount: Number(p.amount.toString()),
+      year: p.year,
+      month: p.month,
+      dueDay: p.dueDay,
+      windowFromDay: p.windowFromDay,
+      windowToDay: p.windowToDay,
+      anchorMonthEnd: p.anchorMonthEnd,
+      recurringSeriesId: p.recurringSeriesId,
+      status: p.status,
+      matchedTransactionId: p.matchedTransactionId,
+      matchedTransactionIds: p.matchedTransactionIds,
+      matchedAmount: p.matchedAmount ? Number(p.matchedAmount.toString()) : null,
+      windowStatus: windowStatusFor(windowShape, today),
+      candidatesInWindow,
+      seriesHistoricMatches,
+    };
+  });
 }
 
 export async function createPlannedItemForUser(

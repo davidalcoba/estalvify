@@ -233,6 +233,22 @@ export function isMissed(item: PlannedForMatch, today: string): boolean {
   return today > addDaysIso(windowEnd, MISSED_GRACE_DAYS);
 }
 
+/** Where `today` sits relative to an item's ACCEPTANCE window (lead/lag included). */
+export type WindowStatus = "FUTURE" | "OPEN" | "CLOSED";
+
+export function windowStatusFor(
+  item: Pick<
+    PlannedForMatch,
+    "year" | "month" | "dueDay" | "windowFromDay" | "windowToDay" | "anchorMonthEnd"
+  >,
+  today: string
+): WindowStatus {
+  const { start, end } = matchWindow(item as PlannedForMatch);
+  if (today < start) return "FUTURE";
+  if (today > end) return "CLOSED";
+  return "OPEN";
+}
+
 /** Deviation worth alerting (the O2 58 → 88.28 case), or null. */
 export function significantDeviation(
   deviation: number | null,

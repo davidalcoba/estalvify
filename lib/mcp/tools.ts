@@ -582,7 +582,12 @@ export function registerTools(server: McpServer): void {
         "same list. status: PENDING (expected), MATCHED (a transaction arrived in the window " +
         "and was linked, matchedAmount holds what actually arrived), MISSED (window closed " +
         "with nothing). Filter by year/month, and by status to get only PENDING / " +
-        "MATCHED / MISSED.",
+        "MATCHED / MISSED. Series items carry recognition diagnostics: " +
+        "seriesHistoricMatches (how many transactions the series recognizes across " +
+        "the whole history — 0 means the matcher is broken), candidatesInWindow " +
+        "(recognized inside this period's window), and windowStatus " +
+        "(FUTURE / OPEN / CLOSED) — so a healthy series whose charge simply has " +
+        "not arrived is distinguishable from a misconfigured one.",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
