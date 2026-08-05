@@ -181,11 +181,14 @@ export function SeriesManager({
           setDismissError(res.error);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // The action itself never throws — a rejection means the request
-        // didn't reach it (usually a redeploy invalidated this tab's actions).
+        // didn't reach it. Show the transport error verbatim: its text tells
+        // apart a network failure, a non-RSC response and a server throw.
         setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
-        setDismissError("App updated — reload the page and retry.");
+        setDismissError(
+          `Request failed: ${err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)}`,
+        );
       });
   }
 
@@ -222,8 +225,10 @@ export function SeriesManager({
         // Drop ?fromTx so a reload doesn't reopen the prefilled form.
         if (prefill) router.replace("/recurring");
         else router.refresh();
-      } catch {
-        setError("App updated — reload the page and retry.");
+      } catch (err) {
+        setError(
+          `Request failed: ${err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)}`,
+        );
       }
     });
   }
