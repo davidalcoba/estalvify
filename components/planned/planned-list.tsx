@@ -131,46 +131,74 @@ export function PlannedList({
           <ul className="divide-y">
             {rows.map((row) => {
               const badge = STATUS_BADGE[row.status];
+              const when = `${formatDate(row.date, dateLocale, "UTC", { day: "numeric", month: "short" })}${row.windowLabel ? ` (${row.windowLabel})` : ""}`;
+              const deletable = !row.fromSeries && row.status === "PENDING";
               return (
-                <li key={row.id} className="flex items-center gap-3 py-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">
-                    {row.fromSeries && (
-                      <Repeat className="mr-1.5 inline size-3.5 text-muted-foreground" aria-label="From a recurring series" />
-                    )}
-                    {row.description}
-                    {row.accountName && (
-                      <span className="ml-2 text-xs text-muted-foreground">{row.accountName}</span>
-                    )}
-                  </span>
-                  <Badge variant={badge.variant} className="shrink-0 text-xs">
-                    {badge.label}
-                  </Badge>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatDate(row.date, dateLocale, "UTC", { day: "numeric", month: "short" })}
-                    {row.windowLabel ? ` (${row.windowLabel})` : ""}
-                  </span>
-                  <span
-                    className={`w-24 shrink-0 text-right tabular-nums ${
-                      row.direction === "CREDIT" ? "text-success" : ""
-                    }`}
-                  >
-                    {row.direction === "CREDIT" ? "+" : "−"}
-                    {formatCurrency(row.matchedAmount ?? row.amount, currency, locale)}
-                  </span>
-                  {!row.fromSeries && row.status === "PENDING" ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-muted-foreground"
-                      onClick={() => remove(row.id)}
-                      disabled={isPending}
-                      title="Delete one-off"
+                <li key={row.id} className="py-2.5 text-sm">
+                  {/* The name owns the first line; status, date and the
+                      delete affordance wrap below on mobile. */}
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {row.fromSeries && (
+                        <Repeat className="mr-1.5 inline size-3.5 text-muted-foreground" aria-label="From a recurring series" />
+                      )}
+                      {row.description}
+                      {row.accountName && (
+                        <span className="ml-2 hidden text-xs font-normal text-muted-foreground sm:inline">
+                          {row.accountName}
+                        </span>
+                      )}
+                    </span>
+                    <Badge variant={badge.variant} className="hidden shrink-0 text-xs sm:inline-flex">
+                      {badge.label}
+                    </Badge>
+                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                      {when}
+                    </span>
+                    <span
+                      className={`shrink-0 text-right tabular-nums sm:w-24 ${
+                        row.direction === "CREDIT" ? "text-success" : ""
+                      }`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  ) : (
-                    <span className="w-7 shrink-0" />
-                  )}
+                      {row.direction === "CREDIT" ? "+" : "−"}
+                      {formatCurrency(row.matchedAmount ?? row.amount, currency, locale)}
+                    </span>
+                    {deletable ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="hidden h-7 w-7 shrink-0 text-muted-foreground sm:inline-flex"
+                        onClick={() => remove(row.id)}
+                        disabled={isPending}
+                        title="Delete one-off"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <span className="hidden w-7 shrink-0 sm:inline" />
+                    )}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs sm:hidden">
+                    <Badge variant={badge.variant} className="shrink-0 text-xs">
+                      {badge.label}
+                    </Badge>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {when}
+                      {row.accountName ? ` · ${row.accountName}` : ""}
+                    </span>
+                    {deletable && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground"
+                        onClick={() => remove(row.id)}
+                        disabled={isPending}
+                        title="Delete one-off"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </li>
               );
             })}
