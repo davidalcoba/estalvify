@@ -37,19 +37,20 @@ model User {
   lowBalanceThreshold Decimal @default(0) @db.Decimal(15, 2)
 
 
-  accounts         Account[]
-  sessions         Session[]
-  bankConnections  BankConnection[]
-  bankAccounts     BankAccount[]
-  transactions     Transaction[]
-  categories       Category[]
-  categoryRules    CategoryRule[]
-  budgets          Budget[]
-  plannedItems     PlannedItem[]
-  recurringSeries  RecurringSeries[]
-  notifications    Notification[]
-  mcpAuthCodes     McpAuthCode[]
-  mcpRefreshTokens McpRefreshToken[]
+  accounts              Account[]
+  sessions              Session[]
+  bankConnections       BankConnection[]
+  bankAccounts          BankAccount[]
+  transactions          Transaction[]
+  categories            Category[]
+  categoryRules         CategoryRule[]
+  budgets               Budget[]
+  plannedItems          PlannedItem[]
+  recurringSeries       RecurringSeries[]
+  notifications         Notification[]
+  mcpAuthCodes          McpAuthCode[]
+  mcpRefreshTokens      McpRefreshToken[]
+  dismissedSuggestions  DismissedRecurringSuggestion[]
 
   @@map("users")
 }
@@ -561,6 +562,21 @@ enum RecurringCadence {
   QUARTERLY
   YEARLY
   IRREGULAR
+}
+
+// A recurring-series suggestion the user rejected. Detection only proposes —
+// this table is what keeps a rejected proposal from resurfacing on every
+// visit. Keyed by the suggestion's merchantKey (normalized descriptor).
+model DismissedRecurringSuggestion {
+  id          String   @id @default(cuid())
+  userId      String
+  merchantKey String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, merchantKey])
+  @@map("dismissed_recurring_suggestions")
 }
 
 // ─────────────────────────────────────────────

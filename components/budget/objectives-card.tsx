@@ -11,7 +11,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, PiggyBank, Plus, Target, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  Loader2,
+  Pencil,
+  PiggyBank,
+  Plus,
+  Repeat,
+  Target,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -56,6 +65,7 @@ export function ObjectivesCard({
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirm, setConfirm] = useState<{ categoryId: string; name: string } | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
   const elapsedPct = Math.round(monthElapsed * 100);
@@ -141,28 +151,29 @@ export function ObjectivesCard({
                     : ahead
                       ? "text-warning"
                       : "text-muted-foreground";
+                  const isOpen = expandedId === o.categoryId;
                   return (
                     <li key={o.categoryId} className="text-sm">
                       {/* One line on desktop; on mobile the amounts wrap to
-                          their own line so the name never crushes them. */}
+                          their own line so the name never crushes them.
+                          Tapping the name unfolds the composition. */}
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
-                          onClick={() =>
-                            setDraft({
-                              categoryId: o.categoryId,
-                              assigned: String(o.assigned),
-                              rollover: false,
-                              existing: true,
-                            })
-                          }
+                          className="flex min-w-0 flex-1 items-center gap-1 text-left font-medium"
+                          onClick={() => setExpandedId(isOpen ? null : o.categoryId)}
+                          aria-expanded={isOpen}
                         >
+                          <ChevronRight
+                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                              isOpen ? "rotate-90" : ""
+                            }`}
+                          />
                           <span
-                            className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
+                            className="inline-block h-2 w-2 shrink-0 rounded-full"
                             style={{ backgroundColor: o.categoryColor }}
                           />
-                          {o.categoryName}
+                          <span className="min-w-0 truncate">{o.categoryName}</span>
                         </button>
                         <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
                           {fmt(o.consumed)} / {fmt(o.assigned)}
@@ -172,20 +183,22 @@ export function ObjectivesCard({
                         >
                           {consumedPct}% · {elapsedPct}%
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 text-muted-foreground"
-                          onClick={() =>
-                            setConfirm({ categoryId: o.categoryId, name: o.categoryName })
-                          }
-                          disabled={isPending}
-                          title="Remove objective (this month onward)"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {o.extra > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-muted-foreground"
+                            onClick={() =>
+                              setConfirm({ categoryId: o.categoryId, name: o.categoryName })
+                            }
+                            disabled={isPending}
+                            title="Remove objective (this month onward)"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 text-xs sm:hidden">
+                      <div className="mt-0.5 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
                         <span className="tabular-nums text-muted-foreground">
                           {fmt(o.consumed)} / {fmt(o.assigned)}
                         </span>
@@ -206,6 +219,79 @@ export function ObjectivesCard({
                           style={{ left: `${elapsedPct}%` }}
                         />
                       </div>
+
+                      {isOpen && (
+                        <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-3 text-xs">
+                          {/* Composition: recurring base + manual extra. */}
+                          {(o.recurrings.length > 0 || o.extra > 0) && (
+                            <ul className="space-y-1">
+                              {o.recurrings.map((r, i) => (
+                                <li
+                                  key={i}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="min-w-0 truncate text-muted-foreground">
+                                    <Repeat className="mr-1 inline h-3 w-3" />
+                                    {r.description}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums">
+                                    {fmt(r.amount)}
+                                  </span>
+                                </li>
+                              ))}
+                              {o.extra > 0 && (
+                                <li className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">Manual</span>
+                                  <span className="shrink-0 tabular-nums">
+                                    {fmt(o.extra)}
+                                  </span>
+                                </li>
+                              )}
+                            </ul>
+                          )}
+
+                          {o.transactions.length > 0 && (
+                            <ul className="max-h-40 space-y-1 overflow-y-auto border-t pt-2">
+                              {o.transactions.map((t, i) => (
+                                <li
+                                  key={i}
+                                  className="flex items-center justify-between gap-2 text-muted-foreground"
+                                >
+                                  <span className="shrink-0 tabular-nums">
+                                    {t.date.slice(8, 10)}/{t.date.slice(5, 7)}
+                                  </span>
+                                  <span className="min-w-0 flex-1 truncate">
+                                    {t.description}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums">
+                                    {fmt(t.amount)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          <div className="flex justify-end border-t pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7"
+                              onClick={() =>
+                                setDraft({
+                                  categoryId: o.categoryId,
+                                  assigned: String(o.extra),
+                                  rollover: false,
+                                  existing: true,
+                                })
+                              }
+                              disabled={isPending}
+                            >
+                              <Pencil className="mr-1 h-3 w-3" />
+                              {o.extra > 0 ? "Edit manual amount" : "Add manual amount"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -302,7 +388,7 @@ export function ObjectivesCard({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="objective-amount">Monthly amount ({currency})</Label>
+              <Label htmlFor="objective-amount">Manual amount ({currency})</Label>
               <Input
                 id="objective-amount"
                 type="number"
@@ -312,7 +398,8 @@ export function ObjectivesCard({
                 onChange={(e) => setDraft({ ...draft, assigned: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                Copied forward automatically each month.
+                On top of the category&apos;s recurring charges; copied forward
+                each month.
               </p>
             </div>
             <div className="flex items-center justify-between gap-3">
