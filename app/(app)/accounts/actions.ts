@@ -97,24 +97,3 @@ export async function renameAccount(accountId: string, name: string) {
   revalidatePath("/accounts");
 }
 
-// Set (or clear) the household holder of an account — a reporting dimension
-// for per-holder breakdowns and the income-concentration indicator.
-export async function setAccountOwner(accountId: string, ownerName: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-
-  const account = await prisma.bankAccount.findFirst({
-    where: { id: accountId, userId: session.user.id },
-    select: { id: true },
-  });
-  if (!account) throw new Error("Account not found");
-
-  const trimmed = ownerName.trim().slice(0, 60);
-  await prisma.bankAccount.update({
-    where: { id: accountId },
-    data: { ownerName: trimmed || null },
-  });
-
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
-}
