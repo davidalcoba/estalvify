@@ -93,6 +93,12 @@ export function CascadeCard({
               </dd>
             </div>
           )}
+          {reconciliation.consolidatedBalance != null && (
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Total balance (all accounts)</dt>
+              <dd className="tabular-nums">{fmt(reconciliation.consolidatedBalance)}</dd>
+            </div>
+          )}
           {reconciliation.monthsOfCushion != null && (
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Months of cushion</dt>

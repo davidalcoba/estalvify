@@ -30,6 +30,7 @@ import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency } from "@/lib/formatters";
+import { chargeTone, incomeTone } from "@/lib/budget/pace";
 import type { CategoryObjective, IncomeObjective } from "@/lib/budget/month-status";
 import { upsertBudgetObjective, removeBudgetObjective } from "@/app/(app)/plan/actions";
 
@@ -142,6 +143,19 @@ export function ObjectivesCard({
               {incomeObjectives.map((o) => {
                 const receivedPct =
                   o.expected > 0 ? Math.round((o.received / o.expected) * 100) : 0;
+                const tone = incomeTone(o.received, o.expected, monthElapsed);
+                const barClass =
+                  tone === "success"
+                    ? "bg-success"
+                    : tone === "warning"
+                      ? "bg-warning"
+                      : "bg-muted-foreground/40";
+                const pctClass =
+                  tone === "success"
+                    ? "text-success"
+                    : tone === "warning"
+                      ? "text-warning"
+                      : "text-muted-foreground";
                 const key = `income:${o.categoryId}`;
                 const isOpen = expandedId === key;
                 return (
@@ -169,9 +183,7 @@ export function ObjectivesCard({
                         <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
                       </span>
                       <span
-                        className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${
-                          receivedPct >= 100 ? "text-success" : "text-muted-foreground"
-                        }`}
+                        className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${pctClass}`}
                       >
                         {receivedPct}%
                       </span>
@@ -185,7 +197,7 @@ export function ObjectivesCard({
                     <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                       {/* Inverted polarity: filling up is good — income arriving. */}
                       <div
-                        className="h-full rounded-full bg-success"
+                        className={`h-full rounded-full ${barClass}`}
                         style={{ width: `${Math.min(100, receivedPct)}%` }}
                       />
                     </div>
@@ -227,13 +239,19 @@ export function ObjectivesCard({
                 {variables.map((o) => {
                   const consumedPct =
                     o.assigned > 0 ? Math.round((o.consumed / o.assigned) * 100) : 0;
-                  const over = o.consumed > o.assigned;
-                  const ahead = consumedPct > elapsedPct;
-                  const pctTone = over
-                    ? "text-destructive"
-                    : ahead
-                      ? "text-warning"
-                      : "text-muted-foreground";
+                  const tone = chargeTone(o.consumed, o.assigned, elapsedPct);
+                  const barClass =
+                    tone === "destructive"
+                      ? "bg-destructive"
+                      : tone === "warning"
+                        ? "bg-warning"
+                        : "bg-success";
+                  const pctTone =
+                    tone === "destructive"
+                      ? "text-destructive"
+                      : tone === "warning"
+                        ? "text-warning"
+                        : "text-success";
                   const isOpen = expandedId === o.categoryId;
                   return (
                     <li key={o.categoryId} className="text-sm">
@@ -276,9 +294,7 @@ export function ObjectivesCard({
                       </div>
                       <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
-                          className={`h-full rounded-full ${
-                            over ? "bg-destructive" : ahead ? "bg-warning" : "bg-primary"
-                          }`}
+                          className={`h-full rounded-full ${barClass}`}
                           style={{ width: `${Math.min(100, consumedPct)}%` }}
                         />
                         {/* Pace marker: where the month is. */}
