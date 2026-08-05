@@ -9,7 +9,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Repeat, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronRight, Loader2, Plus, Repeat, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -100,6 +100,7 @@ export function SeriesManager({
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
 
@@ -192,8 +193,10 @@ export function SeriesManager({
     });
   }
 
-  const debits = series.filter((s) => s.direction === "DEBIT");
-  const credits = series.filter((s) => s.direction === "CREDIT");
+  const rows = [
+    ...series.filter((s) => s.direction === "DEBIT"),
+    ...series.filter((s) => s.direction === "CREDIT"),
+  ];
 
   return (
     <div className="space-y-6">
@@ -211,42 +214,26 @@ export function SeriesManager({
           <CardContent>
             <ul className="divide-y">
               {suggestions.map((s) => (
-                <li key={`${s.direction}:${s.merchantKey}`} className="py-2 text-sm">
-                  <div className="flex items-center gap-3">
+                <li key={`${s.direction}:${s.merchantKey}`}>
+                  {/* The whole row opens the proposal's detail (Use / Dismiss
+                      live there) — no button cluster squeezing the name. */}
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 py-2 text-left text-sm"
+                    onClick={() => setDetail(s)}
+                  >
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {s.displayName}
                     </span>
                     <span
                       className={`shrink-0 tabular-nums ${
-                        s.direction === "CREDIT" ? "text-success" : ""
+                        s.direction === "CREDIT" ? "text-success" : "text-muted-foreground"
                       }`}
                     >
                       ~{fmt(s.expectedAmount)}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 shrink-0"
-                      onClick={() => applySuggestion(s)}
-                      disabled={isPending}
-                    >
-                      Use
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-muted-foreground"
-                      onClick={() => dismiss(s.merchantKey)}
-                      disabled={isPending}
-                      title="Dismiss suggestion"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence} ·{" "}
-                    {s.occurrences}× · last {s.lastDate}
-                  </p>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -257,8 +244,8 @@ export function SeriesManager({
       {series.length === 0 ? (
         <EmptyState
           icon={Repeat}
-          title="Register your standing charges"
-          description="Each series feeds its category in the monthly control and shows up in Upcoming."
+          title="Register your recurring charges and income"
+          description="Each series feeds its category in the Budget and shows up in Upcoming."
         >
           <Button onClick={() => setDraft({ ...EMPTY })}>
             <Plus className="mr-2 h-4 w-4" />
@@ -266,69 +253,149 @@ export function SeriesManager({
           </Button>
         </EmptyState>
       ) : (
-        <>
-          {[
-            { title: "Charges", rows: debits },
-            { title: "Income", rows: credits },
-          ]
-            .filter((g) => g.rows.length > 0)
-            .map((group) => (
-              <Card key={group.title}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">{group.title}</CardTitle>
-                  {group.title === "Charges" && (
-                    <Button variant="ghost" size="sm" onClick={() => setDraft({ ...EMPTY })} disabled={isPending}>
-                      <Plus className="mr-1 h-3.5 w-3.5" />
-                      Series
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Series</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setDraft({ ...EMPTY })} disabled={isPending}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Series
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {rows.map((s) => (
+                <li key={s.id} className="py-2 text-sm">
+                  {/* One line on desktop; on mobile the cadence and amount
+                      wrap to a second line so the name keeps the width. */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+                      onClick={() => openEdit(s)}
+                    >
+                      {s.displayName}
+                      {!s.active && (
+                        <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
+                      )}
+                    </button>
+                    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                      {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
+                      {s.anchorMonthEnd
+                        ? " · month end"
+                        : s.windowFromDay != null
+                          ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
+                          : ""}
+                    </span>
+                    <span
+                      className={`hidden w-24 shrink-0 text-right tabular-nums sm:inline ${s.direction === "CREDIT" ? "text-success" : ""}`}
+                    >
+                      {s.direction === "CREDIT" ? "+" : "−"}
+                      {fmt(s.expectedAmount)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground"
+                      onClick={() => setConfirmDelete({ id: s.id, name: s.displayName })}
+                      disabled={isPending}
+                      title="Delete series"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <ul className="divide-y">
-                    {group.rows.map((s) => (
-                      <li key={s.id} className="flex items-center gap-3 py-2 text-sm">
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
-                          onClick={() => openEdit(s)}
-                        >
-                          {s.displayName}
-                          {!s.active && (
-                            <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
-                          )}
-                        </button>
-                        <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                          {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
-                          {s.anchorMonthEnd
-                            ? " · month end"
-                            : s.windowFromDay != null
-                              ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
-                              : ""}
-                        </span>
-                        <span
-                          className={`w-24 shrink-0 text-right tabular-nums ${s.direction === "CREDIT" ? "text-success" : ""}`}
-                        >
-                          {s.direction === "CREDIT" ? "+" : "−"}
-                          {fmt(s.expectedAmount)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 text-muted-foreground"
-                          onClick={() => setConfirmDelete({ id: s.id, name: s.displayName })}
-                          disabled={isPending}
-                          title="Delete series"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            ))}
-        </>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs sm:hidden">
+                    <span className="text-muted-foreground">
+                      {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
+                      {s.anchorMonthEnd
+                        ? " · month end"
+                        : s.windowFromDay != null
+                          ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
+                          : ""}
+                    </span>
+                    <span
+                      className={`tabular-nums ${s.direction === "CREDIT" ? "text-success" : ""}`}
+                    >
+                      {s.direction === "CREDIT" ? "+" : "−"}
+                      {fmt(s.expectedAmount)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
+
+      <Dialog open={detail !== null} onOpenChange={(o) => { if (!o) setDetail(null); }}>
+        <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
+          <DialogTitle className="truncate pr-6">{detail?.displayName}</DialogTitle>
+          {detail && (
+            <div className="space-y-4">
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Amount (approx.)</dt>
+                  <dd
+                    className={`tabular-nums ${
+                      detail.direction === "CREDIT" ? "text-success" : ""
+                    }`}
+                  >
+                    {detail.direction === "CREDIT" ? "+" : "−"}~{fmt(detail.expectedAmount)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Cadence</dt>
+                  <dd>{CADENCES.find((c) => c.value === detail.cadence)?.label ?? detail.cadence}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Seen</dt>
+                  <dd>
+                    {detail.occurrences}× · last {detail.lastDate}
+                  </dd>
+                </div>
+                {detail.windowFromDay != null && (
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground">Usual days</dt>
+                    <dd>
+                      {detail.windowFromDay}
+                      {detail.windowToDay && detail.windowToDay !== detail.windowFromDay
+                        ? `–${detail.windowToDay}`
+                        : ""}
+                    </dd>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="shrink-0 text-muted-foreground">Matcher</dt>
+                  <dd className="min-w-0 truncate text-xs text-muted-foreground">
+                    {detail.merchantKey}
+                  </dd>
+                </div>
+              </dl>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    dismiss(detail.merchantKey);
+                    setDetail(null);
+                  }}
+                  disabled={isPending}
+                >
+                  <X className="mr-1 h-3.5 w-3.5" />
+                  Dismiss
+                </Button>
+                <Button
+                  onClick={() => {
+                    applySuggestion(detail);
+                    setDetail(null);
+                  }}
+                  disabled={isPending}
+                >
+                  Use as series
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <DialogContent className="pt-8 sm:w-[min(96vw,480px)] sm:max-w-[min(96vw,480px)]">
