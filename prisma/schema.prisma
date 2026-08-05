@@ -487,10 +487,11 @@ model PlannedItem {
   recurringSeriesId String?
 
   status               PlannedStatus @default(PENDING)
-  // The primary matched transaction (earliest in the window) — kept unique so a
-  // transaction anchors at most one planned item. When a period carries several
-  // charges of the same series (school fees, association dues), the rest are in
-  // matchedTransactionIds and matchedAmount is their SUM.
+  // matchedTransactionIds is THE source of truth for what a matched item
+  // absorbed: always 1..n ids, also for single-charge matches. Consumers read
+  // one field with one rule. matchedTransactionId is the LEGACY single-value
+  // anchor (the earliest transaction) — kept unique so a transaction anchors at
+  // most one planned item, but never read alone.
   matchedTransactionId String?       @unique
   matchedTransactionIds String[]     @default([])
   // What actually arrived (SUM across matchedTransactionIds; deviation vs

@@ -581,8 +581,10 @@ export function registerTools(server: McpServer): void {
         "cascade derives from. Series-generated instances and hand-typed one-offs live in the " +
         "same list. status: PENDING (expected), MATCHED (a transaction arrived in the window " +
         "and was linked, matchedAmount holds what actually arrived), MISSED (window closed " +
-        "with nothing). Filter by year/month, and by status to get only PENDING / " +
-        "MATCHED / MISSED. Series items carry recognition diagnostics: " +
+        "with nothing). matchedTransactionIds always carries the 1..n absorbed " +
+        "transactions of a matched item (matchedTransactionId is a legacy " +
+        "single-value alias of the first). Filter by year/month, and by status to " +
+        "get only PENDING / MATCHED / MISSED. Series items carry recognition diagnostics: " +
         "seriesHistoricMatches (how many transactions the series recognizes across " +
         "the whole history — 0 means the matcher is broken), candidatesInWindow " +
         "(recognized inside this period's window), and windowStatus " +

@@ -174,12 +174,19 @@ export async function runPlannedMatching(
     }),
     prisma.plannedItem.findMany({
       where: { userId, status: "MATCHED" },
-      select: { matchedTransactionIds: true },
+      select: { matchedTransactionId: true, matchedTransactionIds: true },
     }),
   ]);
   // A matched item can hold several transactions (aggregate matching), so the
-  // claimed set is the union across all of them.
-  const claimedIds = new Set(claimed.flatMap((c) => c.matchedTransactionIds));
+  // claimed set is the union across all of them. matchedTransactionId is
+  // unioned in defensively: an item matched before the array column existed
+  // carries [] there, and missing it would let its transaction be claimed
+  // twice. (A backfill migration heals the data; this keeps the engine safe
+  // even against a row that slips through.)
+  const claimedIds = new Set([
+    ...claimed.flatMap((c) => c.matchedTransactionIds),
+    ...claimed.map((c) => c.matchedTransactionId).filter(Boolean),
+  ]);
 
   // Rule-linked recognition: the predicate evaluates the rule's condition
   // tree over the raw transaction fields (looked up by id — the pure matcher
