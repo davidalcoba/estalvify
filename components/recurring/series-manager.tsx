@@ -174,10 +174,17 @@ export function SeriesManager({
     setDetail(null);
     setDismissError(null);
     setHiddenKeys((keys) => [...keys, merchantKey]);
-    dismissRecurringSuggestion(merchantKey).catch(() => {
-      setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
-      setDismissError("Couldn't save the dismissal — reload the page and try again.");
-    });
+    dismissRecurringSuggestion(merchantKey)
+      .then((res) => {
+        if (!res.ok) {
+          setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+          setDismissError(res.error);
+        }
+      })
+      .catch(() => {
+        setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
+        setDismissError("Couldn't save the dismissal — reload the page and try again.");
+      });
   }
 
   function save() {

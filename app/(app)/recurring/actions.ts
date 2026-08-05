@@ -44,14 +44,23 @@ export async function deleteSeries(id: string): Promise<void> {
 }
 
 // Rejecting a detection proposal — remembered so it never resurfaces.
-export async function dismissRecurringSuggestion(merchantKey: string): Promise<void> {
-  const userId = await requireUserId();
-  const key = merchantKey?.trim();
-  if (!key) throw new Error("Missing suggestion key");
-  await prisma.dismissedRecurringSuggestion.upsert({
-    where: { userId_merchantKey: { userId, merchantKey: key } },
-    create: { userId, merchantKey: key },
-    update: {},
-  });
-  revalidatePath("/recurring");
+// Returns the failure instead of throwing: production masks thrown server
+// action messages, and a masked failure here reads as a haunted UI.
+export async function dismissRecurringSuggestion(
+  merchantKey: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const userId = await requireUserId();
+    const key = merchantKey?.trim();
+    if (!key) throw new Error("Missing suggestion key");
+    await prisma.dismissedRecurringSuggestion.upsert({
+      where: { userId_merchantKey: { userId, merchantKey: key } },
+      create: { userId, merchantKey: key },
+      update: {},
+    });
+    revalidatePath("/recurring");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
 }
