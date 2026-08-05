@@ -420,12 +420,40 @@ An MCP (Model Context Protocol) server exposes app actions to MCP clients
 (e.g. Claude), authenticated with an OAuth 2.1 Authorization Server that
 **delegates the human login to the existing Auth.js Google flow**. Personal /
 household scope. Access tokens are self-verifying JWTs (HS256, signed with
-`MCP_JWT_SECRET` or `AUTH_SECRET`); auth codes and refresh tokens are opaque and
-stored hashed.
+`MCP_JWT_SECRET`, falling back to `AUTH_SECRET` with a production warning);
+auth codes and refresh tokens are opaque and stored hashed. Tokens carry an
+`iss` claim bound to the deployment target (`estalvify-mcp:<VERCEL_ENV>`), so a
+token minted on preview is not valid against production even when both share a
+signing secret.
 
 - Endpoints: `/api/mcp` (Streamable HTTP, via `mcp-handler`),
-  `/api/oauth/{authorize,token,register}`, and discovery metadata at
+  `/api/oauth/{authorize,token,register,revoke}`, the consent screen at
+  `/oauth/consent`, and discovery metadata at
   `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource`.
+- **Consent + scopes**: `/api/oauth/authorize` validates the request and sends
+  the signed-in user to `/oauth/consent`, which shows the client and the scopes
+  and mints the code only on explicit approval (the server actions re-validate
+  everything — the form fields are transport, not trusted state). Two scopes
+  (`lib/mcp/scopes.ts`, pure + tested): `read` and `write`. A client that
+  requests no scope (MCP clients usually don't) is granted both — full access
+  stays the default, but the user now sees it. Every tool declares read/write
+  via `requireUserId(extra, scope)`, so a read-only token gets an error from
+  write tools; tokens without a scope claim (legacy) keep full access and age
+  out within the hour.
+- **Refresh-token rotation + revocation**: the `refresh_token` grant retires
+  the presented token atomically and issues a replacement — a replayed token
+  gets `invalid_grant`. The grant also re-checks `ALLOWED_EMAILS`, so a removed
+  user stops minting access tokens at the next refresh instead of in 30 days.
+  `/api/oauth/revoke` (RFC 7009) revokes refresh tokens, client-authenticated,
+  200 either way (no validity oracle). `lib/auth/revoke.ts` is the active kill
+  switch: deletes the user's Auth.js sessions and revokes their MCP refresh
+  tokens in one transaction.
+- **Rate limiting** (`lib/rate-limit.ts`): Postgres-backed fixed-window
+  counters (serverless invocations share nothing else; the `rate_limits` table
+  is the store). Applied per IP on the anonymous endpoints —
+  `/api/oauth/{token,register,authorize,revoke}` and `/api/banking/callback`.
+  Fails open on DB errors (the DB being down is already a full outage) and the
+  daily retention purge clears stale windows.
 - `lib/mcp/oauth.ts` — PKCE (S256), opaque-token hashing, JWT sign/verify.
 - `lib/mcp/store.ts` — Prisma-backed clients / single-use codes / refresh tokens
   (`McpOAuthClient`, `McpAuthCode`, `McpRefreshToken`).
@@ -473,6 +501,14 @@ stored hashed.
   callback (`auth.ts`) only lets matching Google accounts in — locking both the
   app and the MCP (which shares the login) to the owner. This is the decisive
   control: only an allowed account can ever obtain an MCP token.
+  The list is enforced on **live** access too, not just at sign-in: `proxy.ts`
+  checks the session's email on every request (pure string match, no extra
+  query) and, on a miss, calls `revokeUserAccess` — deleting the user's session
+  rows and revoking their MCP refresh tokens — before bouncing to /login; and
+  the token endpoint re-checks the allowlist on every `refresh_token` grant.
+  Removing an email therefore cuts app access on the user's next request and
+  caps MCP access at the last access token's remaining lifetime (≤ 1 hour),
+  instead of the old worst case of 30 days.
   The matching is `lib/auth/allowed-emails.ts` — pure and unit-tested, so the one
   rule that decides who gets in is not buried in an Auth.js callback. Entries are
   an exact address, a whole domain (`example.com`, `@example.com`, `*@example.com`
@@ -536,6 +572,35 @@ Rules:
 - Never query shared data without `userId` constraints when entity is user-owned
 - Never accept a client-provided `userId` as source of truth
 - Always derive user context from authenticated session
+
+## Privacy & data lifecycle (GDPR)
+
+The self-service rights live in **Settings → Privacy & data**
+(`components/settings/privacy-data-card.tsx`); the legal pages are `/privacy`
+and `/terms` (`app/(legal)/`, public in `proxy.ts`, linked from the login
+screen). Both pages are drafts pending legal review — the controller identity
+placeholders must be filled before opening the app — and MUST stay in sync
+with what the code actually does.
+
+- **Export (portability)**: `GET /api/export` (session-authenticated) streams
+  one JSON attachment built by `lib/account/export-user.ts` — everything the
+  account owns, including the shared system categories its data references.
+  Deliberate omission: `BankConnection.sessionId` (credential-adjacent).
+- **Deletion (erasure)**: `deleteMyAccount` (settings action, typed-DELETE
+  confirmation) → `lib/account/delete-user.ts`. Order matters: first revoke
+  the PSD2 consents at Enable Banking (best effort — an EB outage must not
+  block erasure; consents lapse within 90 days anyway), then delete rows.
+  `onDelete: Cascade` covers most tables, but `transaction_categorizations`,
+  `category_rules` and `budget_items` hold RESTRICT FKs into `categories`, so
+  they are deleted explicitly first, in the same transaction as the user row.
+- **Retention** (`lib/retention.ts`, filters pure + tested): the daily cron
+  purges expired Auth.js sessions, expired MCP auth codes, expired/revoked
+  refresh tokens (7-day debug grace), notifications (read > 90 days, unread >
+  1 year) and stale rate-limit rows. Financial data is deliberately not
+  auto-purged — it leaves via account deletion; an inactivity purge is a
+  product decision.
+- What deletion cannot reach: Vercel log retention and Neon branch/backup
+  history age out on the providers' schedules. The privacy policy says so.
 
 ## Async Processing
 

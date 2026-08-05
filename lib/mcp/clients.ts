@@ -12,6 +12,8 @@ import { timingSafeEqual } from "node:crypto";
 
 export interface ResolvedClient {
   clientId: string;
+  /** Human-readable name for consent screens (dynamic clients only). */
+  clientName?: string;
   /** Exact redirect_uri allowlist (may be empty for a static client → host rule). */
   redirectUris: string[];
   /** Present ⇒ confidential client; token endpoint must authenticate the secret. */
@@ -51,7 +53,12 @@ export async function resolveClient(
   const { getClient } = await import("./store");
   const db = await getClient(clientId);
   if (!db) return null;
-  return { clientId: db.clientId, redirectUris: db.redirectUris, isStatic: false };
+  return {
+    clientId: db.clientId,
+    clientName: db.clientName ?? undefined,
+    redirectUris: db.redirectUris,
+    isStatic: false,
+  };
 }
 
 export function isAllowedRedirectUri(

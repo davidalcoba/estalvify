@@ -1,9 +1,10 @@
 "use server";
 
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { CategoryKind } from "@/app/generated/prisma";
+import { deleteUserAccount } from "@/lib/account/delete-user";
 
 export async function updatePreferences(data: {
   timezone: string;
@@ -65,6 +66,24 @@ export async function updatePlanningSettings(input: PlanningSettingsInput) {
   revalidatePath("/forecast");
   revalidatePath("/plan");
   revalidatePath("/dashboard");
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNT DELETION (GDPR right to erasure)
+// ─────────────────────────────────────────────
+
+// Deletes everything: PSD2 consents are revoked at Enable Banking (best
+// effort), every user-owned row is removed, and the session ends. The UI
+// gates this behind an explicit typed confirmation.
+export async function deleteMyAccount() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  await deleteUserAccount(session.user.id);
+
+  // The user row (and with it every session row) is gone; this clears the
+  // cookie and lands on the login screen.
+  await signOut({ redirectTo: "/login" });
 }
 
 // ─────────────────────────────────────────────

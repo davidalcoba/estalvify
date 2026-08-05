@@ -60,6 +60,25 @@ export default function SettingsLoading() {
             ))}
           </CardContent>
         </Card>
+
+        {/* Privacy & data (export + delete account) */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-9 w-40" />
+            </div>
+            <div className="space-y-1.5 border-t pt-5">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-9 w-36" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

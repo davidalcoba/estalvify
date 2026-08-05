@@ -2,6 +2,7 @@
 // Redirects to /dashboard after successful sign-in
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth, signIn } from "@/auth";
@@ -74,7 +75,15 @@ export default async function LoginPage(props: {
         </form>
 
         <p className="text-center text-xs text-muted-foreground pt-2">
-          By signing in, you agree to our terms of service and privacy policy.
+          By signing in, you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-foreground">
+            terms of service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline hover:text-foreground">
+            privacy policy
+          </Link>
+          .
         </p>
       </CardContent>
     </Card>

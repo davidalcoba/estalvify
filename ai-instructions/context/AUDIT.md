@@ -14,11 +14,37 @@
 **Resuelto en esta rama** (gate verde: typecheck, lint, tests):
 A1, A2, A3, A4, A6, A7 · B1, B2, B7, B8.
 
+**Actualización 2026-08-05 (rama `claude/multiuser-pii-gdpr-security-mambl9`)** —
+segundo tranche, asumiendo el modelo TPP vía Enable Banking:
+
+- **B4 resuelto**: rate limiting fixed-window respaldado en Postgres
+  (`lib/rate-limit.ts`, tabla `rate_limits`) sobre
+  `/api/oauth/{token,register,authorize,revoke}` y `/api/banking/callback`.
+- **B5 resuelto**: consent screen (`/oauth/consent`) con re-validación
+  server-side; scopes `read`/`write` enforçados por tool
+  (`lib/mcp/scopes.ts` + `requireUserId(extra, scope)`); `/api/oauth/revoke`
+  (RFC 7009); rotación de refresh tokens con detección de replay; purga de
+  códigos/tokens expirados en el cron.
+- **B6 parcial**: `MCP_JWT_SECRET` preferido con warning en producción al caer
+  a `AUTH_SECRET`, y claim `iss` por deployment (preview ≠ producción).
+  Sigue pendiente para self-hosting: `trustHost`/`AUTH_URL` y validación del
+  Host header contra allowlist.
+- **B3 parcial**: revocación activa (`lib/auth/revoke.ts`) — el allowlist se
+  enforça en sesiones vivas (proxy) y en cada refresh MCP, así que quitar un
+  email corta el acceso al siguiente request / ≤1 h. El modelo de alta
+  (signup/tenant) sigue siendo la decisión de producto pendiente.
+- **Nuevo — capa GDPR**: export de datos (`/api/export` +
+  `lib/account/export-user.ts`), borrado de cuenta con revocación PSD2
+  (`lib/account/delete-user.ts`, Settings → Privacy & data), páginas legales
+  `/privacy` y `/terms` (borradores pendientes de revisión legal), y retención
+  con purgas diarias (`lib/retention.ts`).
+
 **Pendiente / deliberadamente diferido** (decisiones de producto o infra, no aptos
-para hacer sin revisión): B3 (modelo de alta multi-usuario), B4 (rate limiting — elige
-infra), B5 (consent screen + enforcement de scopes OAuth), B6 (trustHost/AUTH_URL +
-separar `MCP_JWT_SECRET`), C5 (rediseño de la cola), C6 (harness de tests con BD), D6
-(estrategia i18n). El resto de C/D son quick-wins oportunistas.
+para hacer sin revisión): B3 (modelo de alta multi-usuario), B6 (parte
+self-hosting: trustHost/AUTH_URL), C5 (rediseño de la cola), C6 (harness de
+tests con BD — sigue sin haber tests de autorización con BD real), D6
+(estrategia i18n; las páginas legales están en inglés como el resto de la UI).
+El resto de C/D son quick-wins oportunistas.
 
 ## Contexto
 
