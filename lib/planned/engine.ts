@@ -59,6 +59,7 @@ export async function ensurePlannedItems(userId: string, timezone: string): Prom
         windowFromDay: true,
         windowToDay: true,
         anchorMonthEnd: true,
+        skipMonths: true,
         nextExpectedDate: true,
         lastSeenAt: true,
       },
@@ -82,7 +83,7 @@ export async function ensurePlannedItems(userId: string, timezone: string): Prom
       s.lastSeenAt?.toISOString().slice(0, 10) ??
       null;
     for (const m of months) {
-      if (!isDueInMonth({ cadence: s.cadence, anchorDate, windowFromDay: s.windowFromDay, windowToDay: s.windowToDay, anchorMonthEnd: s.anchorMonthEnd }, m)) {
+      if (!isDueInMonth({ cadence: s.cadence, anchorDate, skipMonths: s.skipMonths, windowFromDay: s.windowFromDay, windowToDay: s.windowToDay, anchorMonthEnd: s.anchorMonthEnd }, m)) {
         continue;
       }
       if (have.has(`${s.id}:${m.year}-${m.month}`)) continue;
