@@ -10,6 +10,12 @@ import {
   type SeriesFields,
 } from "@/lib/mcp/manage";
 
+// NOTE: a "use server" module may only export async functions. Re-exporting a
+// type from here (`export type { SeriesFields }`) made Turbopack emit a runtime
+// reference to the erased type, so the module threw `ReferenceError:
+// SeriesFields is not defined` on evaluation in production — killing every
+// action in the file. Consumers import the type straight from lib/mcp/manage.
+
 async function requireUserId(): Promise<string> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
@@ -22,8 +28,6 @@ function revalidate(): void {
   revalidatePath("/plan");
   revalidatePath("/dashboard");
 }
-
-export type { SeriesFields };
 
 // Every mutation returns its failure instead of throwing: production masks
 // thrown server-action messages, so a thrown validation error (e.g. the

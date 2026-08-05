@@ -12,26 +12,6 @@ export async function proxy(request: NextRequest) {
   const session = await auth();
   const { pathname } = request.nextUrl;
 
-  // TEMPORARY DIAGNOSTIC — log the proxy's view of server-action POSTs.
-  if (request.headers.get("next-action")) {
-    try {
-      const { prisma } = await import("@/lib/prisma");
-      await prisma.syncLog.create({
-        data: {
-          status: "FAILED",
-          syncDate: new Date(),
-          errorMessage:
-            `PROXYDBG method=${request.method} path=${pathname} ` +
-            `hasSession=${!!session?.user} email=${session?.user?.email ?? "-"} ` +
-            `allowed=${session?.user ? isEmailAllowed(session.user.email, process.env.ALLOWED_EMAILS) : "n/a"} ` +
-            `ALLOWED_EMAILS_set=${!!process.env.ALLOWED_EMAILS}`,
-        },
-      });
-    } catch {
-      /* best-effort */
-    }
-  }
-
   // Enforce ALLOWED_EMAILS on LIVE sessions, not just at sign-in. Sign-in is
   // the only place Auth.js consults the allowlist, so without this a removed
   // user keeps a working 30-day session. The check is pure string matching —
