@@ -73,7 +73,7 @@ export async function buildCashflowData(
   const windowStartDate = new Date();
   windowStartDate.setUTCDate(windowStartDate.getUTCDate() - VARIABLE_SPEND_WINDOW_DAYS);
 
-  const [user, accounts, planned, matchedRows, series, recentTx] = await Promise.all([
+  const [user, accounts, planned, matchedRows, series, recentTx, budget] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { lowBalanceThreshold: true },
@@ -128,7 +128,19 @@ export async function buildCashflowData(
         categorization: { select: { category: { select: { kind: true } } } },
       },
     }),
+    prisma.budget.findUnique({
+      where: { userId_year_month: { userId, year, month } },
+      select: { budgetItems: { select: { plannedAmount: true, rollover: true } } },
+    }),
   ]);
+
+  // The plan is the plan: when a variable budget exists, the projection
+  // spends THAT, not the historical habit — otherwise the curve repeats the
+  // old pattern and the expected margin never shows up.
+  const variableBudget = (budget?.budgetItems ?? [])
+    .filter((i) => !i.rollover)
+    .reduce((sum, i) => sum + Number(i.plannedAmount.toString()), 0);
+  const budgetDailyTotal = variableBudget > 0 ? variableBudget / 30.44 : null;
 
   const threshold = user ? Number(user.lowBalanceThreshold.toString()) : 0;
 
@@ -191,15 +203,32 @@ export async function buildCashflowData(
     }
   }
 
+  const historicalRateByAccount = new Map(
+    accounts.map((a) => [
+      a.id,
+      dailyVariableSpend(
+        totalDebitByAccount.get(a.id) ?? 0,
+        plannedDebitByAccount.get(a.id) ?? 0,
+        VARIABLE_SPEND_WINDOW_DAYS
+      ),
+    ])
+  );
+  const historicalTotal = [...historicalRateByAccount.values()].reduce((s, r) => s + r, 0);
+
   const projections = accounts.map((account) => {
     const startingBalance = account.balances[0]
       ? Number(account.balances[0].balance.toString())
       : 0;
-    const rate = dailyVariableSpend(
-      totalDebitByAccount.get(account.id) ?? 0,
-      plannedDebitByAccount.get(account.id) ?? 0,
-      VARIABLE_SPEND_WINDOW_DAYS
-    );
+    const historical = historicalRateByAccount.get(account.id) ?? 0;
+    // Budgeted rate split across accounts by their historical variable share.
+    const rate =
+      budgetDailyTotal === null
+        ? historical
+        : historicalTotal > 0
+          ? Math.round(budgetDailyTotal * (historical / historicalTotal) * 100) / 100
+          : account.id === busiestAccountId
+            ? Math.round(budgetDailyTotal * 100) / 100
+            : 0;
     return {
       rate,
       projection: projectAccountDaily(
