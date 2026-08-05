@@ -21,7 +21,6 @@ import {
 } from "@/lib/analytics/trends";
 import { buildMonthStatus } from "@/lib/budget/month-status";
 import { syncPlannedState } from "@/lib/planned/engine";
-import { incomeConcentration } from "@/lib/analytics/household";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
@@ -29,7 +28,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { IncomeExpensesChart } from "@/components/reports/income-expenses-chart";
 import { CategoryBars } from "@/components/reports/category-bars";
 import { WeeklyCard } from "@/components/budget/weekly-card";
-import { TrendingUp, Wallet, Tag } from "lucide-react";
+import { Target, Wallet, Tag } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -57,7 +56,6 @@ export default async function DashboardPage() {
         select: {
           id: true,
           name: true,
-          ownerName: true,
           balances: {
             orderBy: { date: "desc" },
             take: 1,
@@ -114,29 +112,9 @@ export default async function DashboardPage() {
     })),
     months,
   );
-  const thisMonth = trend[trend.length - 1];
 
   const spendingByCategory = aggregateSpendingByCategory(spendRows);
   const topCats = topCategories(spendingByCategory, categories, 6);
-
-  // Income concentration: how much of the household's income (trend window,
-  // extraordinary excluded) arrives via a single holder. The consolidated view
-  // stays the default — this is the one structural-risk number worth a line.
-  const holderByAccount = new Map(
-    accounts.map((a) => [a.id, a.ownerName ?? a.name]),
-  );
-  const concentration = incomeConcentration(
-    trendTx
-      .filter(
-        (t) =>
-          t.direction === "CREDIT" &&
-          t.categorization?.category?.kind !== "TRANSFER",
-      )
-      .map((t) => ({
-        holder: holderByAccount.get(t.bankAccountId) ?? "",
-        income: Math.abs(Number(t.amount.toString())),
-      })),
-  );
 
   const monthLabel = (y: number, m: number) =>
     formatDate(new Date(Date.UTC(y, m - 1, 1)), language, "UTC", {
@@ -164,27 +142,35 @@ export default async function DashboardPage() {
         />
 
         <Kpi
+          title="Expected result"
+          icon={<Target className="h-4 w-4 text-muted-foreground" />}
+        >
+          <div
+            className={`text-2xl font-bold ${
+              monthStatus.cascade.expectedResult < 0 ? "text-destructive" : "text-success"
+            }`}
+          >
+            {monthStatus.cascade.expectedResult >= 0 ? "+" : "−"}
+            {formatCurrency(Math.abs(monthStatus.cascade.expectedResult), currency, locale)}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Actual {monthStatus.reconciliation.actualResult >= 0 ? "+" : "−"}
+            {formatCurrency(
+              Math.abs(monthStatus.reconciliation.actualResult),
+              currency,
+              locale,
+            )}
+          </p>
+        </Kpi>
+
+        <Kpi
           title="Net Worth"
           icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
         >
           <div className="text-2xl font-bold">
             {formatCurrency(netWorth, currency, locale)}
           </div>
-          <p className="text-xs text-muted-foreground">Across all accounts</p>
-        </Kpi>
-
-        <Kpi
-          title="Income this month"
-          icon={<TrendingUp className="h-4 w-4 text-success" />}
-        >
-          <div className="text-2xl font-bold text-success">
-            +{formatCurrency(thisMonth.income, currency, locale)}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {concentration
-              ? `${Math.round(concentration.share * 100)}% of household income arrives via ${concentration.holder}`
-              : "Money in this month"}
-          </p>
+          <p className="text-xs text-muted-foreground">All accounts</p>
         </Kpi>
 
         <Kpi
@@ -192,9 +178,7 @@ export default async function DashboardPage() {
           icon={<Tag className="h-4 w-4 text-brand" />}
         >
           <div className="text-2xl font-bold">{toCategorize}</div>
-          <p className="text-xs text-muted-foreground">
-            Transactions pending review
-          </p>
+          <p className="text-xs text-muted-foreground">Pending review</p>
         </Kpi>
       </div>
 

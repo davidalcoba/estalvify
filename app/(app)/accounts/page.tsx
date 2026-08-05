@@ -22,7 +22,6 @@ import { DisconnectBankButton } from "@/components/accounts/disconnect-bank-butt
 import { ReconnectBankButton } from "@/components/accounts/reconnect-bank-button";
 import { SyncNowButton } from "@/components/accounts/sync-now-button";
 import { AccountNameEditor } from "@/components/accounts/account-name-editor";
-import { AccountOwnerEditor } from "@/components/accounts/account-owner-editor";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import { SyncPoller } from "@/components/accounts/sync-poller";
 import type { BankConnectionStatus } from "@/app/generated/prisma";
@@ -185,15 +184,12 @@ export default async function AccountsPage({
       <PageHeader title="Bank Accounts" actions={<ConnectBankDialog />} />
 
       <Card className="bg-brand/5 border-brand/20">
-        <CardContent className="flex items-start gap-3 pt-4 pb-4">
-          <Shield className="h-5 w-5 text-brand mt-0.5 shrink-0" />
-          <div className="text-sm">
-            <p className="font-medium text-foreground">Read-only access via PSD2 open banking</p>
-            <p className="text-muted-foreground">
-              We connect through Enable Banking — we can never initiate payments or modify your account.
-              Your bank credentials are never shared with us.
-            </p>
-          </div>
+        <CardContent className="flex items-center gap-3 pt-4 pb-4">
+          <Shield className="h-5 w-5 shrink-0 text-brand" />
+          <p className="text-sm text-muted-foreground">
+            Read-only via PSD2 — we can&apos;t move money and never see your
+            credentials.
+          </p>
         </CardContent>
       </Card>
 
@@ -229,10 +225,9 @@ export default async function AccountsPage({
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm leading-tight">{group.bankName}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Connected {formatDate(group.firstConnectedAt, language, timezone)}
-                        {group.consentExpiresAt && (
-                          <> · Expires {formatDate(group.consentExpiresAt, language, timezone)}</>
-                        )}
+                        {group.consentExpiresAt
+                          ? `Expires ${formatDate(group.consentExpiresAt, language, timezone)}`
+                          : `Connected ${formatDate(group.firstConnectedAt, language, timezone)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
@@ -304,17 +299,17 @@ export default async function AccountsPage({
                                 accountId={account.id}
                                 initialName={account.name}
                               />
-                              <div className="flex items-center gap-3 mt-0.5">
+                              <p className="mt-0.5 text-xs text-muted-foreground">
                                 {account.iban && (
-                                  <p className="text-xs text-muted-foreground font-mono">
-                                    ···{account.iban}
-                                  </p>
+                                  <span className="font-mono">···{account.iban}</span>
                                 )}
-                                <AccountOwnerEditor
-                                  accountId={account.id}
-                                  initialOwner={account.ownerName}
-                                />
-                              </div>
+                                {latestBalance && (
+                                  <span>
+                                    {account.iban ? " · " : ""}
+                                    {formatDate(latestBalance.date, language, timezone)}
+                                  </span>
+                                )}
+                              </p>
                             </div>
 
                             {/* Balance + sync status */}
@@ -329,19 +324,13 @@ export default async function AccountsPage({
                                   <AlertTriangle className="h-3 w-3 shrink-0" />
                                   Sync error
                                 </Badge>
-                              ) : latestBalance ? (
-                                <Badge variant="success-soft">
-                                  Synced {formatDate(latestBalance.date, language, timezone)}
-                                </Badge>
-                              ) : isSyncing ? (
+                              ) : latestBalance ? null : isSyncing ? (
                                 <Badge variant="brand-soft" className="gap-1">
                                   <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
                                   Syncing…
                                 </Badge>
                               ) : (
-                                <Badge variant="secondary">
-                                  Never synced
-                                </Badge>
+                                <Badge variant="secondary">Never synced</Badge>
                               )}
                             </div>
 
