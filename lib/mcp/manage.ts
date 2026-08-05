@@ -569,6 +569,12 @@ export interface SeriesFields {
   windowFromDay?: number | null;
   windowToDay?: number | null;
   anchorMonthEnd?: boolean;
+  /**
+   * When the period carries several charges of this series (school fees,
+   * association dues), sum every recognized arrival in the window instead of
+   * expecting one. Needs a specific matcher or a rule. Default false.
+   */
+  aggregate?: boolean;
   /** Anchor month for non-monthly cadences (any date in a due month). */
   anchorDate?: string | null; // YYYY-MM-DD
   active?: boolean;
@@ -690,6 +696,7 @@ async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
     windowFromDay: day(fields.windowFromDay),
     windowToDay: day(fields.windowToDay),
     anchorMonthEnd: fields.anchorMonthEnd ?? false,
+    aggregate: fields.aggregate ?? false,
     ...(nextExpectedDate ? { nextExpectedDate } : {}),
     ...(fields.active !== undefined ? { active: fields.active } : {}),
   };
@@ -715,6 +722,7 @@ export async function listSeriesForUser(userId: string) {
     windowFromDay: s.windowFromDay,
     windowToDay: s.windowToDay,
     anchorMonthEnd: s.anchorMonthEnd,
+    aggregate: s.aggregate,
     active: s.active,
     lastSeenAt: s.lastSeenAt?.toISOString().slice(0, 10) ?? null,
     nextExpectedDate: s.nextExpectedDate?.toISOString().slice(0, 10) ?? null,
