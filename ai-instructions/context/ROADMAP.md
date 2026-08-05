@@ -62,7 +62,10 @@ recurrentes, etc.).
 >   importe casi estable (±30%, las facturas varían) ⇒ sugerencia editable en
 >   /recurring con contador; aceptar precarga el formulario, descartar persiste
 >   en `dismissed_recurring_suggestions`. El matching queda como mecánica interna
->   (avisos MISSED/desviación, reconciliación y fechas de la previsión).
+>   (avisos MISSED/desviación, reconciliación y fechas de la previsión). **Borrar
+>   una serie retira hacia delante**: sus PENDING desaparecen y sus
+>   MATCHED/MISSED se desvinculan (`recurringSeriesId = null`) — los meses
+>   cerrados nunca se reescriben.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
