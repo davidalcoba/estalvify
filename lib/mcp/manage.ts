@@ -755,7 +755,10 @@ export async function createPlannedItemForUser(
     throw new Error("Invalid amount");
   }
   if (fields.month < 1 || fields.month > 12) throw new Error("Invalid month");
-  if (fields.categoryId) await assertOwnedCategory(userId, fields.categoryId);
+  // Without a category the charge would be orphaned in the Budget — no
+  // objective would own it.
+  if (!fields.categoryId) throw new Error("categoryId is required");
+  await assertOwnedCategory(userId, fields.categoryId);
   const created = await prisma.plannedItem.create({
     data: {
       userId,

@@ -70,13 +70,13 @@ export async function createPlannedOneOff(input: PlannedOneOffInput): Promise<vo
   if (input.dueDay != null && (input.dueDay < 1 || input.dueDay > 31)) {
     throw new Error("Invalid day");
   }
-  if (input.categoryId) {
-    const cat = await prisma.category.findFirst({
-      where: { id: input.categoryId, isActive: true, OR: [{ userId }, { userId: null }] },
-      select: { id: true },
-    });
-    if (!cat) throw new Error("Category not found");
-  }
+  // Without a category the charge would be orphaned in the Budget.
+  if (!input.categoryId) throw new Error("Category is required");
+  const cat = await prisma.category.findFirst({
+    where: { id: input.categoryId, isActive: true, OR: [{ userId }, { userId: null }] },
+    select: { id: true },
+  });
+  if (!cat) throw new Error("Category not found");
   await prisma.plannedItem.create({
     data: {
       userId,
