@@ -7,7 +7,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma";
-import type { CategoryKind } from "@/app/generated/prisma";
+import type { CategoryKind, PlannedStatus } from "@/app/generated/prisma";
 import { wouldCreateCycle, hasChildren, subtreeIds, rootOf } from "@/lib/categories/hierarchy";
 import { normalizeDescriptor } from "@/lib/planned/matching";
 import type { ConditionGroup } from "@/lib/rules/rule-dto";
@@ -848,13 +848,14 @@ export interface PlannedOneOffFields {
 
 export async function listPlannedItemsForUser(
   userId: string,
-  filter?: { year?: number; month?: number },
+  filter?: { year?: number; month?: number; status?: PlannedStatus },
 ) {
   const items = await prisma.plannedItem.findMany({
     where: {
       userId,
       ...(filter?.year ? { year: filter.year } : {}),
       ...(filter?.month ? { month: filter.month } : {}),
+      ...(filter?.status ? { status: filter.status } : {}),
     },
     orderBy: [{ year: "asc" }, { month: "asc" }, { windowFromDay: "asc" }],
     include: { category: { select: { name: true } } },
@@ -875,6 +876,7 @@ export async function listPlannedItemsForUser(
     recurringSeriesId: p.recurringSeriesId,
     status: p.status,
     matchedTransactionId: p.matchedTransactionId,
+    matchedTransactionIds: p.matchedTransactionIds,
     matchedAmount: p.matchedAmount ? Number(p.matchedAmount.toString()) : null,
   }));
 }

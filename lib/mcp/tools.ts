@@ -577,15 +577,17 @@ export function registerTools(server: McpServer): void {
         "cascade derives from. Series-generated instances and hand-typed one-offs live in the " +
         "same list. status: PENDING (expected), MATCHED (a transaction arrived in the window " +
         "and was linked, matchedAmount holds what actually arrived), MISSED (window closed " +
-        "with nothing). Filter by year/month.",
+        "with nothing). Filter by year/month, and by status to get only PENDING / " +
+        "MATCHED / MISSED.",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
+        status: z.enum(["PENDING", "MATCHED", "MISSED"]).optional(),
       },
     },
-    async ({ year, month }, extra) => {
+    async ({ year, month, status }, extra) => {
       const userId = requireUserId(extra as ToolExtra, "read");
-      return json(await listPlannedItemsForUser(userId, { year, month }));
+      return json(await listPlannedItemsForUser(userId, { year, month, status }));
     },
   );
 
