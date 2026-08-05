@@ -28,8 +28,9 @@ import {
   updateSeries,
   deleteSeries,
   dismissRecurringSuggestion,
-  type SeriesFields,
 } from "@/app/(app)/recurring/actions";
+// A "use server" module can't export a type, so take it from the source.
+import type { SeriesFields } from "@/lib/mcp/manage";
 
 export interface SeriesVM {
   id: string;
