@@ -101,6 +101,9 @@ export function SeriesManager({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
+  // Optimistically hidden proposals: dismissing removes the row on the click
+  // itself and persists in the background; a failure just brings it back.
+  const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
 
@@ -137,13 +140,10 @@ export function SeriesManager({
   }
 
   function dismiss(merchantKey: string) {
-    startTransition(async () => {
-      try {
-        await dismissRecurringSuggestion(merchantKey);
-        router.refresh();
-      } catch {
-        // refresh restores truth
-      }
+    setDetail(null);
+    setHiddenKeys((keys) => [...keys, merchantKey]);
+    dismissRecurringSuggestion(merchantKey).catch(() => {
+      setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
     });
   }
 
@@ -197,23 +197,26 @@ export function SeriesManager({
     ...series.filter((s) => s.direction === "DEBIT"),
     ...series.filter((s) => s.direction === "CREDIT"),
   ];
+  const visibleSuggestions = suggestions.filter(
+    (s) => !hiddenKeys.includes(s.merchantKey)
+  );
 
   return (
     <div className="space-y-6">
-      {suggestions.length > 0 && (
+      {visibleSuggestions.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4 text-brand" />
               Detected
               <Badge variant="brand" className="h-5 min-w-5 justify-center px-1 text-xs">
-                {suggestions.length}
+                {visibleSuggestions.length}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="divide-y">
-              {suggestions.map((s) => (
+              {visibleSuggestions.map((s) => (
                 <li key={`${s.direction}:${s.merchantKey}`}>
                   {/* The whole row opens the proposal's detail (Use / Dismiss
                       live there) — no button cluster squeezing the name. */}
