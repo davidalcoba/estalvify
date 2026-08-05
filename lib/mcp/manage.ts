@@ -575,6 +575,11 @@ export interface SeriesFields {
    * expecting one. Needs a specific matcher or a rule. Default false.
    */
   aggregate?: boolean;
+  /**
+   * Calendar months (1–12) this series never bills, on top of the cadence —
+   * a school that skips August. No planned item is generated for them.
+   */
+  skipMonths?: number[];
   /** Anchor month for non-monthly cadences (any date in a due month). */
   anchorDate?: string | null; // YYYY-MM-DD
   active?: boolean;
@@ -697,6 +702,11 @@ async function normalizeSeriesFields(userId: string, fields: SeriesFields) {
     windowToDay: day(fields.windowToDay),
     anchorMonthEnd: fields.anchorMonthEnd ?? false,
     aggregate: fields.aggregate ?? false,
+    skipMonths: (fields.skipMonths ?? []).map((m) => {
+      const v = Math.trunc(m);
+      if (v < 1 || v > 12) throw new Error("skipMonths entries must be 1–12");
+      return v;
+    }),
     ...(nextExpectedDate ? { nextExpectedDate } : {}),
     ...(fields.active !== undefined ? { active: fields.active } : {}),
   };
@@ -723,6 +733,7 @@ export async function listSeriesForUser(userId: string) {
     windowToDay: s.windowToDay,
     anchorMonthEnd: s.anchorMonthEnd,
     aggregate: s.aggregate,
+    skipMonths: s.skipMonths,
     active: s.active,
     lastSeenAt: s.lastSeenAt?.toISOString().slice(0, 10) ?? null,
     nextExpectedDate: s.nextExpectedDate?.toISOString().slice(0, 10) ?? null,
@@ -785,6 +796,18 @@ export async function updateSeriesForUser(
       anchorMonthEnd: data.anchorMonthEnd,
     },
   });
+  // A month newly added to skipMonths must not keep its expectation: drop the
+  // series' PENDING instances in skipped months (MATCHED/MISSED history stays).
+  if (data.skipMonths.length > 0) {
+    await prisma.plannedItem.deleteMany({
+      where: {
+        userId,
+        recurringSeriesId: seriesId,
+        status: "PENDING",
+        month: { in: data.skipMonths },
+      },
+    });
+  }
   // Category attribution follows the series for ALREADY-MATCHED instances in
   // the current (open) month and beyond — otherwise a recategorized series
   // (e.g. O2 moved to Suministros) leaves this month's matched charge filed

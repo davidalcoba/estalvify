@@ -561,6 +561,11 @@ model RecurringSeries {
   // its window instead of expecting one charge. Default false = single charge.
   aggregate Boolean @default(false)
 
+  // Calendar months (1–12) this series NEVER bills, on top of the cadence — a
+  // school that skips August, an association that skips July. No planned item
+  // is generated for those months, so they can't ring a phantom MISSED.
+  skipMonths Int[] @default([])
+
   // Which account the charge hits / the income lands in. Configuration, not
   // inference — rent leaves Despeses, Mònica's salary lands in Estalvis.
   bankAccountId String?

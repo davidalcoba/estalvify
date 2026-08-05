@@ -465,11 +465,12 @@ export function registerTools(server: McpServer): void {
         windowToDay: z.number().int().min(1).max(31).optional(),
         anchorMonthEnd: z.boolean().optional(),
         aggregate: z.boolean().optional(),
+        skipMonths: z.array(z.number().int().min(1).max(12)).optional(),
         anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       },
     },
     async (
-      { displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, aggregate, anchorDate },
+      { displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, aggregate, skipMonths, anchorDate },
       extra,
     ) => {
       const userId = requireUserId(extra as ToolExtra, "write");
@@ -488,6 +489,7 @@ export function registerTools(server: McpServer): void {
             windowToDay: windowToDay ?? null,
             anchorMonthEnd,
             aggregate,
+            skipMonths,
             anchorDate: anchorDate ?? null,
           }),
         );
@@ -518,12 +520,13 @@ export function registerTools(server: McpServer): void {
         windowToDay: z.number().int().min(1).max(31).optional(),
         anchorMonthEnd: z.boolean().optional(),
         aggregate: z.boolean().optional(),
+        skipMonths: z.array(z.number().int().min(1).max(12)).optional(),
         anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         active: z.boolean().optional(),
       },
     },
     async (
-      { seriesId, displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, aggregate, anchorDate, active },
+      { seriesId, displayName, matcher, ruleId, direction, categoryId, bankAccountId, cadence, expectedAmount, windowFromDay, windowToDay, anchorMonthEnd, aggregate, skipMonths, anchorDate, active },
       extra,
     ) => {
       const userId = requireUserId(extra as ToolExtra, "write");
@@ -542,6 +545,7 @@ export function registerTools(server: McpServer): void {
             windowToDay: windowToDay ?? null,
             anchorMonthEnd,
             aggregate,
+            skipMonths,
             anchorDate: anchorDate ?? null,
             active,
           }),
