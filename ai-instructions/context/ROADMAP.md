@@ -103,6 +103,25 @@ recurrentes, etc.).
 >   idéntico sin "hogar"/"vida") no pueden llevar el mismo matcher; hoy casan
 >   por categoría+importe, que basta. El cierre correcto es enlazar cada uno a
 >   una regla con condición de importe (como Ring), no forzar el matcher.
+> - **v3.3 — atribución y horizonte.** Al actualizar una serie, la categoría se
+>   propaga también a los planned MATCHED del **mes en curso** y siguientes (no
+>   solo a los PENDING), para que un recategorizado (O2 → Suministros) no deje
+>   el cargo del mes bajo la categoría vieja; los meses cerrados NUNCA se
+>   reescriben. Añadida categoría **Impuestos** (el IBI de 600 € estaba en
+>   Suministros Palafrugell, inflándola). **La planificación empieza en agosto
+>   2026** (fecha de siembra): no hay planned items en meses anteriores, así que
+>   no hay performance ni MISSED antes de esa fecha — es esperado, no un fallo.
+> - **Deuda v3.3 — varios cargos por periodo (matching agregado).** El modelo
+>   asume 1 cargo por planned item, pero algunas categorías reciben varios: AFA
+>   Teixidores (3×20 € el mismo día = 60), Escola Gràcia (6 adeudos en julio que
+>   suman ~259). Hoy la serie casa uno y deja el resto fuera del plan, así que el
+>   bloque de Educación (~320 €/mes) queda mal. Pendiente: que un planned item
+>   agregue TODOS los cargos que reconoce dentro de la ventana (`matchedAmount` =
+>   suma) hasta cerrar el esperado, en vez de exigir un único cargo.
+> - **Deuda v3.3 — `merchant` limpio en ingesta.** `normalizeDescriptor` ya
+>   pliega el ruido para el matching; falta extraer un campo `merchant` estable
+>   en la ingesta (sin "PAGO CON TARJETA", asteriscos de pasarela, sufijos de
+>   ciudad/país) para limpiar además la lista de *Detected* y la detección.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
