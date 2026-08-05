@@ -51,6 +51,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onOpenAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -61,9 +62,25 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg",
+          // Mobile-first: every dialog is a bottom sheet on small screens
+          // (full width, pinned to the bottom edge, rounded top) and a
+          // centered dialog from `sm:` up. Consumers overriding width must
+          // scope it (`sm:w-…`) so the sheet stays full-width.
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed z-50 grid w-full gap-4 border p-6 shadow-lg duration-200 outline-none",
+          "inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-xl data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:slide-out-to-bottom-8",
+          "sm:inset-x-auto sm:bottom-auto sm:top-[50%] sm:left-[50%] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=closed]:slide-out-to-bottom-0",
           className
         )}
+        // Radix focuses the first tabbable element on open, which on mobile
+        // yanks up the keyboard over the form before it can be read. Focus
+        // the panel itself instead; consumers can still take over.
+        onOpenAutoFocus={(e) => {
+          onOpenAutoFocus?.(e)
+          if (!e.defaultPrevented) {
+            e.preventDefault()
+            ;(e.target as HTMLElement | null)?.focus?.({ preventScroll: true })
+          }
+        }}
         {...props}
       >
         {children}

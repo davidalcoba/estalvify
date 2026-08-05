@@ -175,7 +175,7 @@ export function PlannedList({
       </CardContent>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[min(96vw,440px)] pt-8 px-6 pb-6">
+        <DialogContent className="pt-8 sm:w-[min(96vw,440px)] sm:max-w-[min(96vw,440px)]">
           <DialogTitle>One-off planned charge</DialogTitle>
           <div className="space-y-4">
             <div className="space-y-1.5">

@@ -127,6 +127,12 @@ overflowing on a 375 px viewport.
   `components/categorize/category-select` (hierarchical categories). Never a raw
   `<select>` — Radix Select is theme-aware and consistent.
 - Placeholder/empty states: use `components/ui/empty-state`.
+- Modals: use `components/ui/dialog`. `DialogContent` is a **bottom sheet on
+  mobile** (full width, pinned to the bottom, scrollable) and a centered
+  dialog from `sm:` up, and it never autofocuses (no keyboard jump over the
+  form). A consumer overriding the width MUST scope it (`sm:w-… sm:max-w-…`)
+  so the mobile sheet stays full-width. Destructive actions confirm through
+  the same dialog with a `destructive` button and a pending spinner.
 - Page headers: use `components/layout/page-header` (title + actions; no subtitle).
 - Money/dates: format via `lib/formatters`.
 

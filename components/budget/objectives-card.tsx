@@ -6,9 +6,8 @@
 // accumulation, so its bar fills green as the quota is set aside — same
 // widget, opposite meaning, visually distinct (piggy icon + balance).
 //
-// Editing and deleting go through a bottom sheet on mobile (same pattern as
-// Transactions) and a dialog on desktop; autofocus is suppressed so the
-// numeric keyboard doesn't cover the form the instant it opens.
+// Editing and deleting go through DialogContent, which is a bottom sheet on
+// mobile by itself and never autofocuses (no keyboard jump over the form).
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -16,11 +15,9 @@ import { Loader2, PiggyBank, Plus, Target, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency } from "@/lib/formatters";
@@ -44,48 +41,6 @@ interface Draft {
   rollover: boolean;
   /** Editing an existing row locks the category (it is the row's key). */
   existing: boolean;
-}
-
-/** Bottom sheet on mobile, dialog on desktop; never autofocuses. */
-function ResponsiveModal({
-  open,
-  onOpenChange,
-  title,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  const isMobile = useIsMobile();
-  if (isMobile) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="bottom"
-          className="rounded-t-xl pb-6"
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          <SheetHeader className="pb-1">
-            <SheetTitle className="text-base">{title}</SheetTitle>
-          </SheetHeader>
-          <div className="px-4">{children}</div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="w-[min(96vw,420px)] pt-8 px-6 pb-6"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <DialogTitle>{title}</DialogTitle>
-        {children}
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 export function ObjectivesCard({
@@ -325,14 +280,15 @@ export function ObjectivesCard({
         )}
       </CardContent>
 
-      <ResponsiveModal
+      <Dialog
         open={draft !== null}
         onOpenChange={(o) => {
           if (!o) setDraft(null);
         }}
-        title={draft?.rollover ? "Rollover fund" : "Category objective"}
       >
-        {draft && (
+        <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
+          <DialogTitle>{draft?.rollover ? "Rollover fund" : "Category objective"}</DialogTitle>
+          {draft && (
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Category</Label>
@@ -383,17 +339,19 @@ export function ObjectivesCard({
               </Button>
             </div>
           </div>
-        )}
-      </ResponsiveModal>
+          )}
+        </DialogContent>
+      </Dialog>
 
-      <ResponsiveModal
+      <Dialog
         open={confirm !== null}
         onOpenChange={(o) => {
           if (!o && !isPending) setConfirm(null);
         }}
-        title="Remove objective?"
       >
-        {confirm && (
+        <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
+          <DialogTitle>Remove objective?</DialogTitle>
+          {confirm && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{confirm.name}</span>{" "}
@@ -413,8 +371,9 @@ export function ObjectivesCard({
               </Button>
             </div>
           </div>
-        )}
-      </ResponsiveModal>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
