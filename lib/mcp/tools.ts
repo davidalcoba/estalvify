@@ -49,6 +49,8 @@ import type { ConditionGroup } from "@/lib/rules/rule-dto";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
 import { hasScope, type KnownScope } from "@/lib/mcp/scopes";
+import { buildMonthStatus } from "@/lib/budget/month-status";
+import { getUserPrefs } from "@/lib/user-prefs";
 
 // Rule conditions (see lib/rules/rule-dto.ts). A leaf is {field, operator,
 // value, negate?}; groups nest with op AND/OR.
@@ -303,6 +305,7 @@ export function registerTools(server: McpServer): void {
           direction: t.direction,
           description: t.description,
           remittanceInfo: t.remittanceInfo,
+          merchant: t.merchant,
           account: t.bankAccount?.name ?? null,
           category: t.categorization?.category?.name ?? null,
           categorizationStatus: t.categorization?.status ?? null,
@@ -426,6 +429,57 @@ export function registerTools(server: McpServer): void {
           })),
         })),
       );
+    },
+  );
+
+  // ── get_month_status ──────────────────────────────────────────────────────
+  server.registerTool(
+    "get_month_status",
+    {
+      description:
+        "The month's money position under the v4 model. cascade: expected income - fixed " +
+        "charges - fund quotas - savingsTarget = variableBudget (the residue; " +
+        "assignedVariable is the category split and assignmentGap the mismatch, shown " +
+        "never auto-squared). weekly: the daily-rate available (never month/4; ISO weeks). " +
+        "control: manual objectives only, each with consumed vs assigned, weekConsumed, " +
+        "end-of-month projection and OK/RIESGO/EXCEDIDO, ordered by projected deviation. " +
+        "funds: rollover accumulation (quota + balance). Defaults to the current month.",
+      inputSchema: {
+        year: z.number().int().optional(),
+        month: z.number().int().min(1).max(12).optional(),
+      },
+    },
+    async ({ year, month }, extra) => {
+      const userId = requireUserId(extra as ToolExtra, "read");
+      try {
+        const prefs = await getUserPrefs(userId);
+        const target = year && month ? { year, month } : undefined;
+        const s = await buildMonthStatus(userId, prefs.timezone, target);
+        return json({
+          year: s.year,
+          month: s.month,
+          today: s.today,
+          provisional: s.provisional,
+          monthElapsed: s.monthElapsed,
+          cascade: s.cascade,
+          weekly: s.weekly,
+          opsThisWeek: s.opsThisWeek,
+          opsMedian: s.opsMedian,
+          spentThisWeek: s.spentThisWeek,
+          variableSpentMonth: s.variableSpentMonth,
+          control: s.control,
+          funds: s.objectives
+            .filter((o) => o.rollover)
+            .map((o) => ({
+              categoryId: o.categoryId,
+              category: o.categoryName,
+              quota: o.extra,
+              balance: o.balance,
+            })),
+        });
+      } catch (err) {
+        return errorResult(err, "get_month_status failed");
+      }
     },
   );
 
