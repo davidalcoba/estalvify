@@ -59,6 +59,50 @@ never reports.
 So: never open or merge a pull request into `main` from a feature branch, and
 merge into `preview` first.
 
+### When the release is blocked by a cancelled check
+
+`ci.yml` runs on **both** the push to `preview` and the pull request into
+`main`, and both produce a job named `Typecheck · Lint · Test`. The ruleset
+requires that *context*, and when several check runs share a name GitHub can
+settle on the wrong one: observed 2026-08-06, `main` refused the merge with
+`Required status check "Typecheck · Lint · Test" is cancelled` while the pull
+request's own run was green — it was reading the **push** run on `preview`,
+which GitHub itself had cancelled after 15 minutes without ever assigning a
+runner (job `cancelled`, zero steps executed, no log to download; a second
+attempt died in `Set up job` before checkout). Nothing to do with the code:
+the same tree had already passed CI on the feature branch, and `git rev-parse
+<sha>^{tree}` proved the trees identical.
+
+Recovery, knowing that a Claude Code session **cannot** re-run a workflow
+(`POST /actions/runs/{id}/rerun` and `/rerun-failed-jobs` → 403 "Resource not
+accessible by integration", through the GitHub MCP server as well as plain
+`curl`):
+
+- **A new commit on the branch is the only reliable re-trigger.** It fires
+  `synchronize`, and — because the checks hang off the head SHA — it also
+  leaves the pull request with exactly *one* run per context instead of a
+  pile of same-named ones for the ruleset to choose badly from.
+- Closing and reopening the pull request re-fires its `pull_request`
+  workflows (both listen to the default types, `reopened` included), but it
+  is **not dependable**: it worked three times that day and then stopped
+  producing a run at all. Use it only as a no-commit first try.
+- Neither re-fires the `push` run on `preview`. That one only comes back with
+  a new commit on `preview`, so the fix is a further feature-branch →
+  `preview` pull request, never a direct push.
+
+Before assuming a red release means broken code, **read the failed job's
+log** — `get_job_logs` with `failed_only: true` returns content even for a
+run whose log archive 404s, and it is what actually names the outage. Two
+signatures seen that day, both infrastructure:
+
+- `conclusion: cancelled` with an empty `steps` array and no `runner_name` —
+  GitHub gave up placing the job after ~15 min.
+- A runner picked the job up and died in `Set up job` with
+  `Failed to resolve action download info. Error: Service Unavailable`
+  (twice retried, then fatal). The action-resolution service was down; the
+  workflow never reached `Checkout`. Waiting it out and re-triggering is the
+  whole fix — there is nothing to change in the repo.
+
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).
 Use it against the Vercel REST API at `https://api.vercel.com`.
