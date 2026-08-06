@@ -252,12 +252,20 @@ lo que es una invitación — **sin abrir nada más**:
   de guardia (`lib/auth/scope-guard.test.ts`) impide que `session.user.id`
   reaparezca en las zonas guardadas. OAuth/MCP/cron/cola intactos como estaba
   previsto.
-- [ ] **Fase 2 — Invitaciones + miembros.** Settings → Members (card en la
-  ruta existente de settings, vistas desktop/mobile), server actions de
-  invitar/revocar/cambiar rol/expulsar (nivel `admin`), página `/invite/<token>`
-  (+ su `loading.tsx`), cambios en `signIn` y `proxy.ts` (§7), expulsión →
-  `revokeUserAccess`. Tests puros de validación de invitación (expiración,
-  email match, ya-miembro). *Tamaño: M.*
+- [x] **Fase 2 — Invitaciones + miembros.** ✅ 2026-08-06 — `lib/household/`:
+  `invite.ts` (validación pura + TTL 7 días + roles invitables, testeada),
+  `manage.ts` (crear/renovar/revocar invitación con token hasheado, aceptar,
+  cambiar rol, expulsar → `revokeUserAccess`, DTOs) y `access.ts` (membresía
+  o invitación viva por email, para las puertas). `signIn` y `proxy.ts`
+  aceptan la vía invitación/membresía **solo cuando el allowlist no casa**
+  (aditiva, nada se abre); el proxy además preserva `callbackUrl` al botar a
+  /login, que es lo que hace sobrevivir el link de invitación. UI: card
+  "Household members" en Settings (solo OWNER; invitar con link copiable
+  de un solo uso, renovar, revocar, cambiar rol, expulsar — skeleton
+  actualizado) y página `/invite/<token>` en `(auth)` (+ `loading.tsx`) con
+  mensajes por causa de rechazo. Aceptar exige email de sesión = email
+  invitado; un usuario con hogar propio VACÍO (bootstrap lazy) lo suelta y
+  se une; con datos propios u otro hogar, se rechaza.
 - [ ] **Fase 3 — Roles en la UI.** El rol viaja en el layout de `(app)`:
   VIEWER ve la app sin affordances de mutación (botones/menús/inbox de
   categorizar ocultos o deshabilitados con explicación), EDITOR sin Members ni

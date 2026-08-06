@@ -6,6 +6,12 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { CategoryKind } from "@/app/generated/prisma";
 import { deleteUserAccount } from "@/lib/account/delete-user";
+import {
+  createHouseholdInvite,
+  revokeHouseholdInvite,
+  changeHouseholdMemberRole,
+  removeHouseholdMember,
+} from "@/lib/household/manage";
 
 export async function updatePreferences(data: {
   timezone: string;
@@ -67,6 +73,75 @@ export async function updatePlanningSettings(input: PlanningSettingsInput) {
   revalidatePath("/forecast");
   revalidatePath("/plan");
   revalidatePath("/dashboard");
+}
+
+// ─────────────────────────────────────────────
+// HOUSEHOLD MEMBERS (owner-only; PLAN_MULTIUSER.md phase 2)
+// ─────────────────────────────────────────────
+
+// Mutations return their failure instead of throwing: production masks thrown
+// server-action messages (same convention as /recurring).
+export type MemberActionResult = { ok: true } | { ok: false; error: string };
+
+function memberFailure(err: unknown): { ok: false; error: string } {
+  return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+}
+
+// Creates (or renews) an invitation and returns the raw token exactly once —
+// the client builds the copyable /invite/<token> link from it.
+export async function inviteMember(
+  email: string,
+  role: string
+): Promise<{ ok: true; token: string; expiresAt: string } | { ok: false; error: string }> {
+  try {
+    const { householdId, actorUserId } = await requireScope("admin");
+    const { token, expiresAt } = await createHouseholdInvite(
+      householdId,
+      actorUserId,
+      email,
+      role
+    );
+    revalidatePath("/settings");
+    return { ok: true, token, expiresAt: expiresAt.toISOString() };
+  } catch (err) {
+    return memberFailure(err);
+  }
+}
+
+export async function revokeMemberInvite(inviteId: string): Promise<MemberActionResult> {
+  try {
+    const { householdId } = await requireScope("admin");
+    await revokeHouseholdInvite(householdId, inviteId);
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (err) {
+    return memberFailure(err);
+  }
+}
+
+export async function updateMemberRole(
+  memberId: string,
+  role: string
+): Promise<MemberActionResult> {
+  try {
+    const { householdId } = await requireScope("admin");
+    await changeHouseholdMemberRole(householdId, memberId, role);
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (err) {
+    return memberFailure(err);
+  }
+}
+
+export async function removeMember(memberId: string): Promise<MemberActionResult> {
+  try {
+    const { householdId } = await requireScope("admin");
+    await removeHouseholdMember(householdId, memberId);
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (err) {
+    return memberFailure(err);
+  }
 }
 
 // ─────────────────────────────────────────────

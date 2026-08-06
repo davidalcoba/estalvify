@@ -509,6 +509,18 @@ signing secret.
   no row to match): set it, log in once, unset it. The existence check is
   case-insensitive, because a hand-seeded row with different casing would
   otherwise lock the owner out.
+- **Household invitations** (`lib/household/`, PLAN_MULTIUSER.md phase 2): an
+  owner invites by email + role from Settings → Household members; the link
+  `/invite/<token>` carries a one-time raw token (only its hash is stored,
+  7-day TTL) and acceptance requires the **session email to match the invited
+  email** — a forwarded link admits nobody. Invites are an **additive** third
+  way through both sign-in gates below: a live invite or an existing
+  membership passes the allowlist gate when it misses, and a live invite
+  authorizes the user-row creation the closed-signup gate would refuse.
+  `proxy.ts` accepts the same disjunction on live sessions (the lookup runs
+  only when the allowlist misses) and preserves `callbackUrl` when bouncing
+  to /login so invite links survive the round-trip. Removing a member calls
+  `revokeUserAccess` (sessions + MCP refresh tokens, immediate).
 - **Sign-in allowlist**: when `ALLOWED_EMAILS` is set, the Auth.js `signIn`
   callback (`auth.ts`) only lets matching Google accounts in — locking both the
   app and the MCP (which shares the login) to the owner. This is the decisive

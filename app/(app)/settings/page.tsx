@@ -6,12 +6,20 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
 import { PrivacyDataCard } from "@/components/settings/privacy-data-card";
+import { MembersCard } from "@/components/settings/members-card";
+import { listHouseholdPeople, type HouseholdPeople } from "@/lib/household/manage";
 import { seedDefaultCategories } from "./actions";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const { dataUserId: userId } = await requireScope("read");
+  const scope = await requireScope("read");
+  const userId = scope.dataUserId;
+
+  // Members management is owner-only; others never see the card (the actions
+  // behind it require "admin" anyway).
+  const people =
+    scope.role === "OWNER" ? await listHouseholdPeople(scope.householdId) : null;
 
   const [user, categories] = await Promise.all([
     prisma.user.findUnique({
@@ -51,16 +59,34 @@ export default async function SettingsPage() {
       },
       orderBy: { sortOrder: "asc" },
     });
-    return <SettingsLayout user={user} categories={seeded} />;
+    return (
+      <SettingsLayout
+        user={user}
+        categories={seeded}
+        people={people}
+        actorUserId={scope.actorUserId}
+      />
+    );
   }
 
-  return <SettingsLayout user={user} categories={categories} />;
+  return (
+    <SettingsLayout
+      user={user}
+      categories={categories}
+      people={people}
+      actorUserId={scope.actorUserId}
+    />
+  );
 }
 
 function SettingsLayout({
   user,
   categories,
+  people,
+  actorUserId,
 }: {
+  people: HouseholdPeople | null;
+  actorUserId: string;
   user: {
     email?: string | null;
     timezone?: string | null;
@@ -94,6 +120,14 @@ function SettingsLayout({
         />
 
         <CategoryManager initialCategories={categories} />
+
+        {people && (
+          <MembersCard
+            members={people.members}
+            invites={people.invites}
+            currentUserId={actorUserId}
+          />
+        )}
 
         <PrivacyDataCard email={user?.email ?? ""} />
       </div>
