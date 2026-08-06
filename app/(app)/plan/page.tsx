@@ -58,7 +58,7 @@ async function PlanBody({
       <ObjectivesCard
         objectives={status.objectives}
         incomeObjectives={status.incomeObjectives}
-        control={status.control}
+        control={status.chargeControl}
         monthElapsed={status.monthElapsed}
         categories={categories}
         year={status.year}
