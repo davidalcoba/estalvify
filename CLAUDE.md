@@ -74,21 +74,34 @@ the same tree had already passed CI on the feature branch, and `git rev-parse
 <sha>^{tree}` proved the trees identical.
 
 Recovery, knowing that a Claude Code session **cannot** re-run a workflow
-(`POST /actions/runs/{id}/rerun` → 403 "Resource not accessible by
-integration"):
+(`POST /actions/runs/{id}/rerun` and `/rerun-failed-jobs` → 403 "Resource not
+accessible by integration", through the GitHub MCP server as well as plain
+`curl`):
 
+- **A new commit on the branch is the only reliable re-trigger.** It fires
+  `synchronize`, and — because the checks hang off the head SHA — it also
+  leaves the pull request with exactly *one* run per context instead of a
+  pile of same-named ones for the ruleset to choose badly from.
 - Closing and reopening the pull request re-fires its `pull_request`
-  workflows (both listen to the default types, `reopened` included) — enough
-  when the failure is on the PR's own run, and it took three attempts that
-  day.
-- It does **not** re-fire the `push` run on `preview`. That one only comes
-  back with a new commit on `preview`, so the fix is a further feature-branch
-  → `preview` pull request, never a direct push.
+  workflows (both listen to the default types, `reopened` included), but it
+  is **not dependable**: it worked three times that day and then stopped
+  producing a run at all. Use it only as a no-commit first try.
+- Neither re-fires the `push` run on `preview`. That one only comes back with
+  a new commit on `preview`, so the fix is a further feature-branch →
+  `preview` pull request, never a direct push.
 
-Before assuming a red release means broken code, check whether the job ever
-got a runner: `GET /actions/runs/{id}/jobs` showing `conclusion: cancelled`
-with an empty `steps` array and no `runner_name` is an Actions outage, not a
-regression.
+Before assuming a red release means broken code, **read the failed job's
+log** — `get_job_logs` with `failed_only: true` returns content even for a
+run whose log archive 404s, and it is what actually names the outage. Two
+signatures seen that day, both infrastructure:
+
+- `conclusion: cancelled` with an empty `steps` array and no `runner_name` —
+  GitHub gave up placing the job after ~15 min.
+- A runner picked the job up and died in `Set up job` with
+  `Failed to resolve action download info. Error: Service Unavailable`
+  (twice retried, then fatal). The action-resolution service was down; the
+  workflow never reached `Checkout`. Waiting it out and re-triggering is the
+  whole fix — there is nothing to change in the repo.
 
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).
