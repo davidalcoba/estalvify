@@ -8,6 +8,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { acceptHouseholdInvite } from "@/lib/household/manage";
+import { setActiveHouseholdCookie } from "@/lib/auth/scope";
 
 export async function acceptInvite(token: string): Promise<void> {
   const session = await auth();
@@ -21,5 +22,7 @@ export async function acceptInvite(token: string): Promise<void> {
   if (!result.ok) {
     redirect(`/invite/${token}?error=${result.reason}`);
   }
+  // Land in the household just joined, whatever was active before.
+  await setActiveHouseholdCookie(result.householdId);
   redirect("/dashboard?joined=true");
 }

@@ -73,17 +73,34 @@ async function authenticateClient(
 }
 
 /**
- * The member's household context at mint time (PLAN_MULTIUSER.md phase 4).
- * No membership = own-owner semantics (pre-household tokens behaved exactly
- * like this; the app layout bootstraps the household row on first visit).
+ * The member's household context at mint time (PLAN_MULTIUSER.md phase 4/6):
+ * the grant records the household that was ACTIVE at consent — validated
+ * live here, so a member removed from that household falls back rather than
+ * keeping access through a stale cookie of a token. Fallbacks: the user's
+ * oldest membership, then own-owner semantics (no membership at all — the
+ * tools simply see an empty data scope).
  */
 async function householdContext(
   userId: string,
+  householdId?: string | null,
 ): Promise<{ dataUserId: string; role: HouseholdRole }> {
-  const membership = await prisma.householdMember.findUnique({
-    where: { userId },
-    select: { role: true, household: { select: { ownerUserId: true } } },
-  });
+  const select = {
+    role: true,
+    household: { select: { ownerUserId: true } },
+  } as const;
+  const bound = householdId
+    ? await prisma.householdMember.findFirst({
+        where: { userId, householdId },
+        select,
+      })
+    : null;
+  const membership =
+    bound ??
+    (await prisma.householdMember.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      select,
+    }));
   return membership
     ? { dataUserId: membership.household.ownerUserId, role: membership.role }
     : { dataUserId: userId, role: "OWNER" };
@@ -99,8 +116,13 @@ function effectiveScope(scope: string | undefined, role: HouseholdRole): string 
   return scopesForRole(scopesFromClaim(scope), role).join(" ");
 }
 
-async function issueTokens(userId: string, clientId: string, scope?: string) {
-  const ctx = await householdContext(userId);
+async function issueTokens(
+  userId: string,
+  clientId: string,
+  scope?: string,
+  householdId?: string | null,
+) {
+  const ctx = await householdContext(userId, householdId);
   const minted = effectiveScope(scope, ctx.role);
   const accessToken = await signAccessToken({
     userId,
@@ -109,7 +131,12 @@ async function issueTokens(userId: string, clientId: string, scope?: string) {
     dataUserId: ctx.dataUserId,
     role: ctx.role,
   });
-  const refreshToken = await createRefreshToken({ userId, clientId, scope });
+  const refreshToken = await createRefreshToken({
+    userId,
+    clientId,
+    scope,
+    householdId,
+  });
   return jsonWithCors({
     access_token: accessToken,
     token_type: "Bearer",
@@ -162,7 +189,12 @@ export async function POST(request: NextRequest) {
       return oauthError("invalid_grant", "PKCE verification failed");
     }
 
-    return issueTokens(record.userId, record.clientId, record.scope ?? undefined);
+    return issueTokens(
+      record.userId,
+      record.clientId,
+      record.scope ?? undefined,
+      record.householdId,
+    );
   }
 
   // ── refresh_token ─────────────────────────────────────────────────────────────
@@ -201,7 +233,7 @@ export async function POST(request: NextRequest) {
     }
     // Household context is re-resolved on EVERY refresh, so a role change
     // (or joining/leaving a household) propagates within the hour.
-    const ctx = await householdContext(record.userId);
+    const ctx = await householdContext(record.userId, record.householdId);
     const minted = effectiveScope(record.scope ?? undefined, ctx.role);
     const accessToken = await signAccessToken({
       userId: record.userId,

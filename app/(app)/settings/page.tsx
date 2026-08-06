@@ -160,6 +160,7 @@ function SettingsLayout({
 
         {people && (
           <MembersCard
+            householdName={people.householdName}
             members={people.members}
             invites={people.invites}
             currentUserId={actorUserId}

@@ -11,6 +11,7 @@ import {
   revokeHouseholdInvite,
   changeHouseholdMemberRole,
   removeHouseholdMember,
+  renameHousehold,
 } from "@/lib/household/manage";
 
 // Personal prefs (PLAN_MULTIUSER.md §8 / phase 5): language, number format
@@ -169,6 +170,18 @@ export async function removeMember(memberId: string): Promise<MemberActionResult
     const { householdId } = await requireScope("admin");
     await removeHouseholdMember(householdId, memberId);
     revalidatePath("/settings");
+    return { ok: true };
+  } catch (err) {
+    return memberFailure(err);
+  }
+}
+
+export async function updateHouseholdName(name: string): Promise<MemberActionResult> {
+  try {
+    const { householdId } = await requireScope("admin");
+    await renameHousehold(householdId, name);
+    // The name shows in the sidebar switcher on every route.
+    revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {
     return memberFailure(err);

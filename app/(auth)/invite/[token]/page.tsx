@@ -39,10 +39,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   expired: "This invitation has expired. Ask for a new link.",
   email_mismatch:
     "This invitation was issued for a different email address. Sign in with the invited account, or ask for a new link.",
-  already_in_household:
-    "Your account already belongs to a household. Leaving one household for another isn't supported yet.",
-  own_household_has_data:
-    "Your account already has financial data of its own, so it can't join another household. Delete your data first (Settings → Privacy & data) or use a different Google account.",
 };
 
 export default async function InvitePage({
@@ -58,6 +54,15 @@ export default async function InvitePage({
   const session = await auth();
   if (!session?.user) redirect(`/login?callbackUrl=/invite/${token}`);
 
+  // Where "not now" leads: members go back to the app; a user with no
+  // household goes to /welcome, where NOTHING is created unless they choose
+  // to — declining an invite must never mint an account's household.
+  const membership = await prisma.householdMember.findFirst({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+  const backHref = membership ? "/dashboard" : "/welcome";
+
   // An acceptance attempt bounced back with a reason — show it.
   if (error) {
     return (
@@ -65,7 +70,7 @@ export default async function InvitePage({
         <p className="text-sm text-muted-foreground">
           {ERROR_MESSAGES[error] ?? "Something went wrong. Please try again."}
         </p>
-        <BackToApp />
+        <BackToApp href={backHref} />
       </InviteShell>
     );
   }
@@ -83,7 +88,7 @@ export default async function InvitePage({
         <p className="text-sm text-muted-foreground">
           {ERROR_MESSAGES[validation.reason]}
         </p>
-        <BackToApp />
+        <BackToApp href={backHref} />
       </InviteShell>
     );
   }
@@ -116,7 +121,7 @@ export default async function InvitePage({
           Accept invitation
         </Button>
       </form>
-      <BackToApp label="Not now" />
+      <BackToApp href={backHref} label="Not now" />
     </InviteShell>
   );
 }
@@ -144,10 +149,16 @@ function InviteShell({
   );
 }
 
-function BackToApp({ label = "Go to the app" }: { label?: string }) {
+function BackToApp({
+  href,
+  label = "Go to the app",
+}: {
+  href: string;
+  label?: string;
+}) {
   return (
     <Button asChild variant="ghost" className="w-full">
-      <Link href="/dashboard">{label}</Link>
+      <Link href={href}>{label}</Link>
     </Button>
   );
 }

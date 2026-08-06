@@ -8,7 +8,14 @@
 ## Household Terms (PLAN_MULTIUSER.md)
 
 - Household (`Household`): the unit that owns the data. Its `ownerUserId` is the User whose
-  `userId` anchors every domain row — the "data scope". One household per owner, one per user (v1).
+  `userId` anchors every domain row — the "data scope". A user OWNS at most one household but
+  can belong to several (phase 6-lite).
+- Active household: the one a member is currently acting in — the `estalvify.hh` cookie
+  (a validated preference, never an access grant), oldest membership as fallback; switched
+  from the sidebar user menu. Resolved by `getScope` (`lib/auth/scope.ts`) and, on the OAuth
+  surfaces, `lib/household/active.ts`.
+- `/welcome`: where a signed-in user with no membership lands. Household creation is an
+  explicit choice there (or accept a pending invite, or sign out) — never a sign-in side effect.
 - Member (`HouseholdMember`): a user's membership in a household, with a role.
 - Role (`HouseholdRole`): `OWNER` (everything: banks, members, deletion, Privacy & data),
   `EDITOR` (domain writes: categorize, rules, plan, recurring, connections, settings),

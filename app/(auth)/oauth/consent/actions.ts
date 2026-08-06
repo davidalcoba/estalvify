@@ -9,6 +9,7 @@ import { auth } from "@/auth";
 import { createAuthCode, ensureClientRow } from "@/lib/mcp/store";
 import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
 import { normalizeRequestedScope } from "@/lib/mcp/scopes";
+import { resolveActiveMembership } from "@/lib/household/active";
 
 interface ConsentParams {
   clientId: string;
@@ -85,6 +86,10 @@ export async function approveConsent(formData: FormData): Promise<void> {
       redirectUris: client.redirectUris,
     });
   }
+  // The tokens bind to the household ACTIVE at consent time (phase 6-lite) —
+  // that is what the consent screen displayed, so it is what was approved.
+  const membership = await resolveActiveMembership(session.user.id);
+
   const code = await createAuthCode({
     clientId: client.clientId,
     userId: session.user.id,
@@ -92,6 +97,7 @@ export async function approveConsent(formData: FormData): Promise<void> {
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
     scope: grantedScope,
+    householdId: membership?.householdId ?? null,
   });
 
   clientRedirect(params.redirectUri, { code }, params.state);

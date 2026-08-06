@@ -52,7 +52,7 @@ model User {
   mcpRefreshTokens      McpRefreshToken[]
   dismissedSuggestions  DismissedRecurringSuggestion[]
   ownedHousehold        Household?                     @relation("OwnedHousehold")
-  householdMembership   HouseholdMember?
+  householdMemberships  HouseholdMember[]
   notificationReads     NotificationRead[]
 
   @@map("users")
@@ -92,8 +92,9 @@ enum HouseholdRole {
 model HouseholdMember {
   id          String        @id @default(cuid())
   householdId String
-  // Unique on its own: in v1 a user belongs to exactly ONE household.
-  userId      String        @unique
+  // A user can belong to SEVERAL households (phase 6-lite); the active one is
+  // a cookie resolved by lib/auth/scope.ts (oldest membership as fallback).
+  userId      String
   role        HouseholdRole
   createdAt   DateTime      @default(now())
 
@@ -101,6 +102,7 @@ model HouseholdMember {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([householdId, userId])
+  @@index([userId])
   @@map("household_members")
 }
 
@@ -855,6 +857,10 @@ model McpAuthCode {
   codeChallenge       String
   codeChallengeMethod String    @default("S256")
   scope               String?
+  // The household ACTIVE at consent time — the tokens bind to it. Null =
+  // pre-multi-household grant; the token endpoint falls back to the user's
+  // oldest membership. No FK: validated live against household_members.
+  householdId         String?
   expiresAt           DateTime
   usedAt              DateTime?
   createdAt           DateTime  @default(now())
@@ -868,14 +874,16 @@ model McpAuthCode {
 }
 
 model McpRefreshToken {
-  id        String    @id @default(cuid())
-  tokenHash String    @unique
-  clientId  String
-  userId    String
-  scope     String?
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  clientId    String
+  userId      String
+  scope       String?
+  // Carried forward through rotation from the auth code (see McpAuthCode).
+  householdId String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   client McpOAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -19,7 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LogoMark } from "@/components/brand/logo";
-import { prisma } from "@/lib/prisma";
+import { resolveActiveMembership } from "@/lib/household/active";
 import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
 import {
   normalizeRequestedScope,
@@ -80,13 +80,11 @@ export default async function ConsentPage(props: {
   const clientLabel = client.clientName ?? client.clientId;
 
   // Show what will ACTUALLY be granted: the token endpoint intersects the
-  // scope with the member's household role, so a VIEWER must see read-only
-  // here, not a write promise their token will never carry. Read-only query —
-  // no membership (pre-bootstrap) means own-owner, like the token endpoint.
-  const membership = await prisma.householdMember.findUnique({
-    where: { userId: session.user.id },
-    select: { role: true, household: { select: { name: true } } },
-  });
+  // scope with the member's role IN THE ACTIVE HOUSEHOLD (the one the minted
+  // tokens bind to), so a VIEWER must see read-only here, not a write promise
+  // their token will never carry. No membership means own-owner, like the
+  // token endpoint's fallback.
+  const membership = await resolveActiveMembership(session.user.id);
   const role = membership?.role ?? "OWNER";
   const grantedScopes = scopesForRole(
     normalizeRequestedScope(params.scope).split(" "),

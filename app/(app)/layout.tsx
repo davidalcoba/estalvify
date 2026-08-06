@@ -70,6 +70,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <AppSidebar
         user={scope.actor}
+        households={scope.households}
+        activeHouseholdId={scope.householdId}
         pendingCategorizations={pendingCategorizations}
         onSignOut={handleSignOut}
       />

@@ -622,10 +622,21 @@ pure matrix in `lib/auth/roles.ts` (tested). Every page/action under
 `app/(app)` plus `api/banking/{connect,sync}` and `api/export` declares its
 level; API routes use `getScope` + `roleAllows` to answer 401 vs 403. A guard
 test (`lib/auth/scope-guard.test.ts`) fails the build if `session.user.id`
-reappears in those areas. A user with no membership gets a household
-lazily (the `ALLOW_SIGNUP` bootstrap path). OAuth consent, the MCP token path,
-cron and the queue consumer still derive identity their own way — they pick up
-household awareness in later phases of the plan.
+reappears in those areas.
+
+Since phase 6-lite a user can belong to SEVERAL households (owning at most
+one): the ACTIVE one comes from the `estalvify.hh` cookie — a preference
+validated against the memberships on every request, never an access grant —
+falling back to the oldest membership; the sidebar user menu switches it. A
+signed-in user with NO membership is redirected by `getScope` to `/welcome`,
+where household creation is an EXPLICIT choice (accept a pending invite,
+create a named household, or just sign out) — nothing is ever created as a
+sign-in side effect, because someone following an invite link may not want an
+account at all. `/welcome`, login, the invite page and the OAuth consent flow
+therefore use the session (or `lib/household/active.ts`) directly, never
+`getScope`. MCP grants record the household active at consent and the token
+endpoint re-validates that membership at every mint/refresh. Cron and the
+queue consumer still derive identity from connections, unchanged.
 
 ## Privacy & data lifecycle (GDPR)
 

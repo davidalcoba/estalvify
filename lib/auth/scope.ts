@@ -3,22 +3,40 @@
 //
 // THE multi-user rule (ARCHITECTURE.md → "Multi-User Data Isolation") is
 // unchanged: all domain data hangs off ONE userId derived server-side. What
-// this module changes is WHICH userId that is: the household owner's
+// this module changes is WHICH userId that is: the ACTIVE household's owner
 // (`dataUserId`), which is no longer necessarily the signed-in user
 // (`actorUserId`) once invited members exist. Domain reads/writes use
-// `dataUserId`; personal things (prefs split lands in phase 5, audit trail,
-// OAuth grants) use `actorUserId`.
+// `dataUserId`; personal things (prefs, notification reads, audit, OAuth
+// grants) use `actorUserId`.
+//
+// Since phase 6-lite a user can belong to SEVERAL households: the active one
+// comes from a cookie (set by the sidebar switcher / invite acceptance),
+// falling back to the oldest membership. A signed-in user with NO membership
+// is redirected to /welcome — household creation is EXPLICIT there; nothing
+// is ever created as a side effect of signing in (someone opening an invite
+// link may not want an account of their own at all).
 
 import "server-only";
 import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { roleAllows, type ScopeLevel } from "@/lib/auth/roles";
 import type { HouseholdRole } from "@/app/generated/prisma";
 
+/** Cookie holding the id of the member's active household. */
+export const ACTIVE_HOUSEHOLD_COOKIE = "estalvify.hh";
+
+export interface HouseholdSummary {
+  id: string;
+  name: string;
+  role: HouseholdRole;
+}
+
 export interface Scope {
   /**
-   * The userId that anchors ALL of the household's data (the owner's
+   * The userId that anchors ALL of the active household's data (its owner's
    * User.id). Every domain query filters by this — never by `actorUserId`.
    */
   dataUserId: string;
@@ -26,14 +44,18 @@ export interface Scope {
   actorUserId: string;
   role: HouseholdRole;
   householdId: string;
+  householdName: string;
+  /** Every household the member belongs to (oldest first) — the switcher. */
+  households: HouseholdSummary[];
   /** Display identity of the actor, for the shell/greetings. */
   actor: { name: string | null; email: string | null; image: string | null };
 }
 
 /**
  * Resolves the current session's scope, or null when unauthenticated.
- * Wrapped in React `cache()` so layout + page + nested calls within one
- * request share a single resolution.
+ * Redirects to /welcome when the session has no household membership at all
+ * (that page must therefore never call this). Wrapped in React `cache()` so
+ * layout + page + nested calls within one request share a single resolution.
  */
 export const getScope = cache(async (): Promise<Scope | null> => {
   const session = await auth();
@@ -46,34 +68,36 @@ export const getScope = cache(async (): Promise<Scope | null> => {
     image: session?.user?.image ?? null,
   };
 
-  const membership = await prisma.householdMember.findUnique({
+  const memberships = await prisma.householdMember.findMany({
     where: { userId },
+    orderBy: { createdAt: "asc" },
     select: {
       role: true,
-      household: { select: { id: true, ownerUserId: true } },
+      household: { select: { id: true, name: true, ownerUserId: true } },
     },
   });
 
-  if (membership) {
-    return {
-      dataUserId: membership.household.ownerUserId,
-      actorUserId: userId,
-      role: membership.role,
-      householdId: membership.household.id,
-      actor,
-    };
+  if (memberships.length === 0) {
+    // Nothing in the app can render without a data scope. Creation is an
+    // explicit choice on /welcome — never a sign-in side effect.
+    redirect("/welcome");
   }
 
-  // Lazy bootstrap: a signed-in user without a membership owns a fresh
-  // household. Covers the ALLOW_SIGNUP bootstrap path and any row the
-  // backfill migration could not have seen. Invited members never pass
-  // through here — their membership is created when they accept (phase 2).
-  const household = await ensureOwnHousehold(userId);
+  const wanted = (await cookies()).get(ACTIVE_HOUSEHOLD_COOKIE)?.value;
+  const active =
+    memberships.find((m) => m.household.id === wanted) ?? memberships[0];
+
   return {
-    dataUserId: userId,
+    dataUserId: active.household.ownerUserId,
     actorUserId: userId,
-    role: "OWNER",
-    householdId: household.id,
+    role: active.role,
+    householdId: active.household.id,
+    householdName: active.household.name,
+    households: memberships.map((m) => ({
+      id: m.household.id,
+      name: m.household.name,
+      role: m.role,
+    })),
     actor,
   };
 });
@@ -91,24 +115,13 @@ export async function requireScope(level: ScopeLevel): Promise<Scope> {
   return scope;
 }
 
-async function ensureOwnHousehold(userId: string): Promise<{ id: string }> {
-  // Race-safe: the unique constraints make a concurrent first-request lose
-  // cleanly; on conflict we re-read the winner's row.
-  try {
-    return await prisma.household.create({
-      data: {
-        name: "My household",
-        ownerUserId: userId,
-        members: { create: { userId, role: "OWNER" } },
-      },
-      select: { id: true },
-    });
-  } catch {
-    const existing = await prisma.householdMember.findUnique({
-      where: { userId },
-      select: { householdId: true },
-    });
-    if (!existing) throw new Error("Failed to resolve household");
-    return { id: existing.householdId };
-  }
+/** Persist the active-household choice (validated by the caller). */
+export async function setActiveHouseholdCookie(householdId: string): Promise<void> {
+  (await cookies()).set(ACTIVE_HOUSEHOLD_COOKIE, householdId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
 }

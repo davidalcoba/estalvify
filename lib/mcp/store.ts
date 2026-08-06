@@ -71,6 +71,8 @@ export async function createAuthCode(input: {
   codeChallenge: string;
   codeChallengeMethod: string;
   scope?: string;
+  /** Household active at consent time — the minted tokens bind to it. */
+  householdId?: string | null;
 }): Promise<string> {
   const code = generateOpaqueToken(32);
   await prisma.mcpAuthCode.create({
@@ -82,6 +84,7 @@ export async function createAuthCode(input: {
       codeChallenge: input.codeChallenge,
       codeChallengeMethod: input.codeChallengeMethod,
       scope: input.scope ?? null,
+      householdId: input.householdId ?? null,
       expiresAt: new Date(Date.now() + AUTH_CODE_TTL_SECONDS * 1000),
     },
   });
@@ -110,6 +113,7 @@ export async function createRefreshToken(input: {
   clientId: string;
   userId: string;
   scope?: string;
+  householdId?: string | null;
 }): Promise<string> {
   const token = generateOpaqueToken(32);
   await prisma.mcpRefreshToken.create({
@@ -118,6 +122,7 @@ export async function createRefreshToken(input: {
       clientId: input.clientId,
       userId: input.userId,
       scope: input.scope ?? null,
+      householdId: input.householdId ?? null,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
     },
   });
@@ -162,6 +167,7 @@ export async function rotateRefreshToken(record: {
   clientId: string;
   userId: string;
   scope: string | null;
+  householdId: string | null;
 }): Promise<string | null> {
   const claimed = await prisma.mcpRefreshToken.updateMany({
     where: { id: record.id, revokedAt: null },
@@ -172,5 +178,6 @@ export async function rotateRefreshToken(record: {
     clientId: record.clientId,
     userId: record.userId,
     scope: record.scope ?? undefined,
+    householdId: record.householdId,
   });
 }

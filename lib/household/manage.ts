@@ -209,13 +209,10 @@ export async function removeHouseholdMember(
 // Acceptance
 // ─────────────────────────────────────────────
 
-export type AcceptRejection =
-  | InviteRejection
-  | "already_in_household"
-  | "own_household_has_data";
+export type AcceptRejection = InviteRejection;
 
 export type AcceptResult =
-  | { ok: true; householdName: string }
+  | { ok: true; householdId: string; householdName: string }
   | { ok: false; reason: AcceptRejection };
 
 export async function findInviteForToken(rawToken: string) {
@@ -234,31 +231,47 @@ export async function findInviteForToken(rawToken: string) {
   });
 }
 
-/** Whether any domain row hangs off this userId (as a data scope). */
-export async function userHasDomainData(userId: string): Promise<boolean> {
-  const [connections, transactions, categories, rules, series, planned, budgets] =
-    await Promise.all([
-      prisma.bankConnection.count({ where: { userId } }),
-      prisma.transaction.count({ where: { userId } }),
-      prisma.category.count({ where: { userId } }),
-      prisma.categoryRule.count({ where: { userId } }),
-      prisma.recurringSeries.count({ where: { userId } }),
-      prisma.plannedItem.count({ where: { userId } }),
-      prisma.budget.count({ where: { userId } }),
-    ]);
-  return (
-    connections + transactions + categories + rules + series + planned + budgets >
-    0
-  );
-}
+type LoadedInvite = NonNullable<Awaited<ReturnType<typeof findInviteForToken>>>;
 
 /**
- * Accepts an invite for the signed-in actor. The only self-service migration
- * allowed in v1: an actor who owns a still-EMPTY household (the lazy
- * bootstrap, or a fresh sign-up) drops it and joins the inviting one. An
- * owner with data, or a member of another household, is rejected — moving
- * data between households is explicitly out of scope.
+ * Membership creation shared by both acceptance paths. Since phase 6-lite a
+ * user can belong to several households, so accepting simply ADDS a
+ * membership — nothing is deleted, rejected or migrated. Idempotent when the
+ * membership already exists.
  */
+async function finalizeAcceptance(
+  invite: LoadedInvite,
+  actorUserId: string
+): Promise<AcceptResult> {
+  const existing = await prisma.householdMember.findFirst({
+    where: { householdId: invite.household.id, userId: actorUserId },
+    select: { id: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    if (!existing) {
+      await tx.householdMember.create({
+        data: {
+          householdId: invite.household.id,
+          userId: actorUserId,
+          role: invite.role,
+        },
+      });
+    }
+    await tx.householdInvite.update({
+      where: { id: invite.id },
+      data: { acceptedAt: new Date() },
+    });
+  });
+
+  return {
+    ok: true,
+    householdId: invite.household.id,
+    householdName: invite.household.name,
+  };
+}
+
+/** Accepts an invite link (raw token) for the signed-in actor. */
 export async function acceptHouseholdInvite(
   rawToken: string,
   actor: { userId: string; email: string | null | undefined }
@@ -266,54 +279,115 @@ export async function acceptHouseholdInvite(
   const invite = await findInviteForToken(rawToken);
   const validation = validateInviteForAcceptance(invite, actor.email, new Date());
   if (!validation.ok) return { ok: false, reason: validation.reason };
-  // validateInviteForAcceptance returned ok, so invite is non-null.
-  const found = invite!;
+  return finalizeAcceptance(invite!, actor.userId);
+}
 
-  const membership = await prisma.householdMember.findUnique({
-    where: { userId: actor.userId },
+/**
+ * Accepts a pending invite BY ID from /welcome — the raw token only lives in
+ * the link, but the email-must-match rule gives the same guarantee: only the
+ * invited account can accept, token in hand or not.
+ */
+export async function acceptInviteByIdForEmail(
+  inviteId: string,
+  actor: { userId: string; email: string | null | undefined }
+): Promise<AcceptResult> {
+  const invite = await prisma.householdInvite.findUnique({
+    where: { id: inviteId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      expiresAt: true,
+      acceptedAt: true,
+      revokedAt: true,
+      invitedByUserId: true,
+      household: { select: { id: true, name: true, ownerUserId: true } },
+    },
+  });
+  const validation = validateInviteForAcceptance(invite, actor.email, new Date());
+  if (!validation.ok) return { ok: false, reason: validation.reason };
+  return finalizeAcceptance(invite!, actor.userId);
+}
+
+// ─────────────────────────────────────────────
+// Households (create / rename / pending invites)
+// ─────────────────────────────────────────────
+
+/**
+ * Explicit household creation (the /welcome flow and nothing else — signing
+ * in never creates one as a side effect). Race-safe via the unique
+ * constraint on ownerUserId; on conflict the winner's row is returned.
+ */
+export async function createOwnHousehold(
+  userId: string,
+  rawName: string
+): Promise<{ id: string }> {
+  const name = rawName.trim().slice(0, 60) || "My household";
+  try {
+    return await prisma.household.create({
+      data: {
+        name,
+        ownerUserId: userId,
+        members: { create: { userId, role: "OWNER" } },
+      },
+      select: { id: true },
+    });
+  } catch {
+    const existing = await prisma.household.findUnique({
+      where: { ownerUserId: userId },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Failed to create household");
+    return existing;
+  }
+}
+
+export async function renameHousehold(
+  householdId: string,
+  rawName: string
+): Promise<void> {
+  const name = rawName.trim().slice(0, 60);
+  if (!name) throw new Error("Name is required");
+  await prisma.household.update({ where: { id: householdId }, data: { name } });
+}
+
+export interface PendingInviteDTO {
+  id: string;
+  householdName: string;
+  role: HouseholdRole;
+  invitedByName: string | null;
+}
+
+/** Live invitations addressed to this email (for /welcome). */
+export async function listPendingInvitesForEmail(
+  email: string | null | undefined
+): Promise<PendingInviteDTO[]> {
+  if (!email) return [];
+  const invites = await prisma.householdInvite.findMany({
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      acceptedAt: null,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: "desc" },
     select: {
       id: true,
       role: true,
-      householdId: true,
-      household: { select: { _count: { select: { members: true } } } },
+      invitedByUserId: true,
+      household: { select: { name: true } },
     },
   });
-
-  if (membership?.householdId === found.household.id) {
-    // Already in — mark the invite used and succeed idempotently.
-    await prisma.householdInvite.update({
-      where: { id: found.id },
-      data: { acceptedAt: new Date() },
-    });
-    return { ok: true, householdName: found.household.name };
-  }
-
-  if (membership) {
-    const soleOwner =
-      membership.role === "OWNER" && membership.household._count.members === 1;
-    if (!soleOwner) return { ok: false, reason: "already_in_household" };
-    if (await userHasDomainData(actor.userId)) {
-      return { ok: false, reason: "own_household_has_data" };
-    }
-  }
-
-  await prisma.$transaction(async (tx) => {
-    if (membership) {
-      // Their own empty bootstrap household — cascades the membership away.
-      await tx.household.delete({ where: { id: membership.householdId } });
-    }
-    await tx.householdMember.create({
-      data: {
-        householdId: found.household.id,
-        userId: actor.userId,
-        role: found.role,
-      },
-    });
-    await tx.householdInvite.update({
-      where: { id: found.id },
-      data: { acceptedAt: new Date() },
-    });
+  if (invites.length === 0) return [];
+  const inviters = await prisma.user.findMany({
+    where: { id: { in: invites.map((i) => i.invitedByUserId) } },
+    select: { id: true, name: true, email: true },
   });
-
-  return { ok: true, householdName: found.household.name };
+  const inviterById = new Map(inviters.map((u) => [u.id, u.name ?? u.email]));
+  return invites.map((i) => ({
+    id: i.id,
+    householdName: i.household.name,
+    role: i.role,
+    invitedByName: inviterById.get(i.invitedByUserId) ?? null,
+  }));
 }

@@ -302,10 +302,24 @@ lo que es una invitación — **sin abrir nada más**:
   "quién" en la UI (p. ej. en el detalle de transacción) — los datos ya se
   acumulan; hacerlo pide extender el DTO de transacciones y un mapa de
   miembros, mejor cuando haya histórico que enseñar.
-- [ ] **Fase 6 (opcional, sin fecha) — Hogar de pleno derecho.** Solo si
-  aparece la necesidad real: FK `householdId` en las tablas de dominio,
-  multi-hogar por usuario, transferencia de propiedad. El diseño (B) de §3 la
-  deja preparada pero no la necesita.
+- [x] **Fase 6-lite — Multi-hogar sin migrar FKs.** ✅ 2026-08-06 (a petición
+  del propietario) — Un usuario puede pertenecer a **varios hogares**
+  (`household_members` pierde el unique por `userId`; solo puede seguir
+  SIENDO OWNER de uno, `Household.ownerUserId` sigue único). El **activo** lo
+  decide una cookie (`estalvify.hh`, preferencia validada contra las
+  membresías en cada request — nunca un grant) con fallback a la membresía
+  más antigua; **switcher** en el menú de usuario del sidebar cuando hay más
+  de uno. **Se elimina el bootstrap lazy**: crear hogar es explícito en
+  `/welcome` (usuario con sesión y sin membresía: acepta invitaciones
+  pendientes por email, crea su hogar con nombre, o simplemente cierra sesión
+  — seguir un link de invitación y declinar NO crea nada). Aceptar una
+  invitación pasa a ser solo añadir membresía (los rechazos
+  `already_in_household`/`own_household_has_data` desaparecen) y activa ese
+  hogar. **Renombrar hogar** desde la card de Settings (admin). MCP: los
+  grants (auth code + refresh token) registran el hogar activo en el
+  consentimiento y el token endpoint valida esa membresía en vivo en cada
+  mint/refresh, con fallback a la más antigua. **Sigue fuera**: FK
+  `householdId` en las tablas de dominio y transferencia de propiedad.
 
 Cada fase actualiza los docs afectados en el mismo cambio
 (`PROJECT_OVERVIEW.md` §Multi-User Model, `ARCHITECTURE.md` §Access control y

@@ -30,12 +30,13 @@ import {
   revokeMemberInvite,
   updateMemberRole,
   removeMember,
+  updateHouseholdName,
 } from "@/app/(app)/settings/actions";
 import type {
   HouseholdMemberDTO,
   HouseholdInviteDTO,
 } from "@/lib/household/manage";
-import { Copy, Check, Trash2, RefreshCw } from "lucide-react";
+import { Copy, Check, Trash2, RefreshCw, Pencil } from "lucide-react";
 
 const ROLE_OPTIONS = [
   { value: "EDITOR", label: "Editor" },
@@ -48,10 +49,12 @@ const ROLE_HELP: Record<string, string> = {
 };
 
 export function MembersCard({
+  householdName,
   members,
   invites,
   currentUserId,
 }: {
+  householdName: string;
   members: HouseholdMemberDTO[];
   invites: HouseholdInviteDTO[];
   currentUserId: string;
@@ -62,6 +65,26 @@ export function MembersCard({
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(householdName);
+
+  function saveName() {
+    const next = nameDraft.trim();
+    if (!next || next === householdName) {
+      setNameDraft(householdName);
+      setEditingName(false);
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateHouseholdName(next);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setEditingName(false);
+    });
+  }
 
   function handleInvite() {
     setError(null);
@@ -107,9 +130,48 @@ export function MembersCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Household members</CardTitle>
+        <CardTitle>Household</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Name (shown in the sidebar switcher and on invitations) */}
+        <div className="space-y-1.5">
+          <Label htmlFor="household-name-editor">Name</Label>
+          {editingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                id="household-name-editor"
+                value={nameDraft}
+                maxLength={60}
+                autoFocus
+                disabled={isPending}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") {
+                    setNameDraft(householdName);
+                    setEditingName(false);
+                  }
+                }}
+              />
+              <Button size="sm" onClick={saveName} disabled={isPending}>
+                {isPending ? "…" : "Save"}
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+              onClick={() => {
+                setNameDraft(householdName);
+                setEditingName(true);
+              }}
+            >
+              {householdName}
+              <Pencil className="h-3 w-3 text-muted-foreground" aria-hidden />
+            </button>
+          )}
+        </div>
+
         {/* Members */}
         <ul className="space-y-3">
           {members.map((m) => (
