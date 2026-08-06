@@ -23,6 +23,7 @@ import {
   refreshMyNotifications,
 } from "@/app/(app)/notifications/actions";
 import { severityIcon, severityColor } from "./severity";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 export function NotificationBell({
   notifications,
@@ -35,8 +36,10 @@ export function NotificationBell({
   const isMobile = useIsMobile();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const canWrite = useCanWrite();
 
   function run(action: () => Promise<void>) {
+    if (!canWrite) return;
     startTransition(async () => {
       try {
         await action();
@@ -65,7 +68,7 @@ export function NotificationBell({
     <>
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-sm font-medium">Notifications</span>
-        {unreadCount > 0 && (
+        {canWrite && unreadCount > 0 && (
           <button
             onClick={() => run(markAllNotificationsRead)}
             disabled={pending}
@@ -116,16 +119,18 @@ export function NotificationBell({
         )}
       </div>
 
-      <div className="border-t px-3 py-2">
-        <button
-          onClick={() => run(refreshMyNotifications)}
-          disabled={pending}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
-          Check now
-        </button>
-      </div>
+      {canWrite && (
+        <div className="border-t px-3 py-2">
+          <button
+            onClick={() => run(refreshMyNotifications)}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
+            Check now
+          </button>
+        </div>
+      )}
     </>
   );
 

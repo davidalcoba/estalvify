@@ -266,11 +266,18 @@ lo que es una invitación — **sin abrir nada más**:
   mensajes por causa de rechazo. Aceptar exige email de sesión = email
   invitado; un usuario con hogar propio VACÍO (bootstrap lazy) lo suelta y
   se une; con datos propios u otro hogar, se rechaza.
-- [ ] **Fase 3 — Roles en la UI.** El rol viaja en el layout de `(app)`:
-  VIEWER ve la app sin affordances de mutación (botones/menús/inbox de
-  categorizar ocultos o deshabilitados con explicación), EDITOR sin Members ni
-  Privacy & data. Revisión ruta a ruta contra la matriz de §5 — la UI refleja
-  lo que el server ya impone desde la fase 1. *Tamaño: M.*
+- [x] **Fase 3 — Roles en la UI.** ✅ 2026-08-06 — `RoleProvider` +
+  `useCanWrite`/`useHouseholdRole` montados en el layout de `(app)`
+  (`components/layout/role-provider.tsx`); la matriz se refleja ruta a ruta:
+  sidebar sin Categorize/Rules para VIEWER (`WRITE_ONLY_URLS`), esas dos
+  páginas devuelven un `EmptyState` de solo-lectura en deep link, accounts sin
+  conectar/reconectar/sync/renombrar/borrar, transacciones sin recategorizar
+  ni crear regla/serie (diálogo y vista móvil), plan sin editar objetivo de
+  ahorro/objetivos/fondos ni one-offs, recurring sin sugerencias ni CRUD (la
+  lista queda legible), campana/notificaciones sin marcar-leído ni "check
+  now", y Settings recortado (VIEWER: aviso; EDITOR: sin Privacy & data).
+  Regla nueva en `UI_RULES.md` → "Role-Aware Affordances": toda affordance de
+  mutación se esconde por rol, y esconder nunca es el control de acceso.
 - [ ] **Fase 4 — MCP con roles.** Claims `hh`/`role` en el JWT, intersección
   scope×rol, re-check de membresía en el refresh grant, consent screen
   mostrando el hogar. Tests de `scopes.ts` ampliados. *Tamaño: S–M.*

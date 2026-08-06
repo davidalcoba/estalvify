@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
@@ -65,6 +66,7 @@ export default async function SettingsPage() {
         categories={seeded}
         people={people}
         actorUserId={scope.actorUserId}
+        role={scope.role}
       />
     );
   }
@@ -75,6 +77,7 @@ export default async function SettingsPage() {
       categories={categories}
       people={people}
       actorUserId={scope.actorUserId}
+      role={scope.role}
     />
   );
 }
@@ -84,9 +87,11 @@ function SettingsLayout({
   categories,
   people,
   actorUserId,
+  role,
 }: {
   people: HouseholdPeople | null;
   actorUserId: string;
+  role: "OWNER" | "EDITOR" | "VIEWER";
   user: {
     email?: string | null;
     timezone?: string | null;
@@ -102,6 +107,30 @@ function SettingsLayout({
     children: { id: string; name: string; color: string }[];
   }[];
 }) {
+  // Per the role matrix (PLAN_MULTIUSER.md §5): a VIEWER edits nothing here
+  // (the per-member personal-prefs split is phase 5); an EDITOR manages the
+  // household settings and categories but never Privacy & data (export /
+  // delete are the owner's — they act on the whole household's data).
+  if (role === "VIEWER") {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Settings" />
+        <div className="max-w-lg">
+          <Card>
+            <CardHeader>
+              <CardTitle>Read-only access</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Your role in this household is Viewer. Regional preferences,
+              categories and data management are handled by the household
+              owner and editors.
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" />
@@ -129,7 +158,7 @@ function SettingsLayout({
           />
         )}
 
-        <PrivacyDataCard email={user?.email ?? ""} />
+        {role === "OWNER" && <PrivacyDataCard email={user?.email ?? ""} />}
       </div>
     </div>
   );

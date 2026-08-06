@@ -73,9 +73,11 @@ cross household boundaries. Domain rows hang off the household owner's
 `userId` (the data scope), and sessions resolve to it through the membership
 layer (`Household` / `HouseholdMember` / `HouseholdInvite`, roles
 OWNER/EDITOR/VIEWER) via `requireScope` — see PLAN_MULTIUSER.md; phases 1
-(model + scope enforcement) and 2 (invitations: owner-managed members card in
+(model + scope enforcement), 2 (invitations: owner-managed members card in
 Settings, one-time invite links at `/invite/<token>`, invite-aware sign-in
-gates) are implemented; role-aware UI and MCP roles are the next phases.
+gates) and 3 (role-aware UI: mutation affordances hidden for VIEWER, see
+UI_RULES.md → "Role-Aware Affordances") are implemented; MCP roles and
+per-member conveniences are the next phases.
 
 Examples of user-scoped entities:
 

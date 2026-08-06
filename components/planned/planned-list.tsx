@@ -8,6 +8,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Plus, Repeat, Trash2 } from "lucide-react";
+import { useCanWrite } from "@/components/layout/role-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -61,6 +62,7 @@ export function PlannedList({
   defaultMonth,
 }: PlannedListProps) {
   const router = useRouter();
+  const canWrite = useCanWrite();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,10 +114,12 @@ export function PlannedList({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Upcoming charges</CardTitle>
+        {canWrite && (
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)} disabled={isPending}>
           <Plus className="mr-1 h-3.5 w-3.5" />
           One-off
         </Button>
+        )}
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
@@ -132,7 +136,7 @@ export function PlannedList({
             {rows.map((row) => {
               const badge = STATUS_BADGE[row.status];
               const when = `${formatDate(row.date, dateLocale, "UTC", { day: "numeric", month: "short" })}${row.windowLabel ? ` (${row.windowLabel})` : ""}`;
-              const deletable = !row.fromSeries && row.status === "PENDING";
+              const deletable = canWrite && !row.fromSeries && row.status === "PENDING";
               return (
                 <li key={row.id} className="py-2.5 text-sm">
                   {/* The name owns the first line; status, date and the

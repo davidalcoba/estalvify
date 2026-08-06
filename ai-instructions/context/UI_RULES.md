@@ -188,6 +188,20 @@ is `variant="brand"`, hidden at zero, and caps at `99+`. Anything the layout
 computes runs on **every** navigation, so a count that is not a cheap query
 belongs behind a cache (see `ARCHITECTURE.md` → "Cached Reads").
 
+## Role-Aware Affordances (household roles)
+
+A household member can be a read-only VIEWER (PLAN_MULTIUSER.md §5). Every
+**mutation affordance** — a button, inline editor, dialog trigger or row click
+that ends in a server action or write API call — must not render for a member
+whose role can't use it. Client components get the role from
+`useCanWrite()` / `useHouseholdRole()` (`components/layout/role-provider.tsx`,
+mounted in the `(app)` layout); server components read `scope.role` from
+`requireScope`. Pages that are pure work queues (`/categorize`, `/rules`)
+render a read-only `EmptyState` for VIEWER instead of dead controls, and their
+sidebar items are filtered out (`WRITE_ONLY_URLS` in `app-sidebar.tsx`).
+This is presentation only: the server action/route still enforces its own
+level — hiding a button is never the access control.
+
 ## Desktop and Mobile: First-Class Views
 
 This app is not desktop-only responsive.

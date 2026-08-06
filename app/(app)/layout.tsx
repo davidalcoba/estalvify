@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { RoleProvider } from "@/components/layout/role-provider";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -58,6 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <RoleProvider role={scope.role}>
     <SidebarProvider>
       <AppSidebar
         user={scope.actor}
@@ -71,5 +73,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </RoleProvider>
   );
 }

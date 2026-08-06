@@ -10,6 +10,7 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
+import { useCanWrite } from "@/components/layout/role-provider";
 import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 
 interface TransactionDetailDialogProps {
@@ -32,6 +33,7 @@ export function TransactionDetailDialog({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
+  const canWrite = useCanWrite();
 
   async function handleRecategorize(categoryId: string) {
     if (!categoryId || !transaction) return;
@@ -69,6 +71,7 @@ export function TransactionDetailDialog({
             <div className="space-y-4 overflow-y-auto pr-2">
               <TransactionDetailCard transaction={transaction} locale={locale} dateLocale={dateLocale} timezone={timezone} />
 
+              {canWrite && (
               <div className="flex items-center gap-2">
                 <CategorySelect
                   key={transaction.id}
@@ -105,6 +108,7 @@ export function TransactionDetailDialog({
                   <Repeat className="h-4 w-4" />
                 </Button>
               </div>
+              )}
             </div>
           )}
         </DialogContent>

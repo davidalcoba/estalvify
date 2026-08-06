@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 interface SyncNowButtonProps {
   connectionIds: string[];
@@ -12,6 +13,9 @@ interface SyncNowButtonProps {
 export function SyncNowButton({ connectionIds, disabled = false }: SyncNowButtonProps) {
   const [syncing, setSyncing] = useState(false);
   const router = useRouter();
+  const canWrite = useCanWrite();
+
+  if (!canWrite) return null;
 
   async function handleSync() {
     if (syncing || disabled) return;
