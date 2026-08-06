@@ -20,6 +20,8 @@ import {
   verifyPkce,
   ACCESS_TOKEN_TTL_SECONDS,
 } from "@/lib/mcp/oauth";
+import { scopesForRole, scopesFromClaim } from "@/lib/mcp/scopes";
+import type { HouseholdRole } from "@/app/generated/prisma";
 import {
   resolveClient,
   extractClientAuth,
@@ -70,15 +72,50 @@ async function authenticateClient(
   return { clientId: client.clientId };
 }
 
+/**
+ * The member's household context at mint time (PLAN_MULTIUSER.md phase 4).
+ * No membership = own-owner semantics (pre-household tokens behaved exactly
+ * like this; the app layout bootstraps the household row on first visit).
+ */
+async function householdContext(
+  userId: string,
+): Promise<{ dataUserId: string; role: HouseholdRole }> {
+  const membership = await prisma.householdMember.findUnique({
+    where: { userId },
+    select: { role: true, household: { select: { ownerUserId: true } } },
+  });
+  return membership
+    ? { dataUserId: membership.household.ownerUserId, role: membership.role }
+    : { dataUserId: userId, role: "OWNER" };
+}
+
+/**
+ * The scope actually minted: granted scopes intersected with the member's
+ * role — a VIEWER's token is read-only regardless of consent. The refresh
+ * token keeps the ORIGINAL scope, so a role change (VIEWER → EDITOR) restores
+ * the full grant at the next refresh instead of narrowing it forever.
+ */
+function effectiveScope(scope: string | undefined, role: HouseholdRole): string {
+  return scopesForRole(scopesFromClaim(scope), role).join(" ");
+}
+
 async function issueTokens(userId: string, clientId: string, scope?: string) {
-  const accessToken = await signAccessToken({ userId, clientId, scope });
+  const ctx = await householdContext(userId);
+  const minted = effectiveScope(scope, ctx.role);
+  const accessToken = await signAccessToken({
+    userId,
+    clientId,
+    scope: minted,
+    dataUserId: ctx.dataUserId,
+    role: ctx.role,
+  });
   const refreshToken = await createRefreshToken({ userId, clientId, scope });
   return jsonWithCors({
     access_token: accessToken,
     token_type: "Bearer",
     expires_in: ACCESS_TOKEN_TTL_SECONDS,
     refresh_token: refreshToken,
-    scope,
+    scope: minted,
   });
 }
 
@@ -162,17 +199,23 @@ export async function POST(request: NextRequest) {
     if (!nextRefreshToken) {
       return oauthError("invalid_grant", "Refresh token invalid or expired");
     }
+    // Household context is re-resolved on EVERY refresh, so a role change
+    // (or joining/leaving a household) propagates within the hour.
+    const ctx = await householdContext(record.userId);
+    const minted = effectiveScope(record.scope ?? undefined, ctx.role);
     const accessToken = await signAccessToken({
       userId: record.userId,
       clientId: record.clientId,
-      scope: record.scope ?? undefined,
+      scope: minted,
+      dataUserId: ctx.dataUserId,
+      role: ctx.role,
     });
     return jsonWithCors({
       access_token: accessToken,
       token_type: "Bearer",
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
       refresh_token: nextRefreshToken,
-      scope: record.scope ?? undefined,
+      scope: minted,
     });
   }
 

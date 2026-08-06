@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { updatePreferences } from "@/app/(app)/settings/actions";
+import {
+  updatePreferences,
+  updatePersonalPreferences,
+} from "@/app/(app)/settings/actions";
 import { Check } from "lucide-react";
 
 const TIMEZONES = [
@@ -78,9 +81,21 @@ interface SettingsFormProps {
   currency: string;
   locale: string;
   language: string;
+  /**
+   * Personal prefs only (timezone/language/number format — the acting
+   * member's own): hides the household currency and submits through the
+   * personal action, which any member — including a VIEWER — may call.
+   */
+  personalOnly?: boolean;
 }
 
-export function SettingsForm({ timezone, currency, locale, language }: SettingsFormProps) {
+export function SettingsForm({
+  timezone,
+  currency,
+  locale,
+  language,
+  personalOnly = false,
+}: SettingsFormProps) {
   const [tz, setTz] = useState(timezone);
   const [curr, setCurr] = useState(currency);
   const [loc, setLoc] = useState(locale);
@@ -97,7 +112,11 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
 
     startTransition(async () => {
       try {
-        await updatePreferences({ timezone: tz, currency: curr, locale: loc, language: lang });
+        if (personalOnly) {
+          await updatePersonalPreferences({ timezone: tz, locale: loc, language: lang });
+        } else {
+          await updatePreferences({ timezone: tz, currency: curr, locale: loc, language: lang });
+        }
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
@@ -125,17 +144,22 @@ export function SettingsForm({ timezone, currency, locale, language }: SettingsF
             <p className="text-xs text-muted-foreground">For transaction dates.</p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Default currency</Label>
-            <SimpleSelect
-              value={curr}
-              onValueChange={setCurr}
-              options={CURRENCIES}
-              ariaLabel="Default currency"
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">For totals; transactions keep their own currency.</p>
-          </div>
+          {!personalOnly && (
+            <div className="space-y-1.5">
+              <Label>Default currency</Label>
+              <SimpleSelect
+                value={curr}
+                onValueChange={setCurr}
+                options={CURRENCIES}
+                ariaLabel="Default currency"
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">
+                For totals; transactions keep their own currency. Shared by the
+                whole household.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Language</Label>

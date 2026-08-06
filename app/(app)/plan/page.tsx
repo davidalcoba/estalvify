@@ -71,8 +71,8 @@ async function PlanBody({
 }
 
 export default async function PlanPage({ searchParams }: PageProps) {
-  const { dataUserId: userId } = await requireScope("read");
-  const [prefs, params] = await Promise.all([getUserPrefs(userId), searchParams]);
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
+  const [prefs, params] = await Promise.all([getUserPrefs(userId, actorUserId), searchParams]);
 
   const current = currentYearMonth(prefs.timezone);
   const y = Number(params.y);

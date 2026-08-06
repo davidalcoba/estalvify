@@ -16,9 +16,8 @@ import {
 // SeriesFields is not defined` on evaluation in production — killing every
 // action in the file. Consumers import the type straight from lib/mcp/manage.
 
-async function requireUserId(): Promise<string> {
-  const { dataUserId } = await requireScope("write");
-  return dataUserId;
+async function requireWriteScope() {
+  return requireScope("write");
 }
 
 function revalidate(): void {
@@ -39,8 +38,8 @@ function failure(err: unknown): ActionResult {
 
 export async function createSeries(fields: SeriesFields): Promise<ActionResult> {
   try {
-    const userId = await requireUserId();
-    await createSeriesForUser(userId, fields);
+    const { dataUserId, actorUserId } = await requireWriteScope();
+    await createSeriesForUser(dataUserId, fields, actorUserId);
     revalidate();
     return { ok: true };
   } catch (err) {
@@ -50,8 +49,8 @@ export async function createSeries(fields: SeriesFields): Promise<ActionResult> 
 
 export async function updateSeries(id: string, fields: SeriesFields): Promise<ActionResult> {
   try {
-    const userId = await requireUserId();
-    await updateSeriesForUser(userId, id, fields);
+    const { dataUserId, actorUserId } = await requireWriteScope();
+    await updateSeriesForUser(dataUserId, id, fields, actorUserId);
     revalidate();
     return { ok: true };
   } catch (err) {
@@ -61,8 +60,8 @@ export async function updateSeries(id: string, fields: SeriesFields): Promise<Ac
 
 export async function deleteSeries(id: string): Promise<ActionResult> {
   try {
-    const userId = await requireUserId();
-    await deleteSeriesForUser(userId, id);
+    const { dataUserId } = await requireWriteScope();
+    await deleteSeriesForUser(dataUserId, id);
     revalidate();
     return { ok: true };
   } catch (err) {
@@ -73,7 +72,7 @@ export async function deleteSeries(id: string): Promise<ActionResult> {
 // Rejecting a detection proposal — remembered so it never resurfaces.
 export async function dismissRecurringSuggestion(merchantKey: string): Promise<ActionResult> {
   try {
-    const userId = await requireUserId();
+    const { dataUserId: userId } = await requireWriteScope();
     const key = merchantKey?.trim();
     if (!key) throw new Error("Missing suggestion key");
     await prisma.dismissedRecurringSuggestion.upsert({

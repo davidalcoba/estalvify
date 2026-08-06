@@ -71,7 +71,10 @@ interface ReportsBodyProps {
 }
 
 async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBodyProps) {
-  const { locale, language, currency } = await getUserPrefs(userId);
+  // getScope is request-cached, so re-resolving here is free; the personal
+  // half of the prefs belongs to the acting member, not the data scope.
+  const { actorUserId } = await requireScope("read");
+  const { locale, language, currency } = await getUserPrefs(userId, actorUserId);
 
   const months = lastNMonths(month.year, month.month, trendMonths);
   const rangeStart = monthRange(months[0].year, months[0].month).start;
@@ -314,9 +317,9 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
-  const { dataUserId: userId } = await requireScope("read");
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
   const params = await searchParams;
-  const { language, timezone } = await getUserPrefs(userId);
+  const { language, timezone } = await getUserPrefs(userId, actorUserId);
 
   const current = currentYearMonth(timezone);
 

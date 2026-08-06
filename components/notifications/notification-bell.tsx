@@ -39,7 +39,6 @@ export function NotificationBell({
   const canWrite = useCanWrite();
 
   function run(action: () => Promise<void>) {
-    if (!canWrite) return;
     startTransition(async () => {
       try {
         await action();
@@ -68,7 +67,7 @@ export function NotificationBell({
     <>
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-sm font-medium">Notifications</span>
-        {canWrite && unreadCount > 0 && (
+        {unreadCount > 0 && (
           <button
             onClick={() => run(markAllNotificationsRead)}
             disabled={pending}

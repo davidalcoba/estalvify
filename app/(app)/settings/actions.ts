@@ -13,28 +13,59 @@ import {
   removeHouseholdMember,
 } from "@/lib/household/manage";
 
+// Personal prefs (PLAN_MULTIUSER.md §8 / phase 5): language, number format
+// and timezone belong to the ACTING member — every member, including a
+// VIEWER, renders dates and numbers their own way. Level "read": it only
+// writes the actor's own row.
+export async function updatePersonalPreferences(data: {
+  timezone: string;
+  locale: string;
+  language: string;
+}) {
+  const { actorUserId } = await requireScope("read");
+
+  const { timezone, locale, language } = data;
+  if (!timezone || !locale || !language) throw new Error("Missing fields");
+
+  await prisma.user.update({
+    where: { id: actorUserId },
+    data: { timezone, locale, language },
+  });
+
+  revalidateForPrefs();
+}
+
 export async function updatePreferences(data: {
   timezone: string;
   currency: string;
   locale: string;
   language: string;
 }) {
-  // Prefs still live in one bundle on the owner's row. The personal
-  // (language/locale/timezone) vs household (currency) split is phase 5 of
-  // PLAN_MULTIUSER.md.
-  const { dataUserId } = await requireScope("write");
+  // The full bundle: personal fields land on the ACTOR's row, the currency —
+  // household state, totals must not change per member — on the OWNER's.
+  const { dataUserId, actorUserId } = await requireScope("write");
 
   const { timezone, currency, locale, language } = data;
 
   // Basic validation
   if (!timezone || !currency || !locale || !language) throw new Error("Missing fields");
 
-  await prisma.user.update({
-    where: { id: dataUserId },
-    data: { timezone, currency, locale, language },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: actorUserId },
+      data: { timezone, locale, language },
+    }),
+    prisma.user.update({
+      where: { id: dataUserId },
+      data: { currency },
+    }),
+  ]);
 
-  // Revalidate every route that renders dates or currency with these prefs.
+  revalidateForPrefs();
+}
+
+// Revalidate every route that renders dates or currency with these prefs.
+function revalidateForPrefs(): void {
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/transactions");

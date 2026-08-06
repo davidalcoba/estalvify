@@ -85,7 +85,7 @@ export interface PlannedOneOffInput {
 }
 
 export async function createPlannedOneOff(input: PlannedOneOffInput): Promise<void> {
-  const userId = await requireUserId();
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
   const description = input.description?.trim();
   if (!description) throw new Error("Description is required");
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Invalid amount");
@@ -110,6 +110,7 @@ export async function createPlannedOneOff(input: PlannedOneOffInput): Promise<vo
       year: input.year,
       month: input.month,
       dueDay: input.dueDay,
+      actorUserId,
     },
   });
   revalidate();

@@ -34,7 +34,6 @@ export function NotificationList({
   const canWrite = useCanWrite();
 
   function run(action: () => Promise<void>) {
-    if (!canWrite) return;
     startTransition(async () => {
       try {
         await action();
@@ -86,7 +85,7 @@ export function NotificationList({
             Check now
           </Button>
           )}
-          {canWrite && unreadCount > 0 && (
+          {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"

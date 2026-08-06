@@ -53,6 +53,7 @@ model User {
   dismissedSuggestions  DismissedRecurringSuggestion[]
   ownedHousehold        Household?                     @relation("OwnedHousehold")
   householdMembership   HouseholdMember?
+  notificationReads     NotificationRead[]
 
   @@map("users")
 }
@@ -403,6 +404,12 @@ model CategoryRule {
   priority           Int     @default(0)
   applyRetroactively Boolean @default(false)
 
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
+
   // Observability: refreshed on every run so a rule that matches nothing is visible
   matchCount  Int       @default(0) // Matches in the most recent run, not cumulative
   lastRunAt   DateTime?
@@ -433,6 +440,12 @@ model TransactionCategorization {
 
   // Which rule triggered this (if source = RULE)
   categoryRuleId String?
+
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
 
   // Undo trail for rule runs: what this row held before a rule overwrote it.
   // previousCategoryId has no FK on purpose — it is a historical value and a
@@ -562,6 +575,12 @@ model PlannedItem {
   // hand-typed one-off. One instance per series per month.
   recurringSeriesId String?
 
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
+
   status               PlannedStatus @default(PENDING)
   // matchedTransactionIds is THE source of truth for what a matched item
   // absorbed: always 1..n ids, also for single-charge matches. Consumers read
@@ -647,6 +666,12 @@ model RecurringSeries {
   // inference — rent leaves Despeses, Mònica's salary lands in Estalvis.
   bankAccountId String?
 
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
+
   active           Boolean   @default(true)
   lastSeenAt       DateTime? @db.Date
   nextExpectedDate DateTime? @db.Date
@@ -708,14 +733,36 @@ model Notification {
   dedupeKey String
   metadata  Json? // Extra context for future deep-links (categoryId, merchantKey…)
 
+  // AGGREGATE first-read timestamp: set when the FIRST member reads it, and
+  // what retention purges on (read > 90 days). The per-member read state the
+  // UI shows lives in NotificationRead — never read readAt for display.
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reads NotificationRead[]
 
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// Per-member read state for the shared household bell (PLAN_MULTIUSER.md
+// phase 5): one row = this member has read this notification. Notifications
+// hang off the household's dataUserId, so without this table one member's
+// "mark read" blanked the other's bell.
+model NotificationRead {
+  id             String   @id @default(cuid())
+  notificationId String
+  userId         String // the MEMBER who read it (actorUserId)
+  readAt         DateTime @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId])
+  @@map("notification_reads")
 }
 
 enum NotificationType {

@@ -26,8 +26,8 @@ interface PageProps {
 }
 
 export default async function RecurringPage({ searchParams }: PageProps) {
-  const { dataUserId: userId } = await requireScope("read");
-  const [prefs, params] = await Promise.all([getUserPrefs(userId), searchParams]);
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
+  const [prefs, params] = await Promise.all([getUserPrefs(userId, actorUserId), searchParams]);
 
   const detectionStart = new Date();
   detectionStart.setUTCDate(detectionStart.getUTCDate() - DETECTION_LOOKBACK_DAYS);

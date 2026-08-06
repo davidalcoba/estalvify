@@ -3,6 +3,7 @@ import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getUserPrefs, type UserPrefs } from "@/lib/user-prefs";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
@@ -22,16 +23,15 @@ export default async function SettingsPage() {
   const people =
     scope.role === "OWNER" ? await listHouseholdPeople(scope.householdId) : null;
 
-  const [user, categories] = await Promise.all([
+  // Merged prefs: personal fields (timezone/language/number format) come from
+  // the ACTING member's row, the currency from the household owner's.
+  const [prefs, user, categories] = await Promise.all([
+    getUserPrefs(userId, scope.actorUserId),
     prisma.user.findUnique({
       where: { id: userId },
       select: {
         name: true,
         email: true,
-        timezone: true,
-        currency: true,
-        locale: true,
-        language: true,
         lowBalanceThreshold: true,
       },
     }),
@@ -62,6 +62,7 @@ export default async function SettingsPage() {
     });
     return (
       <SettingsLayout
+        prefs={prefs}
         user={user}
         categories={seeded}
         people={people}
@@ -73,6 +74,7 @@ export default async function SettingsPage() {
 
   return (
     <SettingsLayout
+      prefs={prefs}
       user={user}
       categories={categories}
       people={people}
@@ -83,21 +85,19 @@ export default async function SettingsPage() {
 }
 
 function SettingsLayout({
+  prefs,
   user,
   categories,
   people,
   actorUserId,
   role,
 }: {
+  prefs: UserPrefs;
   people: HouseholdPeople | null;
   actorUserId: string;
   role: "OWNER" | "EDITOR" | "VIEWER";
   user: {
     email?: string | null;
-    timezone?: string | null;
-    currency?: string | null;
-    locale?: string | null;
-    language?: string | null;
     lowBalanceThreshold?: { toString(): string } | null;
   } | null;
   categories: {
@@ -107,23 +107,31 @@ function SettingsLayout({
     children: { id: string; name: string; color: string }[];
   }[];
 }) {
-  // Per the role matrix (PLAN_MULTIUSER.md §5): a VIEWER edits nothing here
-  // (the per-member personal-prefs split is phase 5); an EDITOR manages the
-  // household settings and categories but never Privacy & data (export /
-  // delete are the owner's — they act on the whole household's data).
+  // Per the role matrix (PLAN_MULTIUSER.md §5): a VIEWER edits only their
+  // PERSONAL prefs (timezone/language/number format — their own row); an
+  // EDITOR manages the household settings and categories but never Privacy &
+  // data (export / delete are the owner's — they act on the whole household's
+  // data).
   if (role === "VIEWER") {
     return (
       <div className="space-y-6">
         <PageHeader title="Settings" />
-        <div className="max-w-lg">
+        <div className="max-w-lg space-y-6">
+          <SettingsForm
+            timezone={prefs.timezone}
+            currency={prefs.currency}
+            locale={prefs.locale}
+            language={prefs.language}
+            personalOnly
+          />
           <Card>
             <CardHeader>
               <CardTitle>Read-only access</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Your role in this household is Viewer. Regional preferences,
-              categories and data management are handled by the household
-              owner and editors.
+              Your role in this household is Viewer. Categories, alerts and
+              data management are handled by the household owner and editors;
+              the preferences above only change how the app renders for you.
             </CardContent>
           </Card>
         </div>
@@ -137,15 +145,15 @@ function SettingsLayout({
 
       <div className="max-w-lg space-y-6">
         <SettingsForm
-          timezone={user?.timezone ?? "Europe/London"}
-          currency={user?.currency ?? "EUR"}
-          locale={user?.locale ?? "es-ES"}
-          language={user?.language ?? "en-GB"}
+          timezone={prefs.timezone}
+          currency={prefs.currency}
+          locale={prefs.locale}
+          language={prefs.language}
         />
 
         <PlanningForm
           lowBalanceThreshold={Number(user?.lowBalanceThreshold?.toString() ?? "0")}
-          currency={user?.currency ?? "EUR"}
+          currency={prefs.currency}
         />
 
         <CategoryManager initialCategories={categories} />

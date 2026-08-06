@@ -46,7 +46,7 @@ export default async function RulesPage() {
       // them backwards made the UI contradict the rule it is about to explain.
       orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
     }),
-    getUserPrefs(userId),
+    getUserPrefs(userId, scope.actorUserId),
   ]);
 
   return (

@@ -22,8 +22,8 @@ const CASHFLOW_HORIZON_DAYS = 60;
 const LIST_MONTHS_AHEAD = 2;
 
 export default async function ForecastPage() {
-  const { dataUserId: userId } = await requireScope("read");
-  const { locale, language, timezone, currency } = await getUserPrefs(userId);
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
+  const { locale, language, timezone, currency } = await getUserPrefs(userId, actorUserId);
 
   await syncPlannedState(userId, timezone, currency, locale);
   const cashflow = await buildCashflowData(userId, timezone, CASHFLOW_HORIZON_DAYS);

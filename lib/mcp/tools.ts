@@ -126,19 +126,27 @@ function errorResult(err: unknown, fallback: string): CallToolResult {
 
 // Minimal shape of the auth context we attach in verifyToken.
 type ToolExtra = {
-  authInfo?: { scopes?: string[]; extra?: { userId?: string } };
+  authInfo?: {
+    scopes?: string[];
+    extra?: { userId?: string; dataUserId?: string };
+  };
 };
 
 /**
- * Resolve the acting user AND enforce the token's scope in one place. Every
+ * Resolve the DATA scope AND enforce the token's scope in one place. Every
  * tool declares whether it reads or writes; a token granted only `read` gets
  * an error from write tools instead of silently full access. The scopes on
- * authInfo are set by verifyToken (app/api/mcp/route.ts), which already
- * defaults legacy scope-less tokens to full access.
+ * authInfo are set by verifyToken (app/api/mcp/route.ts), which defaults
+ * legacy scope-less tokens to full access and caps a VIEWER's token at read.
+ *
+ * The returned id is the HOUSEHOLD's data scope (`dataUserId` — the owner's
+ * User.id), not the acting member's, mirroring requireScope in the app
+ * (PLAN_MULTIUSER.md phase 4). Legacy tokens carry no dataUserId; for them
+ * the actor was the owner, so the fallback is exact.
  */
 function requireUserId(extra: ToolExtra, scope: KnownScope): string {
-  const userId = extra.authInfo?.extra?.userId;
-  if (!userId) throw new Error("Unauthenticated");
+  const actorUserId = extra.authInfo?.extra?.userId;
+  if (!actorUserId) throw new Error("Unauthenticated");
   const granted = extra.authInfo?.scopes ?? [];
   if (!hasScope(granted, scope)) {
     throw new Error(
@@ -147,7 +155,7 @@ function requireUserId(extra: ToolExtra, scope: KnownScope): string {
         `re-consent with the ${scope} scope.`,
     );
   }
-  return userId;
+  return extra.authInfo?.extra?.dataUserId ?? actorUserId;
 }
 
 function json(data: unknown): CallToolResult {

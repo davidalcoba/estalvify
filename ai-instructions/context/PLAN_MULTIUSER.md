@@ -278,13 +278,30 @@ lo que es una invitación — **sin abrir nada más**:
   now", y Settings recortado (VIEWER: aviso; EDITOR: sin Privacy & data).
   Regla nueva en `UI_RULES.md` → "Role-Aware Affordances": toda affordance de
   mutación se esconde por rol, y esconder nunca es el control de acceso.
-- [ ] **Fase 4 — MCP con roles.** Claims `hh`/`role` en el JWT, intersección
-  scope×rol, re-check de membresía en el refresh grant, consent screen
-  mostrando el hogar. Tests de `scopes.ts` ampliados. *Tamaño: S–M.*
-- [ ] **Fase 5 — Convivencia.** Estado de lectura de notificaciones por
-  miembro; `actorUserId` en las mutaciones + "quién" en la UI donde aporte
-  (categorización, reglas); split real de prefs personales en Settings para
-  no-owners. *Tamaño: M.*
+- [x] **Fase 4 — MCP con roles.** ✅ 2026-08-06 — El JWT gana claims `du`
+  (dataUserId del hogar) y `role`; `requireUserId` devuelve el scope de datos
+  del hogar (legacy sin claims = own-owner, caduca ≤1h); la intersección
+  scope×rol vive en `scopesForRole` (pura, testeada: VIEWER ⇒ exactamente
+  `["read"]`, nunca `[]` — vacío redondearía a acceso total) y se aplica en
+  mint (token endpoint, ambos grants), en refresh (contexto re-resuelto en
+  cada rotación, así un cambio de rol propaga ≤1h) y en verify (cinturón para
+  legacy). El consent screen muestra el hogar y anuncia solo-lectura a un
+  VIEWER. El refresh token guarda el scope ORIGINAL para que un ascenso de
+  rol restaure `write` en la siguiente rotación.
+- [x] **Fase 5 — Convivencia.** ✅ 2026-08-06 — (a) Campana por miembro:
+  tabla `notification_reads` (+ backfill al owner), no-leídas y marcar-leído
+  por `actorUserId` (nivel `read` — un VIEWER gestiona su campana;
+  `Notification.readAt` queda como agregado de primera-lectura para la
+  retención); "Check now" (generación) sigue siendo write. (b) Prefs
+  partidas: `lib/user-prefs.ts` decide — `locale`/`language`/`timezone` del
+  ACTOR, `currency` del owner; `updatePersonalPreferences` (nivel read, fila
+  propia) + Settings de VIEWER con su formulario personal. (c) Auditoría:
+  columna `actorUserId` (nullable, sin FK) en categorizaciones MANUAL,
+  reglas, planned one-offs y series, escrita desde las actions (MCP y
+  rule-runs quedan null a propósito). **Pendiente de esta fase**: mostrar
+  "quién" en la UI (p. ej. en el detalle de transacción) — los datos ya se
+  acumulan; hacerlo pide extender el DTO de transacciones y un mapa de
+  miembros, mejor cuando haya histórico que enseñar.
 - [ ] **Fase 6 (opcional, sin fecha) — Hogar de pleno derecho.** Solo si
   aparece la necesidad real: FK `householdId` en las tablas de dominio,
   multi-hogar por usuario, transferencia de propiedad. El diseño (B) de §3 la

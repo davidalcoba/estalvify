@@ -19,8 +19,16 @@ interface NotificationRecordLike {
   severity: NotificationSeverity;
   title: string;
   body: string;
+  /** Aggregate first-read timestamp — retention's field, NOT the display state. */
   readAt: Date | null;
   createdAt: Date;
+  /**
+   * Per-member read rows, pre-filtered to the ACTING member by the caller's
+   * query (`reads: { where: { userId: actorUserId } }`). When present, this
+   * is the read state; `readAt` is only the legacy fallback for callers that
+   * haven't joined it.
+   */
+  reads?: { id: string }[];
 }
 
 export function toNotificationDTO(n: NotificationRecordLike): NotificationDTO {
@@ -30,7 +38,7 @@ export function toNotificationDTO(n: NotificationRecordLike): NotificationDTO {
     severity: n.severity,
     title: n.title,
     body: n.body,
-    read: n.readAt !== null,
+    read: n.reads ? n.reads.length > 0 : n.readAt !== null,
     createdAt: n.createdAt.toISOString(),
   };
 }

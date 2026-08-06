@@ -36,8 +36,8 @@ export type InsightsResult =
 
 export async function generateInsights(): Promise<InsightsResult> {
   // Read: generation only derives from household data, it mutates nothing.
-  const { dataUserId: userId } = await requireScope("read");
-  const { locale, language, timezone, currency } = await getUserPrefs(userId);
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
+  const { locale, language, timezone, currency } = await getUserPrefs(userId, actorUserId);
 
   const { year, month } = currentYearMonth(timezone);
   const prev =

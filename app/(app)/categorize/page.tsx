@@ -98,7 +98,7 @@ interface CategorizeBodyProps {
 }
 
 async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBodyProps) {
-  const { dataUserId: userId } = await requireScope("read");
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
   const where = buildUncategorizedWhere(userId);
 
   const [total, transactions, categories, prefs] = await Promise.all([
@@ -114,7 +114,7 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
-    getUserPrefs(userId),
+    getUserPrefs(userId, actorUserId),
   ]);
 
   return (

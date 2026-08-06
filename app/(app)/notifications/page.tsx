@@ -21,13 +21,16 @@ export default async function NotificationsPage({
 }: {
   searchParams: Promise<{ unread?: string; page?: string }>;
 }) {
-  const { dataUserId: userId } = await requireScope("read");
+  const scope = await requireScope("read");
+  const userId = scope.dataUserId;
 
   const params = await searchParams;
   const unreadOnly = params.unread === "1";
   const page = Math.max(1, Number(params.page) || 1);
 
-  const where = { userId, ...(unreadOnly ? { readAt: null } : {}) };
+  // "Unread" is the acting member's read state, not the household's.
+  const unreadFilter = { reads: { none: { userId: scope.actorUserId } } };
+  const where = { userId, ...(unreadOnly ? unreadFilter : {}) };
 
   const [rows, unreadCount, total] = await Promise.all([
     prisma.notification.findMany({
@@ -43,9 +46,13 @@ export default async function NotificationsPage({
         body: true,
         readAt: true,
         createdAt: true,
+        reads: {
+          where: { userId: scope.actorUserId },
+          select: { id: true },
+        },
       },
     }),
-    prisma.notification.count({ where: { userId, readAt: null } }),
+    prisma.notification.count({ where: { userId, ...unreadFilter } }),
     prisma.notification.count({ where }),
   ]);
 

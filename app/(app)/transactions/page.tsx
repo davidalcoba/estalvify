@@ -96,6 +96,9 @@ interface TransactionsBodyProps {
 }
 
 async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accountId, query, userId }: TransactionsBodyProps) {
+  // getScope is request-cached, so re-resolving here is free; the personal
+  // half of the prefs belongs to the acting member, not the data scope.
+  const { actorUserId } = await requireScope("read");
   const where = {
     userId,
     ...(fromDate || toDate
@@ -127,7 +130,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
       skip: (effectivePage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    getUserPrefs(userId),
+    getUserPrefs(userId, actorUserId),
     prisma.category.findMany({
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -179,7 +182,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
 }
 
 export default async function TransactionsPage({ searchParams }: PageProps) {
-  const { dataUserId } = await requireScope("read");
+  const { dataUserId, actorUserId } = await requireScope("read");
   const params = await searchParams;
 
   const fromDate = params.from ? new Date(params.from + "T00:00:00") : null;

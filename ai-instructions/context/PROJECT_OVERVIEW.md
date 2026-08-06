@@ -75,9 +75,11 @@ layer (`Household` / `HouseholdMember` / `HouseholdInvite`, roles
 OWNER/EDITOR/VIEWER) via `requireScope` — see PLAN_MULTIUSER.md; phases 1
 (model + scope enforcement), 2 (invitations: owner-managed members card in
 Settings, one-time invite links at `/invite/<token>`, invite-aware sign-in
-gates) and 3 (role-aware UI: mutation affordances hidden for VIEWER, see
-UI_RULES.md → "Role-Aware Affordances") are implemented; MCP roles and
-per-member conveniences are the next phases.
+gates), 3 (role-aware UI: mutation affordances hidden for VIEWER, see
+UI_RULES.md → "Role-Aware Affordances"), 4 (role-aware MCP tokens: `du`/`role`
+claims, viewer tokens read-only) and 5 (per-member bell read state, personal
+vs household prefs split, actor audit columns) are implemented; only the
+optional phase 6 (true `householdId` FKs / multi-household) remains, undated.
 
 Examples of user-scoped entities:
 

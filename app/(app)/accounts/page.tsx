@@ -52,7 +52,7 @@ export default async function AccountsPage({
 }: {
   searchParams: Promise<{ error?: string; connected?: string; reconnected?: string }>;
 }) {
-  const { dataUserId } = await requireScope("read");
+  const { dataUserId, actorUserId } = await requireScope("read");
   const params = await searchParams;
 
   const errorMessages: Record<string, string> = {
@@ -102,7 +102,7 @@ export default async function AccountsPage({
       },
       orderBy: { createdAt: "desc" },
     }),
-    getUserPrefs(dataUserId),
+    getUserPrefs(dataUserId, actorUserId),
   ]);
 
   const { locale, language, timezone } = prefs;

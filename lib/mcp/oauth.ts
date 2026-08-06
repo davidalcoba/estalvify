@@ -108,12 +108,21 @@ export function verifyPkce(
 // ── Access tokens (JWT, HS256) ────────────────────────────────────────────────
 
 export interface AccessTokenClaims {
-  /** Estalvify user id (Auth.js User.id). */
+  /** Estalvify user id (Auth.js User.id) — the ACTING member (`sub`). */
   userId: string;
   /** OAuth client that the token was issued to. */
   clientId: string;
   /** Space-delimited scopes, if any. */
   scope?: string;
+  /**
+   * Household data scope: the owner's User.id every tool filters by (`du`
+   * claim). Absent on legacy tokens minted before households — callers treat
+   * that as `userId` (pre-household, the only user WAS the owner). Those
+   * tokens age out within the hour; the refresh grant re-mints with claims.
+   */
+  dataUserId?: string;
+  /** Household role at mint time (`role` claim). Absent (legacy) = OWNER. */
+  role?: "OWNER" | "EDITOR" | "VIEWER";
 }
 
 /** Issue a signed access token for the given user/client. */
@@ -122,7 +131,12 @@ export async function signAccessToken(
   ttlSeconds: number = ACCESS_TOKEN_TTL_SECONDS,
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  return new SignJWT({ scope: claims.scope, client_id: claims.clientId })
+  return new SignJWT({
+    scope: claims.scope,
+    client_id: claims.clientId,
+    du: claims.dataUserId,
+    role: claims.role,
+  })
     .setProtectedHeader({ alg: "HS256", typ: "at+jwt" })
     .setSubject(claims.userId)
     .setIssuer(getTokenIssuer())
@@ -131,6 +145,8 @@ export async function signAccessToken(
     .setExpirationTime(now + ttlSeconds)
     .sign(getJwtSecret());
 }
+
+const KNOWN_ROLES = ["OWNER", "EDITOR", "VIEWER"] as const;
 
 /**
  * Verify an access token and return its claims, or null if invalid/expired.
@@ -144,9 +160,22 @@ export async function verifyAccessToken(
       audience: MCP_AUDIENCE,
       issuer: getTokenIssuer(),
     });
-    const p = payload as JWTPayload & { scope?: string; client_id?: string };
+    const p = payload as JWTPayload & {
+      scope?: string;
+      client_id?: string;
+      du?: string;
+      role?: string;
+    };
     if (!p.sub || !p.client_id) return null;
-    return { userId: p.sub, clientId: p.client_id, scope: p.scope };
+    return {
+      userId: p.sub,
+      clientId: p.client_id,
+      scope: p.scope,
+      dataUserId: typeof p.du === "string" ? p.du : undefined,
+      role: (KNOWN_ROLES as readonly string[]).includes(p.role ?? "")
+        ? (p.role as AccessTokenClaims["role"])
+        : undefined,
+    };
   } catch {
     return null;
   }

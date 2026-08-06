@@ -45,9 +45,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           body: true,
           readAt: true,
           createdAt: true,
+          // Read state is the ACTING member's, not the household's.
+          reads: {
+            where: { userId: scope.actorUserId },
+            select: { id: true },
+          },
         },
       }),
-      prisma.notification.count({ where: { userId, readAt: null } }),
+      prisma.notification.count({
+        where: { userId, reads: { none: { userId: scope.actorUserId } } },
+      }),
       // Cached — detection is too heavy to rerun on every navigation.
     ]);
 

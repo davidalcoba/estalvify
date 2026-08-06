@@ -54,7 +54,7 @@ export async function saveRule(input: {
   sourceCategoryId: string | null;
   categoryId: string;
 }): Promise<{ id: string }> {
-  const { dataUserId: userId } = await requireScope("write");
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
 
   assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
@@ -72,6 +72,7 @@ export async function saveRule(input: {
       // Last in the list: a new rule must not outrank the existing ones.
       priority: await nextRulePriority(userId),
       isActive: true,
+      actorUserId,
     },
     select: { id: true },
   });
@@ -122,7 +123,7 @@ export async function executeRuleOnce(input: {
   categoryId: string;
   ruleName: string | null;
 }): Promise<{ categorized: number; savedRuleId: string | null }> {
-  const { dataUserId: userId } = await requireScope("write");
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
 
   assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
@@ -142,6 +143,7 @@ export async function executeRuleOnce(input: {
       categoryId: input.categoryId,
       priority: await nextRulePriority(userId),
       isActive: true,
+      actorUserId,
     },
     select: { id: true },
   });
@@ -248,7 +250,7 @@ export async function updateRule(input: {
   conditions: ConditionGroup;
   categoryId: string;
 }): Promise<void> {
-  const { dataUserId: userId } = await requireScope("write");
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: input.ruleId },
@@ -265,6 +267,7 @@ export async function updateRule(input: {
       name: input.name.trim(),
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       categoryId: input.categoryId,
+      actorUserId,
       // Position is not editable here — it changes by dragging the rule in the
       // list, through reorderRules.
     },

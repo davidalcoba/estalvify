@@ -23,7 +23,7 @@ export const metadata: Metadata = { title: "Dashboard" };
 export default async function DashboardPage() {
   const scope = await requireScope("read");
   const userId = scope.dataUserId;
-  const { locale, timezone, currency } = await getUserPrefs(userId);
+  const { locale, timezone, currency } = await getUserPrefs(userId, scope.actorUserId);
 
   const monthStatusPromise = syncPlannedState(userId, timezone, currency, locale).then(
     () => buildMonthStatus(userId, timezone),

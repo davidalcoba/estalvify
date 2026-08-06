@@ -19,9 +19,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LogoMark } from "@/components/brand/logo";
+import { prisma } from "@/lib/prisma";
 import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
 import {
   normalizeRequestedScope,
+  scopesForRole,
   SCOPE_DESCRIPTIONS,
   type KnownScope,
 } from "@/lib/mcp/scopes";
@@ -76,8 +78,19 @@ export default async function ConsentPage(props: {
   }
 
   const clientLabel = client.clientName ?? client.clientId;
-  const grantedScopes = normalizeRequestedScope(params.scope).split(
-    " ",
+
+  // Show what will ACTUALLY be granted: the token endpoint intersects the
+  // scope with the member's household role, so a VIEWER must see read-only
+  // here, not a write promise their token will never carry. Read-only query —
+  // no membership (pre-bootstrap) means own-owner, like the token endpoint.
+  const membership = await prisma.householdMember.findUnique({
+    where: { userId: session.user.id },
+    select: { role: true, household: { select: { name: true } } },
+  });
+  const role = membership?.role ?? "OWNER";
+  const grantedScopes = scopesForRole(
+    normalizeRequestedScope(params.scope).split(" "),
+    role,
   ) as KnownScope[];
 
   return (
@@ -95,6 +108,16 @@ export default async function ConsentPage(props: {
           <span className="font-medium text-foreground">
             {session.user.email}
           </span>
+          {membership?.household?.name && (
+            <>
+              {" "}
+              (household{" "}
+              <span className="font-medium text-foreground">
+                {membership.household.name}
+              </span>
+              )
+            </>
+          )}
         </CardDescription>
       </CardHeader>
 
@@ -111,6 +134,12 @@ export default async function ConsentPage(props: {
               </li>
             ))}
           </ul>
+          {role === "VIEWER" && (
+            <p className="text-xs text-muted-foreground">
+              Your role in this household is Viewer, so the connection will be
+              read-only.
+            </p>
+          )}
         </div>
 
         <div className="flex gap-3">

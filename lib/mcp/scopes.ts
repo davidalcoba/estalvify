@@ -62,3 +62,19 @@ export function scopesFromClaim(claim: string | null | undefined): string[] {
 export function hasScope(granted: string[], needed: KnownScope): boolean {
   return granted.includes(needed);
 }
+
+/**
+ * Intersect granted scopes with the member's household role
+ * (PLAN_MULTIUSER.md phase 4): a VIEWER's token is read-only no matter what
+ * was requested or consented — the role is the ceiling, the scope the floor
+ * below it. Returning exactly ["read"] (never []) matters twice over: an
+ * empty list would round-trip through scopesFromClaim as FULL access, and a
+ * viewer can read everything in-app anyway. Applied at mint time (token
+ * endpoint) and again at verify time (belt and braces for legacy tokens).
+ */
+export function scopesForRole(
+  scopes: string[],
+  role: "OWNER" | "EDITOR" | "VIEWER",
+): string[] {
+  return role === "VIEWER" ? ["read"] : scopes;
+}
