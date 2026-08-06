@@ -12,6 +12,7 @@ import {
   refreshMyNotifications,
 } from "@/app/(app)/notifications/actions";
 import { severityIcon, severityColor } from "./severity";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 interface NotificationListProps {
   notifications: NotificationDTO[];
@@ -30,6 +31,7 @@ export function NotificationList({
 }: NotificationListProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const canWrite = useCanWrite();
 
   function run(action: () => Promise<void>) {
     startTransition(async () => {
@@ -71,6 +73,7 @@ export function NotificationList({
         </Button>
 
         <div className="ml-auto flex items-center gap-2">
+          {canWrite && (
           <Button
             variant="ghost"
             size="sm"
@@ -81,6 +84,7 @@ export function NotificationList({
             <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
             Check now
           </Button>
+          )}
           {unreadCount > 0 && (
             <Button
               variant="ghost"

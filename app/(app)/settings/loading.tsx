@@ -61,6 +61,32 @@ export default function SettingsLoading() {
           </CardContent>
         </Card>
 
+        {/* Household members (owner-only; matches the card's list + form) */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-40" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                  <Skeleton className="h-8 w-24" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3 border-t pt-5">
+              <Skeleton className="h-4 w-28" />
+              <FieldSkeleton hint={false} />
+              <FieldSkeleton />
+              <Skeleton className="h-9 w-36" />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Privacy & data (export + delete account) */}
         <Card>
           <CardHeader>

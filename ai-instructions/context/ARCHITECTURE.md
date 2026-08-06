@@ -406,7 +406,13 @@ network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
     `formatCurrency`; `language` (date language, default `en-GB`) is passed to
     `formatDate`. Never reuse `locale` for dates — pass `language` (threaded to
     client components as a `dateLocale`/`userLanguage` prop). Both are editable in
-    Settings ("Number format" and "Language").
+    Settings ("Number format" and "Language"). Since multi-user phase 5,
+    `getUserPrefs(dataUserId, actorUserId)` is THE module that splits personal
+    from household prefs: `locale`/`language`/`timezone` come from the ACTING
+    member's row (each member renders the app their way — pages pass
+    `scope.actorUserId`), `currency` from the owner's (totals never change
+    currency per member). Callers without a member context (cron, MCP) pass
+    only `dataUserId` and get the owner's bundle.
 
 - `app/**/actions.ts`
   - Server actions for mutations
@@ -425,7 +431,14 @@ household scope. Access tokens are self-verifying JWTs (HS256, signed with
 auth codes and refresh tokens are opaque and stored hashed. Tokens carry an
 `iss` claim bound to the deployment target (`estalvify-mcp:<VERCEL_ENV>`), so a
 token minted on preview is not valid against production even when both share a
-signing secret.
+signing secret. Since multi-user phase 4 they also carry the household claims
+`du` (the owner's userId — the data scope every tool filters by) and `role`;
+the granted scope is intersected with the role (`scopesForRole`, pure +
+tested: a VIEWER's token is read-only, exactly `["read"]`, never `[]`) at
+mint, at refresh (context re-resolved on every rotation, so role changes
+propagate ≤ 1 h) and at verify. Legacy claim-less tokens mean own-owner and
+age out within the hour. The consent screen shows the household and tells a
+VIEWER the connection will be read-only.
 
 - Endpoints: `/api/mcp` (Streamable HTTP, via `mcp-handler`),
   `/api/oauth/{authorize,token,register,revoke}`, the consent screen at
@@ -458,9 +471,10 @@ signing secret.
 - `lib/mcp/oauth.ts` — PKCE (S256), opaque-token hashing, JWT sign/verify.
 - `lib/mcp/store.ts` — Prisma-backed clients / single-use codes / refresh tokens
   (`McpOAuthClient`, `McpAuthCode`, `McpRefreshToken`).
-- `lib/mcp/tools.ts` — tool registry. **Every tool derives `userId` from the
-  token and scopes all access to it** (same multi-user rule as the rest of the
-  app). Tools reuse `lib/*` logic. Reads: `list_transactions` (date-range +
+- `lib/mcp/tools.ts` — tool registry. **Every tool derives the household's
+  `dataUserId` from the token (`du` claim; legacy fallback = the actor) and
+  scopes all access to it** (same multi-user rule as the rest of the app —
+  `requireUserId(extra, scope)` mirrors `requireScope`). Tools reuse `lib/*` logic. Reads: `list_transactions` (date-range +
   pagination + **category filter and per-category counts** — returns both
   `description` and `remittanceInfo` plus the categorization source, which is what
   makes a misfiring rule debuggable), `list_categories`, `list_accounts`,
@@ -509,6 +523,18 @@ signing secret.
   no row to match): set it, log in once, unset it. The existence check is
   case-insensitive, because a hand-seeded row with different casing would
   otherwise lock the owner out.
+- **Household invitations** (`lib/household/`, PLAN_MULTIUSER.md phase 2): an
+  owner invites by email + role from Settings → Household members; the link
+  `/invite/<token>` carries a one-time raw token (only its hash is stored,
+  7-day TTL) and acceptance requires the **session email to match the invited
+  email** — a forwarded link admits nobody. Invites are an **additive** third
+  way through both sign-in gates below: a live invite or an existing
+  membership passes the allowlist gate when it misses, and a live invite
+  authorizes the user-row creation the closed-signup gate would refuse.
+  `proxy.ts` accepts the same disjunction on live sessions (the lookup runs
+  only when the allowlist misses) and preserves `callbackUrl` when bouncing
+  to /login so invite links survive the round-trip. Removing a member calls
+  `revokeUserAccess` (sessions + MCP refresh tokens, immediate).
 - **Sign-in allowlist**: when `ALLOWED_EMAILS` is set, the Auth.js `signIn`
   callback (`auth.ts`) only lets matching Google accounts in — locking both the
   app and the MCP (which shares the login) to the owner. This is the decisive
@@ -584,6 +610,33 @@ Rules:
 - Never query shared data without `userId` constraints when entity is user-owned
 - Never accept a client-provided `userId` as source of truth
 - Always derive user context from authenticated session
+
+**Households (PLAN_MULTIUSER.md).** Since phase 1 of the multi-user plan, the
+`userId` that scopes domain data is the **household owner's**, resolved by
+`requireScope(level)` / `getScope()` in `lib/auth/scope.ts` (session →
+`HouseholdMember` → `Household.ownerUserId`), not read straight off the
+session. `Scope` distinguishes `dataUserId` (filters every domain query) from
+`actorUserId` (the signed-in member — personal prefs, audit, OAuth grants).
+Levels are `read`/`write`/`admin`, mapped to roles VIEWER/EDITOR/OWNER by the
+pure matrix in `lib/auth/roles.ts` (tested). Every page/action under
+`app/(app)` plus `api/banking/{connect,sync}` and `api/export` declares its
+level; API routes use `getScope` + `roleAllows` to answer 401 vs 403. A guard
+test (`lib/auth/scope-guard.test.ts`) fails the build if `session.user.id`
+reappears in those areas.
+
+Since phase 6-lite a user can belong to SEVERAL households (owning at most
+one): the ACTIVE one comes from the `estalvify.hh` cookie — a preference
+validated against the memberships on every request, never an access grant —
+falling back to the oldest membership; the sidebar user menu switches it. A
+signed-in user with NO membership is redirected by `getScope` to `/welcome`,
+where household creation is an EXPLICIT choice (accept a pending invite,
+create a named household, or just sign out) — nothing is ever created as a
+sign-in side effect, because someone following an invite link may not want an
+account at all. `/welcome`, login, the invite page and the OAuth consent flow
+therefore use the session (or `lib/household/active.ts`) directly, never
+`getScope`. MCP grants record the household active at consent and the token
+endpoint re-validates that membership at every mint/refresh. Cron and the
+queue consumer still derive identity from connections, unchanged.
 
 ## Privacy & data lifecycle (GDPR)
 

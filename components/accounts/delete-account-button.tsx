@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { deleteAccount } from "@/app/(app)/accounts/actions";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 interface DeleteAccountButtonProps {
   accountId: string;
@@ -26,6 +27,9 @@ export function DeleteAccountButton({ accountId, accountName }: DeleteAccountBut
   const [open, setOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const canWrite = useCanWrite();
+
+  if (!canWrite) return null;
 
   function handleOpenChange(next: boolean) {
     setOpen(next);

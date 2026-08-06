@@ -6,18 +6,24 @@
 // for what is included and the two deliberate omissions.
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getScope } from "@/lib/auth/scope";
+import { roleAllows } from "@/lib/auth/roles";
 import { buildUserExport } from "@/lib/account/export-user";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
+  // Owner-only: the export is the household's full financial history, not the
+  // member's own data. A member-scoped profile export is a phase-2 flow.
+  const scope = await getScope();
+  if (!scope) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!roleAllows(scope.role, "admin")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  const data = await buildUserExport(session.user.id);
+  const data = await buildUserExport(scope.dataUserId);
   const date = new Date().toISOString().slice(0, 10);
 
   return new NextResponse(JSON.stringify(data, null, 2), {

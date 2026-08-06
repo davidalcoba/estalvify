@@ -2,9 +2,24 @@ import { describe, it, expect } from "vitest";
 import {
   normalizeRequestedScope,
   scopesFromClaim,
+  scopesForRole,
   hasScope,
   FULL_SCOPE,
 } from "./scopes";
+
+describe("scopesForRole", () => {
+  it("caps a VIEWER at read, whatever was granted", () => {
+    expect(scopesForRole(["read", "write"], "VIEWER")).toEqual(["read"]);
+    expect(scopesForRole(["write"], "VIEWER")).toEqual(["read"]);
+    // Never empty: [] would round-trip through scopesFromClaim as FULL access.
+    expect(scopesForRole([], "VIEWER")).toEqual(["read"]);
+  });
+
+  it("leaves EDITOR and OWNER grants untouched", () => {
+    expect(scopesForRole(["read", "write"], "EDITOR")).toEqual(["read", "write"]);
+    expect(scopesForRole(["read"], "OWNER")).toEqual(["read"]);
+  });
+});
 
 describe("normalizeRequestedScope", () => {
   it("grants full access when the client requests nothing", () => {

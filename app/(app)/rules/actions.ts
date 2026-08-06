@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/app/generated/prisma";
@@ -27,13 +27,12 @@ export async function previewRuleTransactions(
   conditions: ConditionGroup,
   sourceCategoryId: string | null
 ): Promise<{ transactions: TransactionListItemDTO[]; total: number }> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("read");
 
   assertValidConditionTree(conditions);
 
   const { matched, transactions } = await evaluateConditions(
-    session.user.id,
+    dataUserId,
     conditions,
     sourceCategoryId,
     PREVIEW_LIMIT
@@ -55,9 +54,7 @@ export async function saveRule(input: {
   sourceCategoryId: string | null;
   categoryId: string;
 }): Promise<{ id: string }> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
 
   assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
@@ -75,6 +72,7 @@ export async function saveRule(input: {
       // Last in the list: a new rule must not outrank the existing ones.
       priority: await nextRulePriority(userId),
       isActive: true,
+      actorUserId,
     },
     select: { id: true },
   });
@@ -88,10 +86,9 @@ export async function saveRule(input: {
 // ─────────────────────────────────────────────
 
 export async function reorderRules(orderedIds: string[]): Promise<void> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
-  await reorderRulesForUser(session.user.id, orderedIds);
+  await reorderRulesForUser(dataUserId, orderedIds);
 
   revalidatePath("/rules");
 }
@@ -103,9 +100,7 @@ export async function reorderRules(orderedIds: string[]): Promise<void> {
 export async function executeRule(
   ruleId: string
 ): Promise<{ categorized: number }> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: ruleId },
@@ -128,9 +123,7 @@ export async function executeRuleOnce(input: {
   categoryId: string;
   ruleName: string | null;
 }): Promise<{ categorized: number; savedRuleId: string | null }> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
 
   assertValidConditionTree(input.conditions);
   await validateCategoryAccess(userId, input.categoryId);
@@ -150,6 +143,7 @@ export async function executeRuleOnce(input: {
       categoryId: input.categoryId,
       priority: await nextRulePriority(userId),
       isActive: true,
+      actorUserId,
     },
     select: { id: true },
   });
@@ -187,9 +181,7 @@ export async function executeRuleOnce(input: {
 export async function getUserRules(): Promise<
   { id: string; name: string; categoryId: string; categoryName: string }[]
 > {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("read");
 
   const rules = await prisma.categoryRule.findMany({
     where: { userId, isActive: true },
@@ -218,9 +210,7 @@ export async function addConditionToRule(input: {
   ruleId: string;
   condition: RuleCondition;
 }): Promise<{ categorized: number }> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: input.ruleId },
@@ -260,9 +250,7 @@ export async function updateRule(input: {
   conditions: ConditionGroup;
   categoryId: string;
 }): Promise<void> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: input.ruleId },
@@ -279,6 +267,7 @@ export async function updateRule(input: {
       name: input.name.trim(),
       conditions: input.conditions as unknown as Prisma.InputJsonValue,
       categoryId: input.categoryId,
+      actorUserId,
       // Position is not editable here — it changes by dragging the rule in the
       // list, through reorderRules.
     },
@@ -294,10 +283,9 @@ export async function updateRule(input: {
 export async function revertRule(
   ruleId: string
 ): Promise<{ reverted: number }> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
-  const { reverted } = await undoRuleRun(session.user.id, ruleId);
+  const { reverted } = await undoRuleRun(dataUserId, ruleId);
 
   revalidatePath("/rules");
   revalidateAfterCategorization();
@@ -313,9 +301,7 @@ export async function toggleRuleActive(
   ruleId: string,
   isActive: boolean
 ): Promise<void> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const rule = await prisma.categoryRule.findUnique({
     where: { id: ruleId },
@@ -336,10 +322,9 @@ export async function toggleRuleActive(
 // ─────────────────────────────────────────────
 
 export async function deleteRule(ruleId: string): Promise<void> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
-  await deleteRuleForUser(session.user.id, ruleId);
+  await deleteRuleForUser(dataUserId, ruleId);
   revalidatePath("/rules");
 }
 

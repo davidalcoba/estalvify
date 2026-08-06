@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isEmailAllowed } from "@/lib/auth/allowed-emails";
 import { revokeUserAccess } from "@/lib/auth/revoke";
+import { hasHouseholdAccessByEmail } from "@/lib/household/access";
 
 export async function proxy(request: NextRequest) {
   const session = await auth();
@@ -15,13 +16,16 @@ export async function proxy(request: NextRequest) {
   // Enforce ALLOWED_EMAILS on LIVE sessions, not just at sign-in. Sign-in is
   // the only place Auth.js consults the allowlist, so without this a removed
   // user keeps a working 30-day session. The check is pure string matching —
-  // no extra query — and the revocation (delete the DB session rows, revoke
-  // MCP refresh tokens) only runs in the already-exceptional disallowed case.
+  // no extra query on the common path. When the allowlist misses, a household
+  // membership or a live invitation also passes (PLAN_MULTIUSER.md §7) — that
+  // lookup runs only in the exceptional case, and the revocation (delete the
+  // DB session rows, revoke MCP refresh tokens) only when all three fail.
   // With the session rows gone, the next request carries a cookie that
   // resolves to nothing, so this cannot loop.
   if (
     session?.user &&
-    !isEmailAllowed(session.user.email, process.env.ALLOWED_EMAILS)
+    !isEmailAllowed(session.user.email, process.env.ALLOWED_EMAILS) &&
+    !(await hasHouseholdAccessByEmail(session.user.email))
   ) {
     await revokeUserAccess(session.user.id);
     return NextResponse.redirect(new URL("/login", request.url));
@@ -58,7 +62,15 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/sw.js");
 
   if (!session?.user && !isPublicPath) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const login = new URL("/login", request.url);
+    // Preserve the destination through the login round-trip (the login page
+    // validates it as a same-origin relative path). What made this matter:
+    // an invite link (/invite/<token>) opened while signed out must come
+    // back to the invite after Google, not land on the dashboard.
+    if (request.method === "GET" && pathname !== "/") {
+      login.searchParams.set("callbackUrl", pathname + request.nextUrl.search);
+    }
+    return NextResponse.redirect(login);
   }
 
   if (session?.user && pathname === "/login") {

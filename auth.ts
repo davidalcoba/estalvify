@@ -7,6 +7,10 @@ import Google from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 import { isEmailAllowed } from "@/lib/auth/allowed-emails";
 import { isSignupAllowed } from "@/lib/auth/signup-policy";
+import {
+  hasActiveInviteByEmail,
+  hasHouseholdAccessByEmail,
+} from "@/lib/household/access";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -36,9 +40,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     //    exist in the database, so registration is closed no matter what the
     //    allowlist says. Set ALLOW_SIGNUP=true only to bootstrap a fresh
     //    database (first login has no row to match), then turn it back off.
+    // Household invitations (PLAN_MULTIUSER.md §7) are an ADDITIVE third way
+    // through both gates: a live invite or an existing membership passes gate
+    // 1 when the allowlist misses, and a live invite authorizes the user-row
+    // creation gate 2 would otherwise refuse. Nothing existing is loosened —
+    // no invite, no change.
     async signIn({ profile, user }) {
       const email = profile?.email ?? user?.email;
-      if (!isEmailAllowed(email, process.env.ALLOWED_EMAILS)) return false;
+      if (!isEmailAllowed(email, process.env.ALLOWED_EMAILS)) {
+        if (!email || !(await hasHouseholdAccessByEmail(email))) return false;
+      }
       if (isSignupAllowed(process.env.ALLOW_SIGNUP)) return true;
       if (!email) return false;
       const existing = await prisma.user.findFirst({
@@ -47,7 +58,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         where: { email: { equals: email, mode: "insensitive" } },
         select: { id: true },
       });
-      return existing !== null;
+      if (existing !== null) return true;
+      return hasActiveInviteByEmail(email);
     },
     // Expose user.id in the session object
     session({ session, user }) {

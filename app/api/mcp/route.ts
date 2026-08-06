@@ -9,7 +9,7 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { verifyAccessToken } from "@/lib/mcp/oauth";
 import { registerTools } from "@/lib/mcp/tools";
-import { scopesFromClaim } from "@/lib/mcp/scopes";
+import { scopesForRole, scopesFromClaim } from "@/lib/mcp/scopes";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -22,13 +22,20 @@ async function verifyToken(
   if (!bearerToken) return undefined;
   const claims = await verifyAccessToken(bearerToken);
   if (!claims) return undefined;
+  // Legacy tokens (no household claims) = own-owner: they were minted when
+  // the only user WAS the owner, and they age out within the hour.
+  const role = claims.role ?? "OWNER";
   return {
     token: bearerToken,
     clientId: claims.clientId,
     // Legacy tokens without a scope claim keep full access (they expire within
-    // the hour); tools enforce read/write against this list.
-    scopes: scopesFromClaim(claims.scope),
-    extra: { userId: claims.userId },
+    // the hour); tools enforce read/write against this list. The role is the
+    // ceiling: a VIEWER's token is read-only even if the claim says more.
+    scopes: scopesForRole(scopesFromClaim(claims.scope), role),
+    extra: {
+      userId: claims.userId,
+      dataUserId: claims.dataUserId ?? claims.userId,
+    },
   };
 }
 

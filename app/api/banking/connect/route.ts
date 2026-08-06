@@ -5,7 +5,8 @@
 // connection — the callback will restore that connection instead of creating new accounts.
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getScope } from "@/lib/auth/scope";
+import { roleAllows } from "@/lib/auth/roles";
 import { prisma } from "@/lib/prisma";
 import { createBankingSession } from "@/lib/banking/enable-banking";
 import { z } from "zod";
@@ -18,9 +19,12 @@ const connectSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
+  const scope = await getScope();
+  if (!scope) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!roleAllows(scope.role, "write")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -36,7 +40,7 @@ export async function POST(request: NextRequest) {
     const existing = await prisma.bankConnection.findFirst({
       where: {
         id: reconnectConnectionId,
-        userId: session.user.id,
+        userId: scope.dataUserId,
         // Allow re-auth for EXPIRED and ACTIVE connections.
         // ACTIVE connections may also need a fresh consent to reset PSD2 rate limits.
         status: { in: ["EXPIRED", "ACTIVE"] },
@@ -81,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     await prisma.bankConnection.create({
       data: {
-        userId: session.user.id,
+        userId: scope.dataUserId,
         bankId: aspspName,
         bankName: aspspName,
         country: aspspCountry,

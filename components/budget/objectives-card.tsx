@@ -11,6 +11,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useCanWrite } from "@/components/layout/role-provider";
 import {
   ChevronRight,
   Loader2,
@@ -83,6 +84,7 @@ export function ObjectivesCard({
   locale,
 }: ObjectivesCardProps) {
   const router = useRouter();
+  const canWrite = useCanWrite();
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirm, setConfirm] = useState<{ categoryId: string; name: string } | null>(null);
@@ -147,6 +149,7 @@ export function ObjectivesCard({
             {elapsedPct}% elapsed
           </span>
         </CardTitle>
+        {canWrite && (
         <Button
           variant="ghost"
           size="sm"
@@ -159,6 +162,7 @@ export function ObjectivesCard({
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add
         </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {incomeObjectives.length > 0 && (
@@ -489,9 +493,10 @@ export function ObjectivesCard({
                             </ul>
                           )}
 
-                          {/* `xs` + wrap: at `sm` the two labels overflowed the
-                              panel on a phone. Short labels — the panel is
-                              already about this category's manual amount. */}
+                          {canWrite && (
+                          /* `xs` + wrap: at `sm` the two labels overflowed the
+                             panel on a phone. Short labels — the panel is
+                             already about this category's manual amount. */
                           <div className="flex flex-wrap justify-end gap-2 border-t pt-2">
                             {o.extra > 0 && (
                               <Button
@@ -524,6 +529,7 @@ export function ObjectivesCard({
                               {o.extra > 0 ? "Edit manual" : "Add manual"}
                             </Button>
                           </div>
+                          )}
                         </div>
                       )}
                     </li>
@@ -543,6 +549,7 @@ export function ObjectivesCard({
                     <li key={o.categoryId} className="text-sm">
                       <div className="flex items-center gap-3">
                         <PiggyBank className="h-3.5 w-3.5 shrink-0 text-success" />
+                        {canWrite ? (
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
@@ -557,6 +564,11 @@ export function ObjectivesCard({
                         >
                           {o.categoryName}
                         </button>
+                        ) : (
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {o.categoryName}
+                        </span>
+                        )}
                         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                           {fmt0(o.assigned)}/mo
                         </span>
@@ -567,6 +579,7 @@ export function ObjectivesCard({
                         >
                           {fmt0(o.balance ?? 0)}
                         </span>
+                        {canWrite && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -579,6 +592,7 @@ export function ObjectivesCard({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                        )}
                       </div>
                     </li>
                   ))}

@@ -10,6 +10,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Loader2, Plus, Repeat, Sparkles, Trash2, X } from "lucide-react";
+import { useCanWrite } from "@/components/layout/role-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -120,6 +121,7 @@ export function SeriesManager({
   const [draft, setDraft] = useState<Draft | null>(
     prefill ? { ...EMPTY, ...prefill } : null
   );
+  const canWrite = useCanWrite();
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
   // The matcher is internal machinery (arrival recognition); it hides under
@@ -259,7 +261,7 @@ export function SeriesManager({
 
   return (
     <div className="space-y-6">
-      {visibleSuggestions.length > 0 && (
+      {canWrite && visibleSuggestions.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -309,15 +311,18 @@ export function SeriesManager({
           title="Register your recurring charges and income"
           description="Each series feeds its category in the Budget and shows up in Upcoming."
         >
+          {canWrite && (
           <Button onClick={() => { setAdvancedOpen(false); setDraft({ ...EMPTY }); }}>
             <Plus className="mr-2 h-4 w-4" />
             Add series
           </Button>
+          )}
         </EmptyState>
       ) : (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Series</CardTitle>
+            {canWrite && (
             <Button
               variant="ghost"
               size="sm"
@@ -328,6 +333,7 @@ export function SeriesManager({
               <Plus className="mr-1 h-3.5 w-3.5" />
               Add
             </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             {[
@@ -361,6 +367,7 @@ export function SeriesManager({
                         amount wrap to a second line so the name keeps the
                         width. */}
                     <div className="flex items-center gap-3">
+                      {canWrite ? (
                       <button
                         type="button"
                         className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
@@ -371,6 +378,14 @@ export function SeriesManager({
                           <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
                         )}
                       </button>
+                      ) : (
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {s.displayName}
+                        {!s.active && (
+                          <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
+                        )}
+                      </span>
+                      )}
                       <span className="hidden sm:inline-flex">{chip}</span>
                       <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
                         {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
@@ -382,6 +397,7 @@ export function SeriesManager({
                         {s.direction === "CREDIT" ? "+" : "−"}
                         {fmt(s.expectedAmount)}
                       </span>
+                      {canWrite && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -392,6 +408,7 @@ export function SeriesManager({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
+                      )}
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2 text-xs sm:hidden">
                       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">

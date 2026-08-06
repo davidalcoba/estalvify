@@ -3,6 +3,7 @@
 import { useState, useRef, useTransition } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import { renameAccount } from "@/app/(app)/accounts/actions";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 interface AccountNameEditorProps {
   accountId: string;
@@ -15,6 +16,11 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
   const [saved, setSaved] = useState(initialName);
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const canWrite = useCanWrite();
+
+  if (!canWrite) {
+    return <span className="text-sm font-medium">{saved}</span>;
+  }
 
   function startEditing() {
     setEditing(true);
