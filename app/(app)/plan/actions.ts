@@ -17,6 +17,30 @@ function revalidate(): void {
   revalidatePath("/forecast");
 }
 
+// v4: the monthly savings GOAL — the input the variable budget derives from.
+// Stored per month so the progression stays on record. Returns the failure
+// instead of throwing (production masks thrown server-action messages).
+export async function setSavingsTarget(
+  year: number,
+  month: number,
+  amount: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const userId = await requireUserId();
+    if (!Number.isFinite(amount) || amount < 0) throw new Error("Invalid amount");
+    if (month < 1 || month > 12) throw new Error("Invalid month");
+    await prisma.budget.upsert({
+      where: { userId_year_month: { userId, year, month } },
+      create: { userId, year, month, savingsTarget: amount },
+      update: { savingsTarget: amount },
+    });
+    revalidate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 // A category objective is a budget item; rollover: true makes it a fund whose
 // remainder accumulates. Upserting this month's row is all it takes —
 // propagation copies it forward from here.
