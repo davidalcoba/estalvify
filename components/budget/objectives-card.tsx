@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatCurrencyRound } from "@/lib/formatters";
 import { incomeTone } from "@/lib/budget/pace";
 import type { CategoryObjective, IncomeObjective } from "@/lib/budget/month-status";
 import type { ControlRow } from "@/lib/budget/control";
@@ -47,6 +47,20 @@ interface ObjectivesCardProps {
   month: number;
   currency: string;
   locale: string;
+}
+
+/** Bar geometry never leaves 0–100; a zero budget must not produce NaN. */
+const clampPct = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0);
+
+/**
+ * The row's colour. Grey while nothing has been spent — a state of OK on an
+ * untouched category is not news worth colouring green.
+ */
+function toneVar(state: ControlRow["state"], consumed: number): string {
+  if (consumed === 0) return "color-mix(in oklch, var(--foreground) 22%, transparent)";
+  if (state === "EXCEDIDO") return "var(--destructive)";
+  if (state === "RIESGO") return "var(--warning)";
+  return "var(--success)";
 }
 
 interface Draft {
@@ -75,6 +89,7 @@ export function ObjectivesCard({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  const fmt0 = (n: number) => formatCurrencyRound(n, currency, locale);
   const elapsedPct = Math.round(monthElapsed * 100);
 
   function save() {
@@ -147,84 +162,106 @@ export function ObjectivesCard({
         {incomeObjectives.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">Income</p>
-            <ul className="space-y-4">
+            <ul className="space-y-1.5">
               {incomeObjectives.map((o) => {
-                const receivedPct =
-                  o.expected > 0 ? Math.round((o.received / o.expected) * 100) : 0;
+                // Same bar-as-row as Charges, inverted polarity: the fill is
+                // money that HAS arrived, so a full bar is the good end.
+                const receivedPct = clampPct((o.received / o.expected) * 100);
                 const tone = incomeTone(o.received, o.expected, monthElapsed);
-                const barClass =
+                const toneVal =
                   tone === "success"
-                    ? "bg-success"
+                    ? "var(--success)"
                     : tone === "warning"
-                      ? "bg-warning"
-                      : "bg-muted-foreground/40";
-                const pctClass =
-                  tone === "success"
-                    ? "text-success"
-                    : tone === "warning"
-                      ? "text-warning"
-                      : "text-muted-foreground";
+                      ? "var(--warning)"
+                      : "color-mix(in oklch, var(--foreground) 22%, transparent)";
+                const pending = o.expected - o.received;
                 const key = `income:${o.categoryId}`;
                 const isOpen = expandedId === key;
                 return (
                   <li key={key} className="text-sm">
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 items-center gap-1 text-left font-medium"
-                        onClick={() => setExpandedId(isOpen ? null : key)}
-                        aria-expanded={isOpen}
-                      >
-                        <ChevronRight
-                          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
-                            isOpen ? "rotate-90" : ""
-                          }`}
-                        />
-                        <span
-                          className="inline-block h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: o.categoryColor }}
-                        />
-                        <span className="min-w-0 truncate">{o.categoryName}</span>
-                      </button>
-                      <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
-                        {fmt(o.received)}
-                        <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isOpen ? null : key)}
+                      aria-expanded={isOpen}
+                      className={`relative isolate flex h-11 w-full items-center gap-2 overflow-hidden bg-muted px-3 text-left ${
+                        isOpen ? "rounded-t-lg" : "rounded-lg"
+                      }`}
+                    >
+                      <span
+                        className="absolute inset-y-0 left-0 -z-20"
+                        style={{
+                          width: `${receivedPct}%`,
+                          background: `color-mix(in oklch, ${toneVal} 40%, transparent)`,
+                        }}
+                      />
+                      <span
+                        className="absolute inset-y-0 -z-10 w-[1.5px] bg-foreground/30"
+                        style={{ left: `${elapsedPct}%` }}
+                      />
+                      <span
+                        className="inline-block h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: o.categoryColor }}
+                      />
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {o.categoryName}
                       </span>
                       <span
-                        className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${pctClass}`}
+                        className={`shrink-0 text-[13px] font-semibold tabular-nums ${
+                          pending > 0.005 ? "text-muted-foreground" : "text-success"
+                        }`}
                       >
-                        {receivedPct}%
+                        {pending > 0.005 ? fmt0(pending) : "✓"}
                       </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
-                      <span className="tabular-nums text-muted-foreground">
-                        {fmt(o.received)}
-                        <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
-                      </span>
-                    </div>
-                    <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                      {/* Inverted polarity: filling up is good — income arriving. */}
-                      <div
-                        className={`h-full rounded-full ${barClass}`}
-                        style={{ width: `${Math.min(100, receivedPct)}%` }}
+                      <ChevronRight
+                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                          isOpen ? "rotate-90" : ""
+                        }`}
                       />
-                    </div>
+                    </button>
 
-                    {isOpen && o.recurrings.length > 0 && (
-                      <ul className="mt-2 space-y-1 rounded-md bg-muted/40 p-3 text-xs">
-                        {o.recurrings.map((r, i) => (
-                          <li key={i} className="flex items-center justify-between gap-2">
-                            <span className="min-w-0 truncate text-muted-foreground">
-                              <Repeat className="mr-1 inline h-3 w-3" />
-                              {r.description}
-                            </span>
-                            <span className="shrink-0 tabular-nums">
-                              {r.status === "MATCHED" ? "✓ " : ""}
-                              {fmt(r.amount)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                    {isOpen && (
+                      <div className="space-y-2 rounded-b-lg border border-t-0 bg-muted/40 p-3 text-xs">
+                        <dl className="grid grid-cols-3 gap-2">
+                          <div>
+                            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Received
+                            </dt>
+                            <dd className="font-semibold tabular-nums">{fmt0(o.received)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Expected
+                            </dt>
+                            <dd className="font-semibold tabular-nums text-muted-foreground">
+                              {fmt0(o.expected)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Pace
+                            </dt>
+                            <dd className="font-semibold tabular-nums text-muted-foreground">
+                              {elapsedPct}%
+                            </dd>
+                          </div>
+                        </dl>
+                        {o.recurrings.length > 0 && (
+                          <ul className="space-y-1 border-t pt-2">
+                            {o.recurrings.map((r, i) => (
+                              <li key={i} className="flex items-center justify-between gap-2">
+                                <span className="min-w-0 truncate text-muted-foreground">
+                                  <Repeat className="mr-1 inline h-3 w-3" />
+                                  {r.description}
+                                </span>
+                                <span className="shrink-0 tabular-nums">
+                                  {r.status === "MATCHED" ? "✓ " : ""}
+                                  {fmt(r.amount)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     )}
                   </li>
                 );
@@ -243,7 +280,7 @@ export function ObjectivesCard({
             {control.length > 0 && (
               <div className={incomeObjectives.length > 0 ? "space-y-3 border-t pt-3" : "space-y-3"}>
               <p className="text-xs font-medium text-muted-foreground">Charges</p>
-              <ul className="space-y-4">
+              <ul className="space-y-1.5">
                 {control.map((c) => {
                   const o = detailById.get(c.categoryId) ?? {
                     categoryId: c.categoryId,
@@ -258,89 +295,134 @@ export function ObjectivesCard({
                     recurrings: [],
                     transactions: [],
                   };
-                  const consumedPct =
-                    c.assigned > 0 ? Math.round((c.consumed / c.assigned) * 100) : 0;
-                  const tone =
-                    c.state === "EXCEDIDO"
-                      ? "destructive"
-                      : c.state === "RIESGO"
-                        ? "warning"
-                        : "success";
-                  const barClass =
-                    tone === "destructive"
-                      ? "bg-destructive"
-                      : tone === "warning"
-                        ? "bg-warning"
-                        : "bg-success";
+                  const spentPct = clampPct((c.consumed / c.assigned) * 100);
+                  const projPct = clampPct((c.projectedEndOfMonth / c.assigned) * 100);
+                  const tone = toneVar(c.state, c.consumed);
                   const pctTone =
-                    tone === "destructive"
+                    c.state === "EXCEDIDO"
                       ? "text-destructive"
-                      : tone === "warning"
+                      : c.state === "RIESGO"
                         ? "text-warning"
                         : "text-success";
+                  const left = c.assigned - c.consumed;
                   const isOpen = expandedId === o.categoryId;
                   return (
                     <li key={o.categoryId} className="text-sm">
-                      {/* One line on desktop; on mobile the amounts wrap to
-                          their own line so the name never crushes them.
-                          Tapping the name unfolds the composition. */}
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          className="flex min-w-0 flex-1 items-center gap-1 text-left font-medium"
-                          onClick={() => setExpandedId(isOpen ? null : o.categoryId)}
-                          aria-expanded={isOpen}
-                        >
-                          <ChevronRight
-                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
-                              isOpen ? "rotate-90" : ""
-                            }`}
-                          />
-                          <span
-                            className="inline-block h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: o.categoryColor }}
-                          />
-                          <span className="min-w-0 truncate">{o.categoryName}</span>
-                        </button>
-                        <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
-                          {fmt(o.consumed)}
-                          <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
-                        </span>
+                      {/* The bar IS the row: solid = spent, light tint = what
+                          this pace still adds, the line where it lands, and a
+                          wall at the edge when it overshoots. One object, one
+                          number (what's left) — the overshoot chip only when
+                          there is one. */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isOpen ? null : o.categoryId)}
+                        aria-expanded={isOpen}
+                        className={`relative isolate flex h-11 w-full items-center gap-2 overflow-hidden bg-muted px-3 text-left ${
+                          isOpen ? "rounded-t-lg" : "rounded-lg"
+                        }`}
+                      >
                         <span
-                          className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${pctTone}`}
-                        >
-                          {consumedPct}%
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
-                        <span className="tabular-nums text-muted-foreground">
-                          {fmt(o.consumed)}
-                          <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
-                        </span>
-                      </div>
-                      <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full ${barClass}`}
-                          style={{ width: `${Math.min(100, consumedPct)}%` }}
+                          className="absolute inset-y-0 left-0 -z-20"
+                          style={{
+                            width: `${spentPct}%`,
+                            background: `color-mix(in oklch, ${tone} 40%, transparent)`,
+                          }}
                         />
-                        {/* Pace marker: where the month is. */}
-                        <div
-                          className="absolute top-0 h-full w-0.5 bg-foreground/50"
+                        <span
+                          className="absolute inset-y-0 -z-20"
+                          style={{
+                            left: `${spentPct}%`,
+                            width: `${Math.max(0, projPct - spentPct)}%`,
+                            background: `color-mix(in oklch, ${tone} 15%, transparent)`,
+                          }}
+                        />
+                        {projPct > spentPct + 1 && projPct < 99 && (
+                          <span
+                            className="absolute inset-y-0 -z-10 w-[1.5px]"
+                            style={{
+                              left: `${projPct}%`,
+                              background: `color-mix(in oklch, ${tone} 60%, transparent)`,
+                            }}
+                          />
+                        )}
+                        {c.state !== "OK" && (
+                          <span
+                            className="absolute inset-y-0 right-0 -z-10 w-[3px]"
+                            style={{ background: tone }}
+                          />
+                        )}
+                        <span
+                          className="absolute inset-y-0 -z-10 w-[1.5px] bg-foreground/30"
                           style={{ left: `${elapsedPct}%` }}
                         />
-                      </div>
-                      {/* The projection beats the percentage: "heading to
-                          1.580 vs 1.300" is actionable on the 12th. */}
-                      <p className="mt-1 pl-4 text-xs text-muted-foreground">
-                        → {fmt(c.projectedEndOfMonth)}
+                        <span
+                          className="inline-block h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: o.categoryColor }}
+                        />
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {o.categoryName}
+                        </span>
                         {c.projectedDeviation > 0 && (
-                          <span className={pctTone}> (+{fmt(c.projectedDeviation)})</span>
+                          <span
+                            className={`shrink-0 rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums ${pctTone}`}
+                            style={{ background: `color-mix(in oklch, ${tone} 16%, transparent)` }}
+                          >
+                            +{fmt0(c.projectedDeviation)}
+                          </span>
                         )}
-                        <span className="text-muted-foreground/60"> · month {elapsedPct}%</span>
-                      </p>
+                        <span
+                          className={`shrink-0 text-[13px] font-semibold tabular-nums ${
+                            left < 0 ? "text-destructive" : "text-muted-foreground"
+                          }`}
+                        >
+                          {fmt0(left)}
+                        </span>
+                        <ChevronRight
+                          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                            isOpen ? "rotate-90" : ""
+                          }`}
+                        />
+                      </button>
 
                       {isOpen && (
-                        <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-3 text-xs">
+                        <div className="space-y-2 rounded-b-lg border border-t-0 bg-muted/40 p-3 text-xs">
+                          {/* The detail is where the full numbers belong. */}
+                          <dl className="grid grid-cols-4 gap-2">
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                Spent
+                              </dt>
+                              <dd className="font-semibold tabular-nums">{fmt0(c.consumed)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                Budget
+                              </dt>
+                              <dd className="font-semibold tabular-nums text-muted-foreground">
+                                {fmt0(c.assigned)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                Projected
+                              </dt>
+                              <dd
+                                className={`font-semibold tabular-nums ${
+                                  c.state === "OK" ? "" : pctTone
+                                }`}
+                              >
+                                {fmt0(c.projectedEndOfMonth)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                Pace
+                              </dt>
+                              <dd className="font-semibold tabular-nums text-muted-foreground">
+                                {elapsedPct}%
+                              </dd>
+                            </div>
+                          </dl>
                           {/* Composition: recurring base + manual extra. */}
                           {(o.recurrings.length > 0 || o.extra > 0) && (
                             <ul className="space-y-1">
@@ -456,15 +538,15 @@ export function ObjectivesCard({
                         >
                           {o.categoryName}
                         </button>
-                        <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">
-                          {fmt(o.assigned)}/mo
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {fmt0(o.assigned)}/mo
                         </span>
                         <span
-                          className={`hidden w-24 shrink-0 text-right tabular-nums sm:inline ${
+                          className={`w-16 shrink-0 text-right text-xs font-medium tabular-nums ${
                             (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
                           }`}
                         >
-                          {fmt(o.balance ?? 0)}
+                          {fmt0(o.balance ?? 0)}
                         </span>
                         <Button
                           variant="ghost"
@@ -478,18 +560,6 @@ export function ObjectivesCard({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 pl-6 text-xs sm:hidden">
-                        <span className="tabular-nums text-muted-foreground">
-                          {fmt(o.assigned)}/mo
-                        </span>
-                        <span
-                          className={`tabular-nums ${
-                            (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
-                          }`}
-                        >
-                          {fmt(o.balance ?? 0)}
-                        </span>
                       </div>
                     </li>
                   ))}
