@@ -4,7 +4,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { formatDate, formatCurrency } from "@/lib/formatters";
@@ -314,8 +314,7 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId } = await requireScope("read");
   const params = await searchParams;
   const { language, timezone } = await getUserPrefs(userId);
 

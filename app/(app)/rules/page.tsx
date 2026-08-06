@@ -1,7 +1,7 @@
 // Rules page — create and manage transaction categorization rules
 
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,8 +11,7 @@ import { toCategoryRuleDTO } from "@/lib/rules/rule-dto";
 export const metadata: Metadata = { title: "Rules" };
 
 export default async function RulesPage() {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId } = await requireScope("read");
 
   const [categories, savedRules, prefs] = await Promise.all([
     prisma.category.findMany({

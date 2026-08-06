@@ -1,14 +1,16 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { generateNotificationsForUser } from "@/lib/notifications/generate";
 
+// The bell is shared household state in v1 (PLAN_MULTIUSER.md §8): marking
+// read affects every member, so it stays a write. Per-member read state is
+// phase 5.
 async function requireUserId(): Promise<string> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  return session.user.id;
+  const { dataUserId } = await requireScope("write");
+  return dataUserId;
 }
 
 // Mark a single notification read. Scoped by userId; a no-op if already read or

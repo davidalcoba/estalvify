@@ -2,7 +2,8 @@
 // Provides sidebar + header. Redirects unauthenticated users to /login.
 
 import { redirect } from "next/navigation";
-import { auth, signOut } from "@/auth";
+import { signOut } from "@/auth";
+import { getScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -10,13 +11,15 @@ import { AppHeader } from "@/components/layout/app-header";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const scope = await getScope();
 
-  if (!session?.user) {
+  if (!scope) {
     redirect("/login");
   }
 
-  const userId = session.user.id;
+  // Domain data (counts, notifications) is the household's; the sidebar
+  // identity is the signed-in member's.
+  const userId = scope.dataUserId;
 
   const [pendingCategorizations, notificationRows, unreadCount] =
     await Promise.all([
@@ -57,7 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <AppSidebar
-        user={session.user}
+        user={scope.actor}
         pendingCategorizations={pendingCategorizations}
         onSignOut={handleSignOut}
       />

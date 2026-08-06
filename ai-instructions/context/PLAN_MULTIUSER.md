@@ -241,12 +241,17 @@ lo que es una invitación — **sin abrir nada más**:
 
 ## 9. Fases (un PR cada una, por el camino feature → `preview` → `main`)
 
-- [ ] **Fase 1 — Modelo + scope (sin cambio visible).** Migración con las 3
-  tablas + backfill; `lib/auth/scope.ts` (matriz pura + tests, helper con IO);
-  refactor de todos los `actions.ts`/pages/rutas API a `requireScope`, cada uno
-  con su nivel. El único usuario actual queda como OWNER de su hogar y no nota
-  nada. *Tamaño: M–L (mecánico pero ancho: ~44 ficheros).* Gate: typecheck,
-  lint, tests, y smoke manual en preview.
+- [x] **Fase 1 — Modelo + scope (sin cambio visible).** ✅ 2026-08-06 —
+  Migración `20260806130000_households` (3 tablas + backfill idempotente);
+  matriz pura en `lib/auth/roles.ts` + `requireScope`/`getScope` en
+  `lib/auth/scope.ts` (bootstrap lazy del hogar incluido) con tests; refactor
+  completo de `app/(app)` (pages, actions, layout) y de
+  `api/banking/{connect,sync}` (write) y `api/export` (admin, con `getScope` +
+  `roleAllows` para responder 401/403); `deleteMyAccount` es `admin`;
+  el export GDPR incluye el hogar y sus miembros (sin token hashes); y un test
+  de guardia (`lib/auth/scope-guard.test.ts`) impide que `session.user.id`
+  reaparezca en las zonas guardadas. OAuth/MCP/cron/cola intactos como estaba
+  previsto.
 - [ ] **Fase 2 — Invitaciones + miembros.** Settings → Members (card en la
   ruta existente de settings, vistas desktop/mobile), server actions de
   invitar/revocar/cambiar rol/expulsar (nivel `admin`), página `/invite/<token>`

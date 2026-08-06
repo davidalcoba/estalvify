@@ -6,7 +6,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { buildMonthStatus } from "@/lib/budget/month-status";
@@ -21,8 +21,8 @@ import { Wallet } from "lucide-react";
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const session = await auth();
-  const userId = session!.user.id;
+  const scope = await requireScope("read");
+  const userId = scope.dataUserId;
   const { locale, timezone, currency } = await getUserPrefs(userId);
 
   const monthStatusPromise = syncPlannedState(userId, timezone, currency, locale).then(
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
   const hasAccounts =
     (await prisma.bankAccount.count({ where: { userId, isActive: true } })) > 0;
 
-  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const firstName = scope.actor.name?.split(" ")[0] ?? "there";
 
   if (!hasAccounts) {
     return (

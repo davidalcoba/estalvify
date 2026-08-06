@@ -6,7 +6,7 @@
 // with the sync alerts, which can produce several per outage.
 
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { NotificationList } from "@/components/notifications/notification-list";
@@ -21,8 +21,7 @@ export default async function NotificationsPage({
 }: {
   searchParams: Promise<{ unread?: string; page?: string }>;
 }) {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId } = await requireScope("read");
 
   const params = await searchParams;
   const unreadOnly = params.unread === "1";

@@ -585,6 +585,22 @@ Rules:
 - Never accept a client-provided `userId` as source of truth
 - Always derive user context from authenticated session
 
+**Households (PLAN_MULTIUSER.md).** Since phase 1 of the multi-user plan, the
+`userId` that scopes domain data is the **household owner's**, resolved by
+`requireScope(level)` / `getScope()` in `lib/auth/scope.ts` (session →
+`HouseholdMember` → `Household.ownerUserId`), not read straight off the
+session. `Scope` distinguishes `dataUserId` (filters every domain query) from
+`actorUserId` (the signed-in member — personal prefs, audit, OAuth grants).
+Levels are `read`/`write`/`admin`, mapped to roles VIEWER/EDITOR/OWNER by the
+pure matrix in `lib/auth/roles.ts` (tested). Every page/action under
+`app/(app)` plus `api/banking/{connect,sync}` and `api/export` declares its
+level; API routes use `getScope` + `roleAllows` to answer 401 vs 403. A guard
+test (`lib/auth/scope-guard.test.ts`) fails the build if `session.user.id`
+reappears in those areas. A user with no membership gets a household
+lazily (the `ALLOW_SIGNUP` bootstrap path). OAuth consent, the MCP token path,
+cron and the queue consumer still derive identity their own way — they pick up
+household awareness in later phases of the plan.
+
 ## Privacy & data lifecycle (GDPR)
 
 The self-service rights live in **Settings → Privacy & data**

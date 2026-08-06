@@ -3,7 +3,8 @@
 // Returns immediately — the actual sync runs in the consumer.
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getScope } from "@/lib/auth/scope";
+import { roleAllows } from "@/lib/auth/roles";
 import { prisma } from "@/lib/prisma";
 import { send } from "@vercel/queue";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
@@ -12,9 +13,12 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ connectionId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const scope = await getScope();
+  if (!scope) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!roleAllows(scope.role, "write")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { connectionId } = await params;
@@ -22,7 +26,7 @@ export async function POST(
   const connection = await prisma.bankConnection.findFirst({
     where: {
       id: connectionId,
-      userId: session.user.id,
+      userId: scope.dataUserId,
       status: { in: ["ACTIVE", "SYNCING"] },
     },
   });
@@ -40,7 +44,7 @@ export async function POST(
   try {
     const { messageId } = await send<SyncConnectionMessage>(TOPICS.syncConnection, {
       connectionId,
-      userId: session.user.id,
+      userId: scope.dataUserId,
     });
     return NextResponse.json({ queued: true, messageId });
   } catch (err) {

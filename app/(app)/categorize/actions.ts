@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { buildUncategorizedWhere, BULK_CATEGORIZE_CAP } from "@/lib/categorize";
@@ -18,9 +18,7 @@ function assertWithinBulkCap(count: number): void {
 // ─────────────────────────────────────────────
 
 export async function categorizeTransaction(transactionId: string, categoryId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const [tx, cat] = await Promise.all([
     prisma.transaction.findUnique({ where: { id: transactionId }, select: { userId: true } }),
@@ -61,9 +59,7 @@ export async function categorizeTransaction(transactionId: string, categoryId: s
 // ─────────────────────────────────────────────
 
 export async function bulkCategorizeByIds(transactionIds: string[], categoryId: string): Promise<void> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const cat = await prisma.category.findUnique({
     where: { id: categoryId },
@@ -102,9 +98,7 @@ export async function bulkCategorizeByIds(transactionIds: string[], categoryId: 
 // ─────────────────────────────────────────────
 
 export async function bulkCategorize(searchQuery: string, categoryId: string): Promise<number> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const cat = await prisma.category.findUnique({
     where: { id: categoryId },

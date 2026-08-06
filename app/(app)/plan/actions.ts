@@ -1,14 +1,13 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { upsertBudgetItemForUser, deleteBudgetItemForUser } from "@/lib/mcp/manage";
 
 async function requireUserId(): Promise<string> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  return session.user.id;
+  const { dataUserId } = await requireScope("write");
+  return dataUserId;
 }
 
 function revalidate(): void {

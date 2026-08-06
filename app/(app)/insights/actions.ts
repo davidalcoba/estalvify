@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { formatDate } from "@/lib/formatters";
@@ -35,9 +35,8 @@ export type InsightsResult =
   | { status: "error"; message: string };
 
 export async function generateInsights(): Promise<InsightsResult> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  // Read: generation only derives from household data, it mutates nothing.
+  const { dataUserId: userId } = await requireScope("read");
   const { locale, language, timezone, currency } = await getUserPrefs(userId);
 
   const { year, month } = currentYearMonth(timezone);

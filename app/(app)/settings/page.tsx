@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsForm } from "@/components/settings/settings-form";
@@ -11,8 +11,7 @@ import { seedDefaultCategories } from "./actions";
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId } = await requireScope("read");
 
   const [user, categories] = await Promise.all([
     prisma.user.findUnique({

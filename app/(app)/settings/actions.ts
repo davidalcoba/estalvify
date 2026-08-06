@@ -1,6 +1,7 @@
 "use server";
 
-import { auth, signOut } from "@/auth";
+import { signOut } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { CategoryKind } from "@/app/generated/prisma";
@@ -12,8 +13,10 @@ export async function updatePreferences(data: {
   locale: string;
   language: string;
 }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  // Prefs still live in one bundle on the owner's row. The personal
+  // (language/locale/timezone) vs household (currency) split is phase 5 of
+  // PLAN_MULTIUSER.md.
+  const { dataUserId } = await requireScope("write");
 
   const { timezone, currency, locale, language } = data;
 
@@ -21,7 +24,7 @@ export async function updatePreferences(data: {
   if (!timezone || !currency || !locale || !language) throw new Error("Missing fields");
 
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: dataUserId },
     data: { timezone, currency, locale, language },
   });
 
@@ -45,9 +48,7 @@ export interface PlanningSettingsInput {
 // Planning & alert settings. Under the v3 model this is only the cash-flow
 // threshold: income and charges come from planned items, savings is derived.
 export async function updatePlanningSettings(input: PlanningSettingsInput) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const { lowBalanceThreshold } = input;
   if (
@@ -76,10 +77,11 @@ export async function updatePlanningSettings(input: PlanningSettingsInput) {
 // effort), every user-owned row is removed, and the session ends. The UI
 // gates this behind an explicit typed confirmation.
 export async function deleteMyAccount() {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  // Owner-only: deleting the account deletes the household's data. A member
+  // deleting *their own* profile (not the household) is a phase-2 flow.
+  const { dataUserId } = await requireScope("admin");
 
-  await deleteUserAccount(session.user.id);
+  await deleteUserAccount(dataUserId);
 
   // The user row (and with it every session row) is gone; this clears the
   // cookie and lands on the login screen.
@@ -107,9 +109,7 @@ const DEFAULT_CATEGORIES: Array<{
 ];
 
 export async function seedDefaultCategories() {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  const userId = session.user.id;
+  const { dataUserId: userId } = await requireScope("write");
 
   const count = await prisma.category.count({ where: { userId } });
   if (count > 0) return;
@@ -144,20 +144,19 @@ export async function seedDefaultCategories() {
 }
 
 export async function createCategory(data: { name: string; color: string }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const name = data.name?.trim();
   if (!name) throw new Error("Name is required");
 
   const last = await prisma.category.findFirst({
-    where: { userId: session.user.id, parentId: null, isActive: true },
+    where: { userId: dataUserId, parentId: null, isActive: true },
     orderBy: { sortOrder: "desc" },
   });
 
   await prisma.category.create({
     data: {
-      userId: session.user.id,
+      userId: dataUserId,
       name,
       color: data.color,
       sortOrder: (last?.sortOrder ?? -1) + 1,
@@ -168,14 +167,13 @@ export async function createCategory(data: { name: string; color: string }) {
 }
 
 export async function updateCategory(id: string, data: { name: string; color: string }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const name = data.name?.trim();
   if (!name) throw new Error("Name is required");
 
   const cat = await prisma.category.findUnique({ where: { id } });
-  if (!cat || cat.userId !== session.user.id) throw new Error("Not found");
+  if (!cat || cat.userId !== dataUserId) throw new Error("Not found");
 
   await prisma.category.update({
     where: { id },
@@ -186,14 +184,13 @@ export async function updateCategory(id: string, data: { name: string; color: st
 }
 
 export async function deleteCategory(id: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const cat = await prisma.category.findUnique({
     where: { id },
     include: { children: true },
   });
-  if (!cat || cat.userId !== session.user.id) throw new Error("Not found");
+  if (!cat || cat.userId !== dataUserId) throw new Error("Not found");
 
   // Soft-delete children first
   if (cat.children.length > 0) {
@@ -212,14 +209,13 @@ export async function deleteCategory(id: string) {
 }
 
 export async function createSubcategory(parentId: string, data: { name: string; color: string }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const name = data.name?.trim();
   if (!name) throw new Error("Name is required");
 
   const parent = await prisma.category.findUnique({ where: { id: parentId } });
-  if (!parent || parent.userId !== session.user.id) throw new Error("Not found");
+  if (!parent || parent.userId !== dataUserId) throw new Error("Not found");
 
   const last = await prisma.category.findFirst({
     where: { parentId, isActive: true },
@@ -228,7 +224,7 @@ export async function createSubcategory(parentId: string, data: { name: string; 
 
   await prisma.category.create({
     data: {
-      userId: session.user.id,
+      userId: dataUserId,
       name,
       color: data.color,
       parentId,

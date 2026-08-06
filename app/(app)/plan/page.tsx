@@ -10,7 +10,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { buildMonthStatus } from "@/lib/budget/month-status";
@@ -71,8 +71,7 @@ async function PlanBody({
 }
 
 export default async function PlanPage({ searchParams }: PageProps) {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId } = await requireScope("read");
   const [prefs, params] = await Promise.all([getUserPrefs(userId), searchParams]);
 
   const current = currentYearMonth(prefs.timezone);

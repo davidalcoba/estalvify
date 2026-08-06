@@ -1,16 +1,15 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { deleteSession } from "@/lib/banking/enable-banking";
 import { revalidatePath } from "next/cache";
 
 export async function disconnectBank(connectionId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const connection = await prisma.bankConnection.findFirst({
-    where: { id: connectionId, userId: session.user.id },
+    where: { id: connectionId, userId: dataUserId },
   });
 
   if (!connection) throw new Error("Connection not found");
@@ -26,11 +25,10 @@ export async function disconnectBank(connectionId: string) {
 }
 
 export async function disconnectBankGroup(connectionIds: string[]) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const connections = await prisma.bankConnection.findMany({
-    where: { id: { in: connectionIds }, userId: session.user.id },
+    where: { id: { in: connectionIds }, userId: dataUserId },
     select: { id: true, sessionId: true },
   });
 
@@ -45,11 +43,10 @@ export async function disconnectBankGroup(connectionIds: string[]) {
 }
 
 export async function deleteAccount(accountId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const account = await prisma.bankAccount.findFirst({
-    where: { id: accountId, userId: session.user.id },
+    where: { id: accountId, userId: dataUserId },
     select: { id: true, bankConnectionId: true },
   });
 
@@ -77,14 +74,13 @@ export async function deleteAccount(accountId: string) {
 }
 
 export async function renameAccount(accountId: string, name: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Name cannot be empty");
 
   const account = await prisma.bankAccount.findFirst({
-    where: { id: accountId, userId: session.user.id },
+    where: { id: accountId, userId: dataUserId },
   });
 
   if (!account) throw new Error("Account not found");

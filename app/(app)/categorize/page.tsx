@@ -2,7 +2,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,8 +96,7 @@ interface CategorizeBodyProps {
 }
 
 async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBodyProps) {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId } = await requireScope("read");
   const where = buildUncategorizedWhere(userId);
 
   const [total, transactions, categories, prefs] = await Promise.all([

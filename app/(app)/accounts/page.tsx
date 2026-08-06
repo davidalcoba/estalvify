@@ -3,7 +3,7 @@
 // Allows connecting new banks via Enable Banking OAuth2
 
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { expireStaleConsents } from "@/lib/banking/connection-status";
@@ -52,7 +52,7 @@ export default async function AccountsPage({
 }: {
   searchParams: Promise<{ error?: string; connected?: string; reconnected?: string }>;
 }) {
-  const session = await auth();
+  const { dataUserId } = await requireScope("read");
   const params = await searchParams;
 
   const errorMessages: Record<string, string> = {
@@ -73,7 +73,7 @@ export default async function AccountsPage({
   // updating the connection status back to ACTIVE.
   await prisma.bankConnection.updateMany({
     where: {
-      userId: session!.user.id,
+      userId: dataUserId,
       status: "SYNCING",
       // eslint-disable-next-line react-hooks/purity -- async server component: runs once per request on the server, not during a React render
       updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
@@ -83,12 +83,12 @@ export default async function AccountsPage({
 
   // Proactively flip connections whose PSD2 consent has expired to EXPIRED, so
   // the Reconnect button appears without waiting for a sync to 401.
-  await expireStaleConsents({ userId: session!.user.id });
+  await expireStaleConsents({ userId: dataUserId });
 
   const [connections, prefs] = await Promise.all([
     prisma.bankConnection.findMany({
       where: {
-        userId: session!.user.id,
+        userId: dataUserId,
         status: { notIn: ["PENDING_REAUTH", "PENDING_SETUP"] },
       },
       include: {
@@ -102,7 +102,7 @@ export default async function AccountsPage({
       },
       orderBy: { createdAt: "desc" },
     }),
-    getUserPrefs(session!.user.id),
+    getUserPrefs(dataUserId),
   ]);
 
   const { locale, language, timezone } = prefs;
