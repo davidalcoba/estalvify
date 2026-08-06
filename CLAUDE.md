@@ -59,6 +59,37 @@ never reports.
 So: never open or merge a pull request into `main` from a feature branch, and
 merge into `preview` first.
 
+### When the release is blocked by a cancelled check
+
+`ci.yml` runs on **both** the push to `preview` and the pull request into
+`main`, and both produce a job named `Typecheck · Lint · Test`. The ruleset
+requires that *context*, and when several check runs share a name GitHub can
+settle on the wrong one: observed 2026-08-06, `main` refused the merge with
+`Required status check "Typecheck · Lint · Test" is cancelled` while the pull
+request's own run was green — it was reading the **push** run on `preview`,
+which GitHub itself had cancelled after 15 minutes without ever assigning a
+runner (job `cancelled`, zero steps executed, no log to download; a second
+attempt died in `Set up job` before checkout). Nothing to do with the code:
+the same tree had already passed CI on the feature branch, and `git rev-parse
+<sha>^{tree}` proved the trees identical.
+
+Recovery, knowing that a Claude Code session **cannot** re-run a workflow
+(`POST /actions/runs/{id}/rerun` → 403 "Resource not accessible by
+integration"):
+
+- Closing and reopening the pull request re-fires its `pull_request`
+  workflows (both listen to the default types, `reopened` included) — enough
+  when the failure is on the PR's own run, and it took three attempts that
+  day.
+- It does **not** re-fire the `push` run on `preview`. That one only comes
+  back with a new commit on `preview`, so the fix is a further feature-branch
+  → `preview` pull request, never a direct push.
+
+Before assuming a red release means broken code, check whether the job ever
+got a runner: `GET /actions/runs/{id}/jobs` showing `conclusion: cancelled`
+with an empty `steps` array and no `runner_name` is an Actions outage, not a
+regression.
+
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).
 Use it against the Vercel REST API at `https://api.vercel.com`.
