@@ -66,8 +66,8 @@ export function CascadeCard({
           </div>
           {Math.abs(cascade.assignmentGap) > 1 && (
             <p className="text-xs text-warning">
-              Category lines total {fmt(cascade.assignedVariable)} —{" "}
-              {cascade.assignmentGap > 0 ? "over" : "under"} the variable budget by{" "}
+              Lines {fmt(cascade.assignedVariable)} · gap{" "}
+              {cascade.assignmentGap > 0 ? "+" : "−"}
               {fmt(Math.abs(cascade.assignmentGap))}
             </p>
           )}

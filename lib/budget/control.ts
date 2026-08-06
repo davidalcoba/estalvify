@@ -21,9 +21,13 @@ export interface ControlCategoryInput {
   categoryColor: string;
   assigned: number;
   consumed: number;
+  /** Spent inside the current ISO week (same subtree rollup as consumed). */
+  weekConsumed?: number;
 }
 
 export interface ControlRow extends ControlCategoryInput {
+  /** Always present on a computed row (0 when the input omitted it). */
+  weekConsumed: number;
   /** consumed / assigned (0 when nothing assigned). */
   percentage: number;
   /** The pace reference: how much of the month has elapsed, same 0–1 scale. */
@@ -56,6 +60,7 @@ export function computeControl(
         ...c,
         assigned: round(c.assigned),
         consumed: round(c.consumed),
+        weekConsumed: round(c.weekConsumed ?? 0),
         percentage: c.assigned > 0 ? round(c.consumed / c.assigned) : 0,
         monthElapsedPct,
         projectedEndOfMonth: projected,

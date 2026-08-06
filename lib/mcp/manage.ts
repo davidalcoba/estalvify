@@ -725,6 +725,7 @@ export async function listSeriesForUser(userId: string) {
     id: s.id,
     displayName: s.displayName,
     matcher: s.merchantKey,
+    ruleId: s.ruleId,
     direction: s.direction,
     categoryId: s.categoryId,
     category: s.category?.name ?? null,

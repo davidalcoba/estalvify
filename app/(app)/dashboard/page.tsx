@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WeeklyCard } from "@/components/budget/weekly-card";
+import { ControlMini } from "@/components/budget/control-mini";
 import { Wallet } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -54,9 +55,10 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={`Good morning, ${firstName} 👋`} />
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-xl space-y-4">
         <WeeklyCard status={monthStatus} currency={currency} locale={locale} />
-        <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+        <ControlMini control={monthStatus.control} currency={currency} locale={locale} />
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
           <Link href="/plan" className="text-muted-foreground underline-offset-4 hover:underline">
             Budget
           </Link>

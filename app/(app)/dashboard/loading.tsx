@@ -7,8 +7,9 @@ export default function DashboardLoading() {
   return (
     <div className="space-y-6">
       <PageHeaderSkeleton titleWidth="w-64" />
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-xl space-y-4">
         <ListCardSkeleton rows={4} titleWidth="w-40" />
+        <ListCardSkeleton rows={8} titleWidth="w-28" />
       </div>
     </div>
   );
