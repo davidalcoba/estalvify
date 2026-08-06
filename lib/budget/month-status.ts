@@ -30,6 +30,7 @@ import {
   computeWeeklyAvailable,
   weekOperations,
   weeklyOpsMedian,
+  isoWeekStart,
   weekComposition,
   type WeeklyAvailable,
   type VariableTx,
@@ -686,6 +687,18 @@ export async function buildMonthStatus(
   // run rate, ordered by projected deviation: where the money is escaping.
   const daysElapsedForControl =
     ahead === 0 ? Number(today.slice(8, 10)) : ahead < 0 ? daysInMonth : 1;
+  // This ISO week's spend per objective (same nearest-objective rollup).
+  const weekStart = isoWeekStart(today);
+  const weekEnd = new Date(Date.parse(weekStart) + 6 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const weekByObjective = new Map<string, number>();
+  for (const tx of variableTx) {
+    if (tx.date < weekStart || tx.date > weekEnd || !tx.categoryId) continue;
+    const target = nearestInSet(tx.categoryId, objectiveSet, parentOf);
+    if (!target) continue;
+    weekByObjective.set(target, (weekByObjective.get(target) ?? 0) + tx.amount);
+  }
   const control = computeControl(
     currentItems
       .filter(
@@ -699,6 +712,7 @@ export async function buildMonthStatus(
           categoryColor: cat?.color ?? "#6366f1",
           assigned: i.assigned,
           consumed: round(consumedByObjective.get(i.categoryId) ?? 0),
+          weekConsumed: round(weekByObjective.get(i.categoryId) ?? 0),
         };
       }),
     daysElapsedForControl,

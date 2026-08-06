@@ -35,6 +35,7 @@ const READ_TOOLS = new Set([
   "list_categories",
   "list_accounts",
   "get_budgets",
+  "get_month_status",
   "list_recurring_series",
   "list_planned_items",
   "list_rules",

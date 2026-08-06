@@ -332,7 +332,7 @@ export function ObjectivesCard({
                       {/* The projection beats the percentage: "heading to
                           1.580 vs 1.300" is actionable on the 12th. */}
                       <p className="mt-1 pl-4 text-xs text-muted-foreground">
-                        → {fmt(c.projectedEndOfMonth)} at this pace
+                        → {fmt(c.projectedEndOfMonth)}
                         {c.projectedDeviation > 0 && (
                           <span className={pctTone}> (+{fmt(c.projectedDeviation)})</span>
                         )}

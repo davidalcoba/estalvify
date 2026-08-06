@@ -29,12 +29,11 @@ export function WeeklyCard({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Assign your variable budget per category in{" "}
+            Set category budgets in{" "}
             <Link href="/plan" className="text-brand underline-offset-2 hover:underline">
               Budget
             </Link>{" "}
-            to get the one number that matters: what you can still spend this
-            week.
+            first.
           </p>
         </CardContent>
       </Card>
@@ -63,8 +62,8 @@ export function WeeklyCard({
             {fmt(weekly.availableThisWeek)}
           </span>
           <span className={`text-sm tabular-nums ${opsTone}`}>
-            {status.opsThisWeek} operations
-            {status.opsMedian > 0 ? ` (median ${status.opsMedian})` : ""}
+            {status.opsThisWeek} ops
+            {status.opsMedian > 0 ? ` · median ${status.opsMedian}` : ""}
           </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
