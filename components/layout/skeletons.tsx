@@ -119,6 +119,33 @@ export function ListCardSkeleton({
   );
 }
 
+/**
+ * Card wrapping a list of full-width bar rows — the Budget objectives, where
+ * the bar IS the row, so the skeleton is a stack of tall pills, not thin lines.
+ */
+export function BarListCardSkeleton({
+  rows = 6,
+  titleWidth = "w-40",
+  className,
+}: {
+  rows?: number;
+  titleWidth?: string;
+  className?: string;
+}) {
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <Skeleton className={cn("h-5", titleWidth)} />
+      </CardHeader>
+      <CardContent className="space-y-1.5">
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} className="h-11 w-full rounded-lg" />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 /** Bordered table-ish block: a header strip plus evenly spaced rows. */
 export function TableCardSkeleton({
   rows = 6,
