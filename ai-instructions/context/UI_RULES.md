@@ -129,9 +129,14 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 - **Light tint (15%)** of the *same* colour continuing to where the current
   pace lands, plus a **1.5px line** at that point. No hatching, no second
   colour — projection is the same quantity, less certain.
-- **1.5px `bg-foreground/30` tick** at the % of the month elapsed: the pace
-  reference. A fill is only judged against it, never alone.
 - **3px wall** at the right edge when the state is not `OK`.
+- **No elapsed-month tick inside the row.** It was tried and removed: it sits
+  at the same x in every row (it is the same month for all of them), so it
+  reads as a per-category limit — the first question it got was "shouldn't
+  that be different per category?". The projection line already carries the
+  pace. State the elapsed % once in the card header, and again in the
+  expanded panel. General rule: **a reference that is identical for every row
+  does not belong inside the rows.**
 - Colour comes from the control state (`--success` / `--warning` /
   `--destructive`), and is **grey while nothing has been spent** — `OK` on an
   untouched category is not news.
