@@ -385,10 +385,11 @@ export function registerTools(server: McpServer): void {
     "get_budgets",
     {
       description:
-        "Get the user's LEGACY monthly budgets (per-category planned amounts). The Budget " +
-        "feature was replaced by the Plan (/budget redirects to /plan) and these tables are " +
-        "no longer written by the app — use list_planned_items / create_planned_item / " +
-        "update_planned_item / delete_planned_item for planning instead.",
+        "Get the monthly budgets: the per-month savingsTarget (the v4 input the variable " +
+        "budget derives from) and the per-category lines (rollover: false = variable " +
+        "assignment, true = accumulation fund). Manage lines with upsert_budget_item / " +
+        "delete_budget_item, the target with set_savings_target, and dated charges with " +
+        "list_planned_items / create_planned_item.",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
@@ -404,6 +405,7 @@ export function registerTools(server: McpServer): void {
             select: {
               plannedAmount: true,
               currency: true,
+              rollover: true,
               category: { select: { name: true } },
             },
           },
@@ -415,13 +417,50 @@ export function registerTools(server: McpServer): void {
           year: b.year,
           month: b.month,
           name: b.name,
+          savingsTarget: Number(b.savingsTarget),
           items: b.budgetItems.map((i) => ({
             category: i.category.name,
             plannedAmount: Number(i.plannedAmount),
             currency: i.currency,
+            rollover: i.rollover,
           })),
         })),
       );
+    },
+  );
+
+  // ── set_savings_target ────────────────────────────────────────────────────
+  server.registerTool(
+    "set_savings_target",
+    {
+      description:
+        "Set the monthly savings GOAL — the v4 input the variable budget derives from: " +
+        "variable = expected income (CREDIT planned items) - fixed charges (DEBIT planned " +
+        "items) - rollover fund quotas - savingsTarget. Stored per month so the progression " +
+        "stays on record. There is no inverse mode: move the target, the variable moves.",
+      inputSchema: {
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+        amount: z.number().min(0),
+      },
+    },
+    async ({ year, month, amount }, extra) => {
+      const userId = requireUserId(extra as ToolExtra, "write");
+      try {
+        const budget = await prisma.budget.upsert({
+          where: { userId_year_month: { userId, year, month } },
+          create: { userId, year, month, savingsTarget: amount },
+          update: { savingsTarget: amount },
+          select: { year: true, month: true, savingsTarget: true },
+        });
+        return json({
+          year: budget.year,
+          month: budget.month,
+          savingsTarget: Number(budget.savingsTarget),
+        });
+      } catch (err) {
+        return errorResult(err, "set_savings_target failed");
+      }
     },
   );
 

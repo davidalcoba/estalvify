@@ -1,11 +1,12 @@
-// Server component: the v3 monthly cascade — the expected RESULT is the goal.
-// Savings is not a line: it is the derived consequence (the reconciliation
-// card shows it as the consolidated balance change).
+// Server component: the v4 monthly cascade — the savings TARGET is the input
+// and the variable budget is the residue. One mode only: move the target,
+// watch the variable move.
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/formatters";
 import type { MonthStatus } from "@/lib/budget/month-status";
+import { SavingsTargetInput } from "@/components/budget/savings-target-input";
 import { Layers } from "lucide-react";
 
 export function CascadeCard({
@@ -48,18 +49,28 @@ export function CascadeCard({
             <dd className="tabular-nums">−{fmt(cascade.rolloverQuotas)}</dd>
           </div>
           <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Variable budget</dt>
-            <dd className="tabular-nums">−{fmt(cascade.variableBudget)}</dd>
-          </div>
-          <div className="flex items-center justify-between border-t pt-1.5 font-medium">
-            <dt>Expected result (goal)</dt>
-            <dd
-              className={`tabular-nums ${cascade.expectedResult < 0 ? "text-destructive" : "text-success"}`}
-            >
-              {cascade.expectedResult >= 0 ? "+" : "−"}
-              {fmt(Math.abs(cascade.expectedResult))}
+            <dt className="text-muted-foreground">Savings target</dt>
+            <dd>
+              <SavingsTargetInput
+                year={status.year}
+                month={status.month}
+                value={cascade.savingsTarget}
+                currency={currency}
+                locale={locale}
+              />
             </dd>
           </div>
+          <div className="flex items-center justify-between border-t pt-1.5 font-medium">
+            <dt>Variable budget</dt>
+            <dd className="tabular-nums">{fmt(cascade.variableBudget)}</dd>
+          </div>
+          {Math.abs(cascade.assignmentGap) > 1 && (
+            <p className="text-xs text-warning">
+              Category lines total {fmt(cascade.assignedVariable)} —{" "}
+              {cascade.assignmentGap > 0 ? "over" : "under"} the variable budget by{" "}
+              {fmt(Math.abs(cascade.assignmentGap))}
+            </p>
+          )}
         </dl>
         <dl className="space-y-1.5 border-t pt-3 text-sm">
           <div className="flex items-center justify-between">

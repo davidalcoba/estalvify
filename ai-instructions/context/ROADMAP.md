@@ -123,10 +123,26 @@ recurrentes, etc.).
 >   de un solo cargo mantienen el guard v3.2. La diferencia con Escola no era el
 >   agregado sino el horizonte: sus cargos son de julio y no había item de julio
 >   (lo resolvió el backfill).
-> - **Deuda v3.3 — `merchant` limpio en ingesta.** `normalizeDescriptor` ya
->   pliega el ruido para el matching; falta extraer un campo `merchant` estable
->   en la ingesta (sin "PAGO CON TARJETA", asteriscos de pasarela, sufijos de
->   ciudad/país) para limpiar además la lista de *Detected* y la detección.
+> - **v3.3 — `merchant` limpio en ingesta.** Hecho: `extractMerchant` en la
+>   ingesta (`Transaction.merchant`, 1998/1998 backfilled) para display y
+>   detección; el matching sigue sobre el texto crudo con `normalizeDescriptor`.
+> - **v4 — capa de uso diario (spec 2026-08-06).** Un solo modo: el
+>   **objetivo de ahorro es el INPUT** (`Budget.savingsTarget`, por mes, para
+>   registrar la progresión) y el **presupuesto variable es el residuo**
+>   (ingresos − fijos − cuotas de fondos − objetivo). Sin modo inverso — misma
+>   ecuación, una decisión menos. Las líneas por categoría son el reparto del
+>   residuo; el descuadre se muestra (`assignmentGap`), nunca se cuadra solo.
+>   El semanal ya era tasa diaria (nunca /4, semana ISO). **Dashboard = dos
+>   números**: disponible esta semana + operaciones (contra mediana), con la
+>   composición informativa (sin semáforo); todo lo demás a un toque.
+>   **Control por categoría** (`lib/budget/control.ts`, puro): solo objetivos
+>   manuales (línea sin base recurrente — las categorías alimentadas por
+>   planned/series y los fondos rollover se excluyen; los fondos van en su
+>   sección con polaridad de acumulación). Cada fila: % consumido junto a % de
+>   mes transcurrido, **proyección fin de mes** (consumido/días×díasDelMes) y
+>   estado OK/RIESGO (proyección>asignado)/EXCEDIDO (consumido>asignado),
+>   ordenado por desviación proyectada. MCP: `set_savings_target` nuevo;
+>   `get_budgets` expone `savingsTarget` y `rollover`.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
