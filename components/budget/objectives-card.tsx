@@ -30,13 +30,16 @@ import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency } from "@/lib/formatters";
-import { chargeTone, incomeTone } from "@/lib/budget/pace";
+import { incomeTone } from "@/lib/budget/pace";
 import type { CategoryObjective, IncomeObjective } from "@/lib/budget/month-status";
+import type { ControlRow } from "@/lib/budget/control";
 import { upsertBudgetObjective, removeBudgetObjective } from "@/app/(app)/plan/actions";
 
 interface ObjectivesCardProps {
   objectives: CategoryObjective[];
   incomeObjectives: IncomeObjective[];
+  /** v4 control rows: manual objectives only, ordered by projected deviation. */
+  control: ControlRow[];
   /** 0–1, how much of the month has elapsed — the pace reference. */
   monthElapsed: number;
   categories: Category[];
@@ -57,6 +60,7 @@ interface Draft {
 export function ObjectivesCard({
   objectives,
   incomeObjectives,
+  control,
   monthElapsed,
   categories,
   year,
@@ -110,7 +114,11 @@ export function ObjectivesCard({
     });
   }
 
-  const variables = objectives.filter((o) => !o.rollover);
+  // v4: the Charges list shows ONLY the manual objectives (the control rows,
+  // already ordered by projected deviation). Planned/recurring-fed categories
+  // are noise here — nothing to decide about them mid-month. The objective
+  // detail (transactions, edit/remove) is joined back by category.
+  const detailById = new Map(objectives.map((o) => [o.categoryId, o]));
   const funds = objectives.filter((o) => o.rollover);
 
   return (
@@ -232,14 +240,32 @@ export function ObjectivesCard({
           </div>
         ) : (
           <>
-            {variables.length > 0 && (
+            {control.length > 0 && (
               <div className={incomeObjectives.length > 0 ? "space-y-3 border-t pt-3" : "space-y-3"}>
               <p className="text-xs font-medium text-muted-foreground">Charges</p>
               <ul className="space-y-4">
-                {variables.map((o) => {
+                {control.map((c) => {
+                  const o = detailById.get(c.categoryId) ?? {
+                    categoryId: c.categoryId,
+                    categoryName: c.categoryName,
+                    categoryColor: c.categoryColor,
+                    base: 0,
+                    extra: c.assigned,
+                    assigned: c.assigned,
+                    consumed: c.consumed,
+                    rollover: false,
+                    balance: null,
+                    recurrings: [],
+                    transactions: [],
+                  };
                   const consumedPct =
-                    o.assigned > 0 ? Math.round((o.consumed / o.assigned) * 100) : 0;
-                  const tone = chargeTone(o.consumed, o.assigned, elapsedPct);
+                    c.assigned > 0 ? Math.round((c.consumed / c.assigned) * 100) : 0;
+                  const tone =
+                    c.state === "EXCEDIDO"
+                      ? "destructive"
+                      : c.state === "RIESGO"
+                        ? "warning"
+                        : "success";
                   const barClass =
                     tone === "destructive"
                       ? "bg-destructive"
@@ -303,6 +329,15 @@ export function ObjectivesCard({
                           style={{ left: `${elapsedPct}%` }}
                         />
                       </div>
+                      {/* The projection beats the percentage: "heading to
+                          1.580 vs 1.300" is actionable on the 12th. */}
+                      <p className="mt-1 pl-4 text-xs text-muted-foreground">
+                        → {fmt(c.projectedEndOfMonth)} at this pace
+                        {c.projectedDeviation > 0 && (
+                          <span className={pctTone}> (+{fmt(c.projectedDeviation)})</span>
+                        )}
+                        <span className="text-muted-foreground/60"> · month {elapsedPct}%</span>
+                      </p>
 
                       {isOpen && (
                         <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-3 text-xs">

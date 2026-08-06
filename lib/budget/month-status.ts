@@ -25,6 +25,7 @@ import {
   type MonthCascade,
   type ActualResult,
 } from "./cascade";
+import { computeControl, type ControlRow } from "./control";
 import {
   computeWeeklyAvailable,
   weekOperations,
@@ -129,6 +130,8 @@ export interface MonthStatus {
   spentThisWeek: number;
   composition: WeekCompositionRow[];
   variableSpentMonth: number;
+  /** v4 category control: manual objectives only, ordered by projected deviation. */
+  control: ControlRow[];
   objectives: CategoryObjective[];
   incomeObjectives: IncomeObjective[];
   reconciliation: Reconciliation;
@@ -310,6 +313,7 @@ export async function buildMonthStatus(
         select: {
           year: true,
           month: true,
+          savingsTarget: true,
           budgetItems: {
             select: { categoryId: true, plannedAmount: true, rollover: true },
           },
@@ -353,7 +357,11 @@ export async function buildMonthStatus(
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const currentItems: { categoryId: string; assigned: number; rollover: boolean }[] = [];
   const rolloverHistory = new Map<string, { year: number; month: number; assigned: number }[]>();
+  let savingsTarget = 0;
   for (const b of budgets) {
+    if (b.year === year && b.month === month) {
+      savingsTarget = Number(b.savingsTarget.toString());
+    }
     for (const item of b.budgetItems) {
       const inPast = b.year < year || (b.year === year && b.month <= month);
       if (b.year === year && b.month === month) {
@@ -374,7 +382,10 @@ export async function buildMonthStatus(
       }
     }
   }
-  const variableBudget = currentItems
+  // v4: the Σ of non-rollover lines is the per-category SPLIT; the month's
+  // variable budget itself is the cascade's residue (income − fixed − quotas
+  // − savingsTarget). A mismatch surfaces as cascade.assignmentGap.
+  const assignedVariable = currentItems
     .filter((i) => !i.rollover)
     .reduce((sum, i) => sum + i.assigned, 0);
   const rolloverQuotas = currentItems
@@ -573,7 +584,8 @@ export async function buildMonthStatus(
       amount: Number(p.amount.toString()),
     })),
     rolloverQuotas,
-    variableBudget,
+    savingsTarget,
+    assignedVariable,
   });
 
   // ── Weekly ───────────────────────────────────────────────────────────────
@@ -666,13 +678,40 @@ export async function buildMonthStatus(
         : 0;
   const provisional = isProvisionalMonth(today) && (ahead === 0 || ahead === -1);
 
+  // ── Category control (v4): only MANUAL objectives ───────────────────────
+  // A category qualifies when it carries a non-rollover budget line AND its
+  // objective has no recurring base — planned-fed categories (rent, school,
+  // utilities) are noise here (nothing to decide mid-month) and rollover funds
+  // have inverted polarity, so both are excluded. Projection at the current
+  // run rate, ordered by projected deviation: where the money is escaping.
+  const daysElapsedForControl =
+    ahead === 0 ? Number(today.slice(8, 10)) : ahead < 0 ? daysInMonth : 1;
+  const control = computeControl(
+    currentItems
+      .filter(
+        (i) => !i.rollover && (baseByObjective.get(i.categoryId) ?? 0) === 0
+      )
+      .map((i) => {
+        const cat = categoryById.get(i.categoryId);
+        return {
+          categoryId: i.categoryId,
+          categoryName: cat?.name ?? "?",
+          categoryColor: cat?.color ?? "#6366f1",
+          assigned: i.assigned,
+          consumed: round(consumedByObjective.get(i.categoryId) ?? 0),
+        };
+      }),
+    daysElapsedForControl,
+    daysInMonth
+  );
+
   return {
     year,
     month,
     today,
     provisional,
     monthElapsed,
-    configured: variableBudget > 0,
+    configured: assignedVariable > 0,
     cascade,
     weekly,
     opsThisWeek: ops.count,
@@ -680,6 +719,7 @@ export async function buildMonthStatus(
     opsMedian: weeklyOpsMedian(variableTx, today),
     composition,
     variableSpentMonth,
+    control,
     objectives,
     incomeObjectives,
     reconciliation,

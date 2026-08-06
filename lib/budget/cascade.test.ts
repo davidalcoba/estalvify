@@ -8,33 +8,64 @@ import {
   monthsOfCushion,
 } from "./cascade";
 
-describe("computeCascade (v3)", () => {
-  it("reproduces the spec's cascade: the expected result IS the goal", () => {
+describe("computeCascade (v4: savings target in, variable as residue)", () => {
+  it("acceptance #1: the spec's cascade — 8.262 − 2.650 − 225 − 1.000 = 4.387", () => {
     const c = computeCascade({
       plannedItems: [
         { direction: "CREDIT", amount: 6009 },
         { direction: "CREDIT", amount: 2253 },
-        { direction: "DEBIT", amount: 2610 },
+        { direction: "DEBIT", amount: 2650 },
       ],
-      rolloverQuotas: 285,
-      variableBudget: 4567,
+      rolloverQuotas: 225,
+      savingsTarget: 1000,
+      assignedVariable: 4390,
     });
     expect(c.expectedIncome).toBe(8262);
-    expect(c.expectedResult).toBe(800);
+    expect(c.variableBudget).toBe(4387);
+    expect(c.savingsTarget).toBe(1000);
+    // Lines don't square with the residue: shown as a gap, never auto-fixed.
+    expect(c.assignmentGap).toBe(3);
+    expect(c.expectedResult).toBe(1000);
+  });
+
+  it("acceptance #1b: raising the target 1.000 → 1.300 lowers the residue to 4.087", () => {
+    const base = {
+      plannedItems: [
+        { direction: "CREDIT" as const, amount: 8262 },
+        { direction: "DEBIT" as const, amount: 2650 },
+      ],
+      rolloverQuotas: 225,
+      assignedVariable: 4390,
+    };
+    const at1000 = computeCascade({ ...base, savingsTarget: 1000 });
+    const at1300 = computeCascade({ ...base, savingsTarget: 1300 });
+    expect(at1000.variableBudget).toBe(4387);
+    expect(at1300.variableBudget).toBe(4087);
+  });
+
+  it("a target beyond the month's residue floors variable at 0 and caps the result", () => {
+    const c = computeCascade({
+      plannedItems: [{ direction: "CREDIT", amount: 3000 }, { direction: "DEBIT", amount: 2500 }],
+      rolloverQuotas: 200,
+      savingsTarget: 5000,
+      assignedVariable: 0,
+    });
+    expect(c.variableBudget).toBe(0);
+    expect(c.expectedResult).toBe(300); // what the month can actually leave
   });
 
   it("always uses EXPECTED amounts — reality lands in performance, not the plan", () => {
-    // The salary series expects 6.009; 20.528 arriving must not move the goal.
     const c = computeCascade({
       plannedItems: [{ direction: "CREDIT", amount: 6009 }],
       rolloverQuotas: 0,
-      variableBudget: 0,
+      savingsTarget: 0,
+      assignedVariable: 0,
     });
     expect(c.expectedIncome).toBe(6009);
   });
 
-  it("plan test #6: a 600 € one-off IBI planned in August lowers August's expected result", () => {
-    const base = { rolloverQuotas: 0, variableBudget: 4567 };
+  it("a 600 € one-off IBI planned in August lowers August's residue, not the target", () => {
+    const base = { rolloverQuotas: 0, savingsTarget: 1000, assignedVariable: 0 };
     const without = computeCascade({ plannedItems: [{ direction: "CREDIT", amount: 8262 }], ...base });
     const withIbi = computeCascade({
       plannedItems: [
@@ -43,7 +74,8 @@ describe("computeCascade (v3)", () => {
       ],
       ...base,
     });
-    expect(without.expectedResult - withIbi.expectedResult).toBe(600);
+    expect(without.variableBudget - withIbi.variableBudget).toBe(600);
+    expect(withIbi.savingsTarget).toBe(1000);
   });
 });
 

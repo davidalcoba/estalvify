@@ -413,6 +413,12 @@ model Budget {
   month Int // 1–12
   name  String? // Optional label (e.g. "December holiday budget")
 
+  // v4: the monthly savings GOAL, as an INPUT. The variable budget is the
+  // residue (income − fixed charges − fund quotas − savingsTarget), never the
+  // other way around. Stored per month so the progression stays on record and
+  // goal-vs-real is comparable over time.
+  savingsTarget Decimal @default(0) @db.Decimal(15, 2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,18 +1,22 @@
-// Pure monthly cascade, v3: the expected RESULT is the goal.
+// Pure monthly cascade, v4: the savings TARGET is the input and the variable
+// budget is the RESIDUE.
 //
-//   expected income  (CREDIT planned items of the budget month)
+//   expected income   (CREDIT planned items of the budget month)
 //   − expected charges (DEBIT planned items of the budget month)
 //   − rollover-fund quotas (budget_items with rollover)
-//   − variable budget (Σ non-rollover budget_items assignments)
+//   − SAVINGS TARGET   ← the input, stored per month
 //   ─────────────────────────────────────────────
-//   = expected result of the month
+//   = variable budget  (what the month may spend)
 //
-// Savings is NOT a line here — it is the derived consequence: the month's
-// consolidated balance change. Want to save more? Lower the variable budget
-// until the expected result is the number you want. The cascade always uses
-// EXPECTED amounts (the plan); reality lands in `performance`, so a salary
-// arriving 14.5k above expectation shows up as performance, not as a silently
-// moved goalpost. No Prisma — unit-tested in isolation.
+// The app answers ONE question: "if I want to save X, how much can I spend?"
+// There is deliberately no inverse mode (fix the spend, read the savings) —
+// same equation, one more decision per screen. Move the target, watch the
+// variable move.
+//
+// The per-category assignments (Σ non-rollover budget lines) are compared
+// against the residue: a mismatch is SHOWN as assignmentGap, never squared
+// automatically. The cascade always uses EXPECTED amounts (the plan); reality
+// lands in `performance`. No Prisma — unit-tested in isolation.
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
@@ -25,14 +29,27 @@ export interface MonthCascade {
   expectedIncome: number;
   expectedCharges: number;
   rolloverQuotas: number;
+  /** The monthly savings goal — an INPUT, stored per month. */
+  savingsTarget: number;
+  /** The residue: income − charges − quotas − savingsTarget, floored at 0. */
   variableBudget: number;
+  /** Σ non-rollover budget lines — the per-category split of the residue. */
+  assignedVariable: number;
+  /** assignedVariable − variableBudget. Shown, never auto-squared. */
+  assignmentGap: number;
+  /**
+   * income − charges − quotas − variableBudget. Equals savingsTarget while the
+   * residue is positive; smaller when the target exceeds what the month has.
+   */
   expectedResult: number;
 }
 
 export function computeCascade(input: {
   plannedItems: PlannedForCascade[];
   rolloverQuotas: number;
-  variableBudget: number;
+  savingsTarget: number;
+  /** Σ non-rollover budget line assignments (the categories' split). */
+  assignedVariable: number;
 }): MonthCascade {
   let expectedIncome = 0;
   let expectedCharges = 0;
@@ -43,12 +60,19 @@ export function computeCascade(input: {
   expectedIncome = round(expectedIncome);
   expectedCharges = round(expectedCharges);
   const rolloverQuotas = round(Math.max(0, input.rolloverQuotas));
-  const variableBudget = round(Math.max(0, input.variableBudget));
+  const savingsTarget = round(Math.max(0, input.savingsTarget));
+  const assignedVariable = round(Math.max(0, input.assignedVariable));
+  const variableBudget = round(
+    Math.max(0, expectedIncome - expectedCharges - rolloverQuotas - savingsTarget)
+  );
   return {
     expectedIncome,
     expectedCharges,
     rolloverQuotas,
+    savingsTarget,
     variableBudget,
+    assignedVariable,
+    assignmentGap: round(assignedVariable - variableBudget),
     expectedResult: round(
       expectedIncome - expectedCharges - rolloverQuotas - variableBudget
     ),
