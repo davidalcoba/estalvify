@@ -11,7 +11,8 @@
 **Última actualización:** 2026-08-04 · **Fase en curso:** ninguna ·
 **Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
-recurrentes, etc.).
+recurrentes, etc.). **Plan aprobado pendiente de ejecución:** multiusuario por hogar
+(invitaciones + roles) — ver `PLAN_MULTIUSER.md`, fases en su §9.
 
 > **Post-roadmap — MODELO DE PLANIFICACIÓN V3 (spec definitivo, 2026-08-04).** Sustituye
 > a los dos specs anteriores (el batch de 8 features y el modelo v2 del mismo día).
