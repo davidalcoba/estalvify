@@ -195,10 +195,6 @@ export function ObjectivesCard({
                         }}
                       />
                       <span
-                        className="absolute inset-y-0 -z-10 w-[1.5px] bg-foreground/30"
-                        style={{ left: `${elapsedPct}%` }}
-                      />
-                      <span
                         className="inline-block h-2 w-2 shrink-0 rounded-full"
                         style={{ backgroundColor: o.categoryColor }}
                       />
@@ -312,7 +308,12 @@ export function ObjectivesCard({
                           this pace still adds, the line where it lands, and a
                           wall at the edge when it overshoots. One object, one
                           number (what's left) — the overshoot chip only when
-                          there is one. */}
+                          there is one.
+                          No elapsed-month tick here on purpose: it sat at the
+                          same x in every row (it is the same month for all of
+                          them), so it read as a per-category limit, and the
+                          projection line already says where this pace lands.
+                          The pace lives in the header and in the panel. */}
                       <button
                         type="button"
                         onClick={() => setExpandedId(isOpen ? null : o.categoryId)}
@@ -351,10 +352,6 @@ export function ObjectivesCard({
                             style={{ background: tone }}
                           />
                         )}
-                        <span
-                          className="absolute inset-y-0 -z-10 w-[1.5px] bg-foreground/30"
-                          style={{ left: `${elapsedPct}%` }}
-                        />
                         <span
                           className="inline-block h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: o.categoryColor }}
@@ -472,25 +469,27 @@ export function ObjectivesCard({
                             </ul>
                           )}
 
-                          <div className="flex justify-end gap-2 border-t pt-2">
+                          {/* `xs` + wrap: at `sm` the two labels overflowed the
+                              panel on a phone. Short labels — the panel is
+                              already about this category's manual amount. */}
+                          <div className="flex flex-wrap justify-end gap-2 border-t pt-2">
                             {o.extra > 0 && (
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="h-7 text-destructive hover:text-destructive"
+                                size="xs"
+                                className="text-destructive hover:text-destructive"
                                 onClick={() =>
                                   setConfirm({ categoryId: o.categoryId, name: o.categoryName })
                                 }
                                 disabled={isPending}
                               >
-                                <Trash2 className="mr-1 h-3 w-3" />
-                                Remove manual
+                                <Trash2 />
+                                Remove
                               </Button>
                             )}
                             <Button
                               variant="outline"
-                              size="sm"
-                              className="h-7"
+                              size="xs"
                               onClick={() =>
                                 setDraft({
                                   categoryId: o.categoryId,
@@ -501,8 +500,8 @@ export function ObjectivesCard({
                               }
                               disabled={isPending}
                             >
-                              <Pencil className="mr-1 h-3 w-3" />
-                              {o.extra > 0 ? "Edit manual amount" : "Add manual amount"}
+                              <Pencil />
+                              {o.extra > 0 ? "Edit manual" : "Add manual"}
                             </Button>
                           </div>
                         </div>
