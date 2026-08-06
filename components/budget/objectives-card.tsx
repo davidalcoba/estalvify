@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatCurrencyRound } from "@/lib/formatters";
 import { incomeTone } from "@/lib/budget/pace";
 import type { CategoryObjective, IncomeObjective } from "@/lib/budget/month-status";
 import type { ControlRow } from "@/lib/budget/control";
@@ -75,6 +75,7 @@ export function ObjectivesCard({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  const fmt0 = (n: number) => formatCurrencyRound(n, currency, locale);
   const elapsedPct = Math.round(monthElapsed * 100);
 
   function save() {
@@ -147,7 +148,7 @@ export function ObjectivesCard({
         {incomeObjectives.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">Income</p>
-            <ul className="space-y-4">
+            <ul className="space-y-5">
               {incomeObjectives.map((o) => {
                 const receivedPct =
                   o.expected > 0 ? Math.round((o.received / o.expected) * 100) : 0;
@@ -168,7 +169,7 @@ export function ObjectivesCard({
                 const isOpen = expandedId === key;
                 return (
                   <li key={key} className="text-sm">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-1 text-left font-medium"
@@ -186,20 +187,14 @@ export function ObjectivesCard({
                         />
                         <span className="min-w-0 truncate">{o.categoryName}</span>
                       </button>
-                      <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
-                        {fmt(o.received)}
-                        <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {fmt0(o.received)}
+                        <span className="text-muted-foreground/60">/{fmt0(o.expected)}</span>
                       </span>
                       <span
-                        className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${pctClass}`}
+                        className={`w-10 shrink-0 text-right text-xs font-medium tabular-nums ${pctClass}`}
                       >
                         {receivedPct}%
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
-                      <span className="tabular-nums text-muted-foreground">
-                        {fmt(o.received)}
-                        <span className="text-muted-foreground/60"> / {fmt(o.expected)}</span>
                       </span>
                     </div>
                     <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -243,7 +238,7 @@ export function ObjectivesCard({
             {control.length > 0 && (
               <div className={incomeObjectives.length > 0 ? "space-y-3 border-t pt-3" : "space-y-3"}>
               <p className="text-xs font-medium text-muted-foreground">Charges</p>
-              <ul className="space-y-4">
+              <ul className="space-y-5">
                 {control.map((c) => {
                   const o = detailById.get(c.categoryId) ?? {
                     categoryId: c.categoryId,
@@ -284,7 +279,9 @@ export function ObjectivesCard({
                       {/* One line on desktop; on mobile the amounts wrap to
                           their own line so the name never crushes them.
                           Tapping the name unfolds the composition. */}
-                      <div className="flex items-center gap-3">
+                      {/* One line: name + consumed/assigned (whole euros) + %.
+                          The bar carries the pace; no per-row month label. */}
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
                           className="flex min-w-0 flex-1 items-center gap-1 text-left font-medium"
@@ -302,20 +299,14 @@ export function ObjectivesCard({
                           />
                           <span className="min-w-0 truncate">{o.categoryName}</span>
                         </button>
-                        <span className="hidden shrink-0 tabular-nums text-muted-foreground sm:inline">
-                          {fmt(o.consumed)}
-                          <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {fmt0(c.consumed)}
+                          <span className="text-muted-foreground/60">/{fmt0(c.assigned)}</span>
                         </span>
                         <span
-                          className={`w-12 shrink-0 text-right text-xs font-medium tabular-nums ${pctTone}`}
+                          className={`w-10 shrink-0 text-right text-xs font-medium tabular-nums ${pctTone}`}
                         >
                           {consumedPct}%
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-xs sm:hidden">
-                        <span className="tabular-nums text-muted-foreground">
-                          {fmt(o.consumed)}
-                          <span className="text-muted-foreground/60"> / {fmt(o.assigned)}</span>
                         </span>
                       </div>
                       <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -329,15 +320,15 @@ export function ObjectivesCard({
                           style={{ left: `${elapsedPct}%` }}
                         />
                       </div>
-                      {/* The projection beats the percentage: "heading to
-                          1.580 vs 1.300" is actionable on the 12th. */}
-                      <p className="mt-1 pl-4 text-xs text-muted-foreground">
-                        → {fmt(c.projectedEndOfMonth)}
-                        {c.projectedDeviation > 0 && (
-                          <span className={pctTone}> (+{fmt(c.projectedDeviation)})</span>
-                        )}
-                        <span className="text-muted-foreground/60"> · month {elapsedPct}%</span>
-                      </p>
+                      {/* Projection only once there is spend — "→ 0 €" is noise. */}
+                      {c.consumed > 0 && (
+                        <p className="mt-1.5 pl-4 text-xs text-muted-foreground">
+                          → {fmt0(c.projectedEndOfMonth)}
+                          {c.projectedDeviation > 0 && (
+                            <span className={pctTone}> (+{fmt0(c.projectedDeviation)})</span>
+                          )}
+                        </p>
+                      )}
 
                       {isOpen && (
                         <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-3 text-xs">
@@ -456,15 +447,15 @@ export function ObjectivesCard({
                         >
                           {o.categoryName}
                         </button>
-                        <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">
-                          {fmt(o.assigned)}/mo
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {fmt0(o.assigned)}/mo
                         </span>
                         <span
-                          className={`hidden w-24 shrink-0 text-right tabular-nums sm:inline ${
+                          className={`w-16 shrink-0 text-right text-xs font-medium tabular-nums ${
                             (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
                           }`}
                         >
-                          {fmt(o.balance ?? 0)}
+                          {fmt0(o.balance ?? 0)}
                         </span>
                         <Button
                           variant="ghost"
@@ -478,18 +469,6 @@ export function ObjectivesCard({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 pl-6 text-xs sm:hidden">
-                        <span className="tabular-nums text-muted-foreground">
-                          {fmt(o.assigned)}/mo
-                        </span>
-                        <span
-                          className={`tabular-nums ${
-                            (o.balance ?? 0) < 0 ? "text-destructive" : "text-success"
-                          }`}
-                        >
-                          {fmt(o.balance ?? 0)}
-                        </span>
                       </div>
                     </li>
                   ))}
