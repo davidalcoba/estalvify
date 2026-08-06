@@ -135,14 +135,21 @@ recurrentes, etc.).
 >   El semanal ya era tasa diaria (nunca /4, semana ISO). **Dashboard = dos
 >   números**: disponible esta semana + operaciones (contra mediana), con la
 >   composición informativa (sin semáforo); todo lo demás a un toque.
->   **Control por categoría** (`lib/budget/control.ts`, puro): solo objetivos
->   manuales (línea sin base recurrente — las categorías alimentadas por
->   planned/series y los fondos rollover se excluyen; los fondos van en su
->   sección con polaridad de acumulación). Cada fila: % consumido junto a % de
->   mes transcurrido, **proyección fin de mes** (consumido/días×díasDelMes) y
->   estado OK/RIESGO (proyección>asignado)/EXCEDIDO (consumido>asignado),
->   ordenado por desviación proyectada. MCP: `set_savings_target` nuevo;
->   `get_budgets` expone `savingsTarget` y `rollover`.
+>   **Control por categoría** (`lib/budget/control.ts`, puro): se calcula sobre
+>   **todos** los objetivos no-rollover (los fondos van en su sección, con
+>   polaridad de acumulación) y de ahí salen dos vistas — `chargeControl`
+>   (todas, para la pantalla del mes, donde los fijos son la mitad del dinero) y
+>   `control` (las de `fixedTotal === 0`, las discrecionales, para el dashboard
+>   diario: del alquiler no se decide nada a mitad de mes). Cada fila: %
+>   consumido junto a % de mes transcurrido, `fixedTotal`/`fixedMatched` (el
+>   tramo recurrente ya comprometido del presupuesto), **proyección fin de mes**
+>   = `fixedTotal + tasa diaria de la parte discrecional` — extrapolar un
+>   alquiler a ritmo diario no significa nada; la fórmula degenera a la tasa
+>   pura cuando `fixedTotal` es 0 y al plan cuando lo es todo — y estado
+>   OK/RIESGO (proyección>asignado)/EXCEDIDO (consumido>asignado), ordenado por
+>   desviación proyectada. MCP: `set_savings_target` nuevo; `get_budgets` expone
+>   `savingsTarget` y `rollover`; `get_month_status` expone `chargeControl`
+>   además de `control`.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en

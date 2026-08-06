@@ -38,7 +38,7 @@ import { upsertBudgetObjective, removeBudgetObjective } from "@/app/(app)/plan/a
 interface ObjectivesCardProps {
   objectives: CategoryObjective[];
   incomeObjectives: IncomeObjective[];
-  /** v4 control rows: manual objectives only, ordered by projected deviation. */
+  /** Every non-rollover objective, ordered by projected deviation. */
   control: ControlRow[];
   /** 0–1, how much of the month has elapsed — the pace reference. */
   monthElapsed: number;
@@ -129,10 +129,12 @@ export function ObjectivesCard({
     });
   }
 
-  // v4: the Charges list shows ONLY the manual objectives (the control rows,
-  // already ordered by projected deviation). Planned/recurring-fed categories
-  // are noise here — nothing to decide about them mid-month. The objective
-  // detail (transactions, edit/remove) is joined back by category.
+  // The Charges list shows every non-rollover objective (`chargeControl`,
+  // already ordered by projected deviation) — the fixed ones included: on the
+  // MONTH screen they are half the money, and their bar carries the committed
+  // rule. It is the daily dashboard that narrows to the discretionary ones.
+  // The objective detail (transactions, edit/remove) is joined back by
+  // category.
   const detailById = new Map(objectives.map((o) => [o.categoryId, o]));
   const funds = objectives.filter((o) => o.rollover);
 
@@ -293,6 +295,7 @@ export function ObjectivesCard({
                   };
                   const spentPct = clampPct((c.consumed / c.assigned) * 100);
                   const projPct = clampPct((c.projectedEndOfMonth / c.assigned) * 100);
+                  const fixedPct = clampPct((c.fixedTotal / c.assigned) * 100);
                   const tone = toneVar(c.state, c.consumed);
                   const pctTone =
                     c.state === "EXCEDIDO"
@@ -350,6 +353,20 @@ export function ObjectivesCard({
                           <span
                             className="absolute inset-y-0 right-0 -z-10 w-[3px]"
                             style={{ background: tone }}
+                          />
+                        )}
+                        {/* The committed slice: recurring charges, already
+                            decided. Ruled along the bottom rather than marked
+                            with one more vertical line — its right edge is the
+                            boundary, and a row that is fixed end to end reads
+                            as such at a glance. */}
+                        {fixedPct > 0 && (
+                          <span
+                            className="absolute bottom-0 left-0 -z-10 h-[3px] rounded-r-full"
+                            style={{
+                              width: `${fixedPct}%`,
+                              background: "color-mix(in oklch, var(--foreground) 45%, transparent)",
+                            }}
                           />
                         )}
                         <span
@@ -412,11 +429,14 @@ export function ObjectivesCard({
                               </dd>
                             </div>
                             <div>
+                              {/* Pace explains a projection built from a run
+                                  rate; on a committed budget it explains
+                                  nothing, so that slot shows the commitment. */}
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Pace
+                                {c.fixedTotal > 0 ? "Fixed" : "Pace"}
                               </dt>
                               <dd className="font-semibold tabular-nums text-muted-foreground">
-                                {elapsedPct}%
+                                {c.fixedTotal > 0 ? fmt0(c.fixedTotal) : `${elapsedPct}%`}
                               </dd>
                             </div>
                           </dl>
