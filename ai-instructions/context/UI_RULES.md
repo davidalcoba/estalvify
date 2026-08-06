@@ -113,6 +113,36 @@ overflowing on a 375 px viewport.
 - The route's `loading.tsx` mirrors the grid classes, so it gets `grid-cols-1`
   in the same change.
 
+## Progress rows: the bar IS the row
+
+A list where every item is "how am I doing against a target" (Budget →
+Objectives, both Income and Charges) does **not** stack a text line over a thin
+progress bar — that reads as two objects per item and goes illegible on a phone
+as soon as there are more than a handful. The row itself is the bar: a 44px
+(`h-11`) full-width rounded block whose background is painted by progress, with
+the name and the numbers sitting on top of it.
+
+The pattern, as implemented in `components/budget/objectives-card.tsx`:
+
+- **Solid tint (40%)** from the left = what has already happened (spent, or
+  received for income).
+- **Light tint (15%)** of the *same* colour continuing to where the current
+  pace lands, plus a **1.5px line** at that point. No hatching, no second
+  colour — projection is the same quantity, less certain.
+- **1.5px `bg-foreground/30` tick** at the % of the month elapsed: the pace
+  reference. A fill is only judged against it, never alone.
+- **3px wall** at the right edge when the state is not `OK`.
+- Colour comes from the control state (`--success` / `--warning` /
+  `--destructive`), and is **grey while nothing has been spent** — `OK` on an
+  untouched category is not news.
+- **One number on the right**: what is left (or still to arrive). A chip with
+  the projected overshoot appears *only* when there is one. Everything else —
+  spent, budget, projected, pace — lives in the panel that the row expands
+  into, which is where the detail, the composition and the actions belong.
+
+Zero targets must not paint `NaN`: clamp every percentage through a
+finite-checked helper.
+
 ## Copy: terse, SaaS-style
 
 - **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)
@@ -170,7 +200,8 @@ change? If yes, the skeleton changes too.
 
 - Build from `components/layout/skeletons` (`PageHeaderSkeleton`,
   `KpiGridSkeleton`, `ChartCardSkeleton`, `ListCardSkeleton`,
-  `TableCardSkeleton`) rather than hand-rolling `Skeleton` blocks. If a page
+  `BarListCardSkeleton`, `TableCardSkeleton`) rather than hand-rolling
+  `Skeleton` blocks. If a page
   needs a shape that isn't there and another page could reuse it, add it to
   that module instead of inlining it.
 - Mirror the real layout: same outer spacing (`space-y-4` vs `space-y-6`),
