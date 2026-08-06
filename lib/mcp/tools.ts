@@ -449,8 +449,12 @@ export function registerTools(server: McpServer): void {
         "charges - fund quotas - savingsTarget = variableBudget (the residue; " +
         "assignedVariable is the category split and assignmentGap the mismatch, shown " +
         "never auto-squared). weekly: the daily-rate available (never month/4; ISO weeks). " +
-        "control: manual objectives only, each with consumed vs assigned, weekConsumed, " +
-        "end-of-month projection and OK/RIESGO/EXCEDIDO, ordered by projected deviation. " +
+        "chargeControl: EVERY non-rollover objective, each with consumed vs assigned, " +
+        "weekConsumed, fixedTotal (the recurring, already-committed slice of the budget) " +
+        "and fixedMatched, plus the end-of-month projection — fixedTotal + the run rate of " +
+        "the discretionary part only, since extrapolating rent daily is meaningless — and " +
+        "OK/RIESGO/EXCEDIDO, ordered by projected deviation. control: the subset with " +
+        "fixedTotal 0, the purely discretionary ones the daily screen acts on. " +
         "funds: rollover accumulation (quota + balance). Defaults to the current month.",
       inputSchema: {
         year: z.number().int().optional(),
@@ -476,6 +480,7 @@ export function registerTools(server: McpServer): void {
           spentThisWeek: s.spentThisWeek,
           variableSpentMonth: s.variableSpentMonth,
           control: s.control,
+          chargeControl: s.chargeControl,
           funds: s.objectives
             .filter((o) => o.rollover)
             .map((o) => ({

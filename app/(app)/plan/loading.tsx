@@ -3,6 +3,7 @@
 import {
   PageHeaderSkeleton,
   ListCardSkeleton,
+  BarListCardSkeleton,
 } from "@/components/layout/skeletons";
 
 export default function PlanLoading() {
@@ -13,8 +14,8 @@ export default function PlanLoading() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Monthly cascade + reconciliation */}
         <ListCardSkeleton rows={9} titleWidth="w-40" />
-        {/* Category objectives */}
-        <ListCardSkeleton rows={6} titleWidth="w-44" />
+        {/* Category objectives — bar-as-row list */}
+        <BarListCardSkeleton rows={6} titleWidth="w-44" />
       </div>
     </div>
   );
