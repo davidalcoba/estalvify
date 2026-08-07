@@ -6,6 +6,7 @@ import {
   rolloverBalance,
   monthsOfCushion,
   expectedResultToDate,
+  projectedResult,
 } from "./cascade";
 
 describe("computeCascade (v4: savings target in, variable as residue)", () => {
@@ -219,3 +220,30 @@ describe("expectedResultToDate", () => {
     expect(toDate).toBe(1519.83);
   });
 });
+
+describe("projectedResult", () => {
+  it("turns a structurally negative day 8 into where the month lands", () => {
+    // Production, 8 August: −2.882,31 real against a plan of 860 € for the
+    // month, of which −2.757,03 had accrued. The month is heading for 734,72 —
+    // 125,28 short of target, with 23 days left to close it.
+    expect(projectedResult(-2882.31, 860, -2757.03)).toBe(734.72);
+  });
+
+  it("is short of the target by exactly the underperformance", () => {
+    const target = 860;
+    const projected = projectedResult(-2882.31, target, -2757.03);
+    expect(round2(projected - target)).toBe(performance(-2882.31, -2757.03));
+  });
+
+  it("converges on the real result once the month has fully accrued", () => {
+    expect(projectedResult(912.4, 860, 860)).toBe(912.4);
+  });
+
+  it("carries an overshoot forward rather than hiding it", () => {
+    // Nothing has arrived yet and the plan is intact, but 500 € of unplanned
+    // spending already happened: the month lands 500 € below target.
+    expect(projectedResult(-500, 860, 0)).toBe(360);
+  });
+});
+
+const round2 = (n: number) => Math.round(n * 100) / 100;

@@ -31,6 +31,7 @@ import {
   rolloverBalance,
   monthsOfCushion,
   expectedResultToDate,
+  projectedResult,
   type MonthCascade,
   type ActualResult,
 } from "./cascade";
@@ -112,6 +113,11 @@ export interface Reconciliation extends ActualResult {
   expectedResultToDate: number;
   /** actualResult − expectedResultToDate. Positive = ahead of plan so far. */
   performance: number;
+  /**
+   * Where the month lands if the rest of the plan holds — the only figure in
+   * this block that is not structurally negative until the salaries arrive.
+   */
+  projectedResult: number;
   /** The month's consolidated balance change — the REAL savings, derived. */
   consolidatedDelta: number | null;
   /**
@@ -831,6 +837,11 @@ export async function buildMonthStatus(
     expectedResult: cascade.expectedResult,
     expectedResultToDate: expectedToDate,
     performance: performance(actual.actualResult, expectedToDate),
+    projectedResult: projectedResult(
+      actual.actualResult,
+      cascade.expectedResult,
+      expectedToDate
+    ),
     consolidatedDelta,
     openingBalanceUnknown,
     discrepancy,
