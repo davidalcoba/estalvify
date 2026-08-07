@@ -397,8 +397,11 @@ export function ObjectivesCard({
 
                       {isOpen && (
                         <div className="space-y-2 rounded-b-lg border border-t-0 bg-muted/40 p-3 text-xs">
-                          {/* The detail is where the full numbers belong. */}
-                          <dl className="grid grid-cols-4 gap-2">
+                          {/* The detail is where the full numbers belong.
+                              Right-aligned like every amount below it, so the
+                              last column lands on the same edge as the
+                              composition and transaction figures. */}
+                          <dl className="grid grid-cols-4 gap-2 text-right">
                             <div>
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                 Spent
