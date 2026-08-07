@@ -299,7 +299,6 @@ export function ObjectivesCard({
                   };
                   const spentPct = clampPct((c.consumed / c.assigned) * 100);
                   const projPct = clampPct((c.projectedEndOfMonth / c.assigned) * 100);
-                  const fixedPct = clampPct((c.fixedTotal / c.assigned) * 100);
                   const tone = toneVar(c.state, c.consumed);
                   const pctTone =
                     c.state === "EXCEDIDO"
@@ -359,20 +358,14 @@ export function ObjectivesCard({
                             style={{ background: tone }}
                           />
                         )}
-                        {/* The committed slice: recurring charges, already
-                            decided. Ruled along the bottom rather than marked
-                            with one more vertical line — its right edge is the
-                            boundary, and a row that is fixed end to end reads
-                            as such at a glance. */}
-                        {fixedPct > 0 && (
-                          <span
-                            className="absolute bottom-0 left-0 -z-10 h-[3px] rounded-r-full"
-                            style={{
-                              width: `${fixedPct}%`,
-                              background: "color-mix(in oklch, var(--foreground) 45%, transparent)",
-                            }}
-                          />
-                        )}
+                        {/* No mark for the committed slice in the row. A rule
+                            along the bottom was tried and removed: the
+                            recurring-fed objectives are the ones whose budget
+                            IS their recurring total, so it came out full-width
+                            on every row that had it — distinguishing nothing,
+                            and reading as a black border on the row rather
+                            than as a marking inside the bar. The committed
+                            amount is stated in the panel, as `Fixed`. */}
                         <span
                           className="inline-block h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: o.categoryColor }}

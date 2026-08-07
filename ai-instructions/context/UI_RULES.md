@@ -130,11 +130,15 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
   pace lands, plus a **1.5px line** at that point. No hatching, no second
   colour — projection is the same quantity, less certain.
 - **3px wall** at the right edge when the state is not `OK`.
-- **3px rule along the bottom** covering the committed slice — the recurring
-  charges (`fixedTotal / assigned`). Its right edge is the boundary between
-  what is already decided and what the user still chooses, so it needs no
-  extra vertical mark, and a row that is fixed end to end reads as such at a
-  glance. Absent when there is nothing recurring.
+- **No mark for the committed slice.** A 3px rule along the bottom covering
+  `fixedTotal / assigned` was tried and removed. The premise was wrong: an
+  objective fed by recurring charges has no manual `extra`, so its budget
+  *is* its recurring total and the rule came out full-width on every row that
+  had one — distinguishing nothing, and reading as a black border on the row
+  instead of as a marking inside the bar (worse on an expanded row, where it
+  became a heavy divider above the panel). The committed amount is stated in
+  the panel, as `Fixed`, which is where a number that does not vary within
+  the month belongs.
 - **No elapsed-month tick inside the row.** It was tried and removed: it sits
   at the same x in every row (it is the same month for all of them), so it
   reads as a per-category limit — the first question it got was "shouldn't
