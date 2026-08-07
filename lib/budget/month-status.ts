@@ -26,6 +26,7 @@ import {
   rolloverBalance,
   monthsOfCushion,
   expectedResultToDate,
+  openingSnapshotIsUsable,
   type MonthCascade,
   type ActualResult,
 } from "./cascade";
@@ -43,6 +44,12 @@ import {
 const OPS_LOOKBACK_DAYS = 98; // 14 weeks: current + 12 complete + margin
 /** A date can hold several balance types; a handful is always enough. */
 const SNAPSHOT_CANDIDATES = 6;
+/**
+ * How stale the opening snapshot may be. The sync writes one a day, so the
+ * honest window is "the last days of the previous month". Three allows for a
+ * weekend of missed runs; eight weeks of silence is what this rejects.
+ */
+const OPENING_SNAPSHOT_MAX_AGE_DAYS = 3;
 const CUSHION_BASELINE_MONTHS = 6;
 
 export interface ObjectiveRecurring {
@@ -109,6 +116,11 @@ export interface Reconciliation extends ActualResult {
   performance: number;
   /** The month's consolidated balance change — the REAL savings, derived. */
   consolidatedDelta: number | null;
+  /**
+   * Balances are known today but no snapshot near the month's start survives,
+   * so the change cannot be measured. Distinct from having no accounts.
+   */
+  openingBalanceUnknown: boolean;
   /** consolidatedDelta − actualResult: uncaptured flow when non-zero. */
   discrepancy: number | null;
   consolidatedBalance: number | null;
@@ -179,12 +191,12 @@ const round = (n: number) => Math.round(n * 100) / 100;
  */
 function pickSnapshot(
   rows: { balance: Prisma.Decimal; date: Date; balanceType: string | null }[]
-): number | null {
+): { balance: number; date: Date } | null {
   if (rows.length === 0) return null;
   const newest = rows[0].date.getTime();
   const sameDay = rows.filter((r) => r.date.getTime() === newest);
-  const fromEndpoint = sameDay.find((r) => r.balanceType !== AFTER_TRANSACTION);
-  return Number((fromEndpoint ?? sameDay[0]).balance.toString());
+  const chosen = sameDay.find((r) => r.balanceType !== AFTER_TRANSACTION) ?? sameDay[0];
+  return { balance: Number(chosen.balance.toString()), date: chosen.date };
 }
 
 /**
@@ -690,17 +702,27 @@ export async function buildMonthStatus(
   // no semantics — always the sum of all of them). For the current month the
   // "end" snapshot is simply the latest one; for a past month it is the last
   // snapshot inside it, so navigation shows that month's own delta.
-  const endBalances = endSnapshots.map(pickSnapshot);
-  const startBalances = startSnapshots.map(pickSnapshot);
+  const endPicks = endSnapshots.map(pickSnapshot);
+  const startPicks = startSnapshots.map(pickSnapshot);
   const consolidatedBalance =
-    accounts.length > 0 && endBalances.some((b) => b !== null)
-      ? round(endBalances.reduce<number>((sum, b) => sum + (b ?? 0), 0))
+    accounts.length > 0 && endPicks.some((p) => p !== null)
+      ? round(endPicks.reduce<number>((sum, p) => sum + (p?.balance ?? 0), 0))
       : null;
-  const haveAllStarts = accounts.length > 0 && startBalances.every((b) => b !== null);
+  // Every account needs an opening snapshot, and it has to be RECENT — see
+  // openingSnapshotIsUsable. Reaching past a sync outage produced a two-month
+  // "monthly" saving and a 7.544 € phantom discrepancy.
+  const haveAllStarts =
+    accounts.length > 0 &&
+    startPicks.every((p) =>
+      openingSnapshotIsUsable(p?.date ?? null, start, OPENING_SNAPSHOT_MAX_AGE_DAYS)
+    );
   const consolidatedDelta =
     consolidatedBalance != null && haveAllStarts
-      ? round(consolidatedBalance - startBalances.reduce<number>((sum, b) => sum + b!, 0))
+      ? round(consolidatedBalance - startPicks.reduce<number>((sum, p) => sum + p!.balance, 0))
       : null;
+  // Distinguishes "we cannot measure this month's saving" from "there are no
+  // accounts at all", so the card can say which.
+  const openingBalanceUnknown = consolidatedBalance != null && !haveAllStarts;
 
   const avgMonthlySpend = baselineAgg._sum.amount
     ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
@@ -732,6 +754,7 @@ export async function buildMonthStatus(
     expectedResultToDate: expectedToDate,
     performance: performance(actual.actualResult, expectedToDate),
     consolidatedDelta,
+    openingBalanceUnknown,
     discrepancy: reconciliationGap(consolidatedDelta, actual.actualResult),
     consolidatedBalance,
     monthsOfCushion: monthsOfCushion(consolidatedBalance, avgMonthlySpend),
