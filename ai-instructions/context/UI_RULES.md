@@ -149,10 +149,17 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 - Colour comes from the control state (`--success` / `--warning` /
   `--destructive`), and is **grey while nothing has been spent** — `OK` on an
   untouched category is not news.
-- **One number on the right**: what is left (or still to arrive). A chip with
-  the projected overshoot appears *only* when there is one. Everything else —
-  spent, budget, projected, pace — lives in the panel that the row expands
-  into, which is where the detail, the composition and the actions belong.
+- **On the right, what is true now and what was planned**: `spent/budget`
+  (`received/expected` for income), the budget half in
+  `text-muted-foreground/50` — the same pair, in the same shape, as the
+  dashboard's Categories card, so the two screens do not describe a category
+  differently. A fully arrived income row keeps a `✓` rather than printing the
+  same figure twice.
+- **Nothing derived goes in the row.** Projected, its overshoot, fixed and
+  pace are all computed *from* those two numbers, and they live in the panel
+  the row expands into. A remaining-amount and an overshoot chip were both
+  tried in the row and removed: five figures on one line stops being readable
+  at a glance, which is the only thing the bar is for.
 
 Zero targets must not paint `NaN`: clamp every percentage through a
 finite-checked helper.
