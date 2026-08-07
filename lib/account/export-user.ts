@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 export async function buildUserExport(userId: string) {
   const [
     user,
+    household,
     bankConnections,
     bankAccounts,
     balances,
@@ -40,6 +41,23 @@ export async function buildUserExport(userId: string) {
         locale: true,
         language: true,
         lowBalanceThreshold: true,
+      },
+    }),
+    // The household record (name, members and their roles). Invite token
+    // hashes are deliberately omitted — credential-adjacent, like sessionId.
+    prisma.household.findUnique({
+      where: { ownerUserId: userId },
+      select: {
+        name: true,
+        createdAt: true,
+        members: {
+          select: {
+            userId: true,
+            role: true,
+            createdAt: true,
+            user: { select: { name: true, email: true } },
+          },
+        },
       },
     }),
     prisma.bankConnection.findMany({
@@ -219,6 +237,7 @@ export async function buildUserExport(userId: string) {
     exportedAt: new Date().toISOString(),
     format: "estalvify-export/v1",
     user,
+    household,
     bankConnections,
     bankAccounts,
     balances,

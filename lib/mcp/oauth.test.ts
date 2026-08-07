@@ -103,4 +103,25 @@ describe("access tokens", () => {
     const claims = await verifyAccessToken(token);
     expect(claims?.userId).toBe("u");
   });
+
+  it("round-trips household claims (du + role)", async () => {
+    const token = await signAccessToken({
+      userId: "member_1",
+      clientId: "client_abc",
+      scope: "read",
+      dataUserId: "owner_1",
+      role: "VIEWER",
+    });
+    const claims = await verifyAccessToken(token);
+    expect(claims?.userId).toBe("member_1");
+    expect(claims?.dataUserId).toBe("owner_1");
+    expect(claims?.role).toBe("VIEWER");
+  });
+
+  it("treats a legacy token (no household claims) as claimless, not garbage", async () => {
+    const token = await signAccessToken({ userId: "u", clientId: "c" });
+    const claims = await verifyAccessToken(token);
+    expect(claims?.dataUserId).toBeUndefined();
+    expect(claims?.role).toBeUndefined();
+  });
 });

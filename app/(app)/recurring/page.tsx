@@ -6,7 +6,7 @@
 // created automatically.
 
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { detectRecurringSuggestions, suggestionKey } from "@/lib/recurring/detect";
@@ -26,9 +26,8 @@ interface PageProps {
 }
 
 export default async function RecurringPage({ searchParams }: PageProps) {
-  const session = await auth();
-  const userId = session!.user.id;
-  const [prefs, params] = await Promise.all([getUserPrefs(userId), searchParams]);
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
+  const [prefs, params] = await Promise.all([getUserPrefs(userId, actorUserId), searchParams]);
 
   const detectionStart = new Date();
   detectionStart.setUTCDate(detectionStart.getUTCDate() - DETECTION_LOOKBACK_DAYS);

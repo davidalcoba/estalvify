@@ -5,6 +5,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTransition } from "react";
 import {
   Bell,
   LayoutDashboard,
@@ -20,7 +21,10 @@ import {
   ListFilter,
   Repeat,
   LineChart,
+  Home,
+  Check,
 } from "lucide-react";
+import { switchHousehold } from "@/app/(app)/actions";
 
 import {
   Sidebar,
@@ -46,6 +50,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { LogoMark } from "@/components/brand/logo";
+import { useCanWrite } from "@/components/layout/role-provider";
+
+// Work-queue routes: pure mutation surfaces a read-only member can't use.
+// Their pages also render a read-only notice for VIEWER, so a deep link
+// stays consistent with the hidden nav item.
+const WRITE_ONLY_URLS = new Set(["/categorize", "/rules"]);
 
 const navItems = [
   {
@@ -126,6 +136,9 @@ interface AppSidebarProps {
     email?: string | null;
     image?: string | null;
   };
+  /** The member's households (oldest first) and which one is active. */
+  households?: { id: string; name: string }[];
+  activeHouseholdId?: string;
   pendingCategorizations?: number;
   recurringToReview?: number;
   onSignOut: () => void;
@@ -133,12 +146,16 @@ interface AppSidebarProps {
 
 export function AppSidebar({
   user,
+  households = [],
+  activeHouseholdId,
   pendingCategorizations = 0,
   recurringToReview = 0,
   onSignOut,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
+  const canWrite = useCanWrite();
+  const [switching, startSwitching] = useTransition();
 
   // Outstanding work per route: transactions left to categorize, detected series
   // left to review. Rendered as a count badge on that nav item.
@@ -191,7 +208,9 @@ export function AppSidebar({
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => {
+                {group.items
+                  .filter((item) => canWrite || !WRITE_ONLY_URLS.has(item.url))
+                  .map((item) => {
                   const isActive =
                     pathname === item.url ||
                     (item.url !== "/dashboard" && pathname.startsWith(item.url));
@@ -257,6 +276,26 @@ export function AppSidebar({
                 align="end"
                 sideOffset={4}
               >
+                {/* Household switcher — only when there is a choice to make. */}
+                {households.length > 1 && (
+                  <>
+                    {households.map((h) => {
+                      const isActive = h.id === activeHouseholdId;
+                      return (
+                        <DropdownMenuItem
+                          key={h.id}
+                          disabled={switching || isActive}
+                          onClick={() => startSwitching(() => switchHousehold(h.id))}
+                        >
+                          <Home className="mr-2 h-4 w-4" />
+                          <span className="truncate">{h.name}</span>
+                          {isActive && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem asChild>
                   <Link href="/settings">
                     <Settings className="mr-2 h-4 w-4" />

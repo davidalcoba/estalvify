@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 interface ReconnectBankButtonProps {
   connectionId: string;
@@ -16,6 +17,9 @@ interface ReconnectBankButtonProps {
 export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, label = "Reconnect", secondary = false }: ReconnectBankButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const canWrite = useCanWrite();
+
+  if (!canWrite) return null;
 
   function handleReconnect() {
     setError(null);

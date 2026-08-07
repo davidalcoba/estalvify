@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/app/generated/prisma";
 import { send } from "@vercel/queue";
@@ -25,13 +25,12 @@ function mapAccountType(type?: string): "CHECKING" | "SAVINGS" | "CREDIT" | "INV
 }
 
 export async function finalizeSetup(connectionId: string, selectedUids: string[]) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   if (selectedUids.length === 0) throw new Error("Select at least one account");
 
   const connection = await prisma.bankConnection.findFirst({
-    where: { id: connectionId, userId: session.user.id, status: "PENDING_SETUP" },
+    where: { id: connectionId, userId: dataUserId, status: "PENDING_SETUP" },
     select: { id: true, pendingAccounts: true },
   });
 
@@ -56,12 +55,12 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
           // retarget a row that belongs to someone else.
           where: {
             userId_externalAccountId: {
-              userId: session.user.id,
+              userId: dataUserId,
               externalAccountId: account.uid,
             },
           },
           create: {
-            userId: session.user.id,
+            userId: dataUserId,
             bankConnectionId: connectionId,
             externalAccountId: account.uid,
             iban: account.ibanSuffix ?? null,
@@ -88,7 +87,7 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
   try {
     await send<SyncConnectionMessage>(TOPICS.syncConnection, {
       connectionId,
-      userId: session.user.id,
+      userId: dataUserId,
     });
   } catch (err) {
     // Queues unavailable (plan limitation, misconfiguration, etc.).
@@ -103,11 +102,10 @@ export async function finalizeSetup(connectionId: string, selectedUids: string[]
 }
 
 export async function cancelSetup(connectionId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const { dataUserId } = await requireScope("write");
 
   await prisma.bankConnection.deleteMany({
-    where: { id: connectionId, userId: session.user.id, status: "PENDING_SETUP" },
+    where: { id: connectionId, userId: dataUserId, status: "PENDING_SETUP" },
   });
 
   redirect("/accounts");

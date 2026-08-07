@@ -68,7 +68,21 @@ AI insights: the `/insights` page generates on-demand recommendations from an **
 
 This is a multi-user SaaS-style app.
 
-Each user has an isolated workspace and data scope. User data must never cross boundaries.
+Each **household** has an isolated workspace and data scope; data must never
+cross household boundaries. Domain rows hang off the household owner's
+`userId` (the data scope), and sessions resolve to it through the membership
+layer (`Household` / `HouseholdMember` / `HouseholdInvite`, roles
+OWNER/EDITOR/VIEWER) via `requireScope` — see PLAN_MULTIUSER.md; phases 1
+(model + scope enforcement), 2 (invitations: owner-managed members card in
+Settings, one-time invite links at `/invite/<token>`, invite-aware sign-in
+gates), 3 (role-aware UI: mutation affordances hidden for VIEWER, see
+UI_RULES.md → "Role-Aware Affordances"), 4 (role-aware MCP tokens: `du`/`role`
+claims, viewer tokens read-only), 5 (per-member bell read state, personal
+vs household prefs split, actor audit columns) and 6-lite (multi-household
+membership with an active-household cookie + sidebar switcher, explicit
+household creation on `/welcome` — never a sign-in side effect — and
+household rename) are implemented; only true `householdId` FKs and ownership
+transfer remain out of scope.
 
 Examples of user-scoped entities:
 

@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
 import { normalizeDescriptor, isProvisionalMonth } from "@/lib/planned/matching";
 import { nearestInSet, rootOf, type ParentMap } from "@/lib/categories/hierarchy";
+import { merchantDisplayName } from "@/lib/transactions/merchant";
 import {
   computeCascade,
   computeActualResult,
@@ -131,8 +132,14 @@ export interface MonthStatus {
   spentThisWeek: number;
   composition: WeekCompositionRow[];
   variableSpentMonth: number;
-  /** v4 category control: manual objectives only, ordered by projected deviation. */
+  /** Category control for the DAILY screen: discretionary objectives only. */
   control: ControlRow[];
+  /**
+   * Category control for the MONTH screen: every non-rollover objective,
+   * fixed ones included, each carrying `fixedTotal` — the committed slice of
+   * its budget. Superset of `control`, same ordering.
+   */
+  chargeControl: ControlRow[];
   objectives: CategoryObjective[];
   incomeObjectives: IncomeObjective[];
   reconciliation: Reconciliation;
@@ -473,12 +480,21 @@ export async function buildMonthStatus(
     objectiveSet.add(rootOf(p.categoryId!, parentOf));
   }
   const baseByObjective = new Map<string, number>();
+  // Of that base, what has already been charged — the control projection needs
+  // it to tell the committed part from the discretionary one.
+  const matchedBaseByObjective = new Map<string, number>();
   const recurringsByObjective = new Map<string, ObjectiveRecurring[]>();
   for (const p of plannedDebits) {
     const target = nearestInSet(p.categoryId!, objectiveSet, parentOf);
     if (!target) continue;
     const amount = Number(p.amount.toString());
     baseByObjective.set(target, (baseByObjective.get(target) ?? 0) + amount);
+    if (p.status === "MATCHED" && p.matchedAmount != null) {
+      matchedBaseByObjective.set(
+        target,
+        (matchedBaseByObjective.get(target) ?? 0) + Number(p.matchedAmount.toString())
+      );
+    }
     const list = recurringsByObjective.get(target) ?? [];
     list.push({ description: p.description, amount: round(amount), status: p.status });
     recurringsByObjective.set(target, list);
@@ -504,7 +520,11 @@ export async function buildMonthStatus(
     const list = txsByObjective.get(target) ?? [];
     list.push({
       date,
-      description: (tx.description ?? tx.remittanceInfo ?? "").trim().slice(0, 80),
+      // The raw descriptor leads with the bank's operation scaffolding, so a
+      // list of direct debits reads as a column of "PAGO DE ADEUDO DIRECTO
+      // SEPA …" with the actual creditor truncated away. Strip it the same way
+      // the merchants report does.
+      description: merchantDisplayName(tx.description, tx.remittanceInfo),
       amount: round(amount),
     });
     txsByObjective.set(target, list);
@@ -679,12 +699,15 @@ export async function buildMonthStatus(
         : 0;
   const provisional = isProvisionalMonth(today) && (ahead === 0 || ahead === -1);
 
-  // ── Category control (v4): only MANUAL objectives ───────────────────────
-  // A category qualifies when it carries a non-rollover budget line AND its
-  // objective has no recurring base — planned-fed categories (rent, school,
-  // utilities) are noise here (nothing to decide mid-month) and rollover funds
-  // have inverted polarity, so both are excluded. Projection at the current
-  // run rate, ordered by projected deviation: where the money is escaping.
+  // ── Category control (v4) ───────────────────────────────────────────────
+  // Computed once over EVERY non-rollover objective (funds are excluded: their
+  // polarity is inverted). Two views come out of the one list:
+  //   `chargeControl` — all of them, for the month screen, where the fixed
+  //                     charges are half the month and must be visible.
+  //   `control`       — the discretionary ones (fixedTotal === 0), for the
+  //                     daily dashboard: nothing can be decided mid-month
+  //                     about rent, so it is noise there.
+  // Ordered by projected deviation: where the money is escaping.
   const daysElapsedForControl =
     ahead === 0 ? Number(today.slice(8, 10)) : ahead < 0 ? daysInMonth : 1;
   // This ISO week's spend per objective (same nearest-objective rollup).
@@ -699,25 +722,23 @@ export async function buildMonthStatus(
     if (!target) continue;
     weekByObjective.set(target, (weekByObjective.get(target) ?? 0) + tx.amount);
   }
-  const control = computeControl(
-    currentItems
-      .filter(
-        (i) => !i.rollover && (baseByObjective.get(i.categoryId) ?? 0) === 0
-      )
-      .map((i) => {
-        const cat = categoryById.get(i.categoryId);
-        return {
-          categoryId: i.categoryId,
-          categoryName: cat?.name ?? "?",
-          categoryColor: cat?.color ?? "#6366f1",
-          assigned: i.assigned,
-          consumed: round(consumedByObjective.get(i.categoryId) ?? 0),
-          weekConsumed: round(weekByObjective.get(i.categoryId) ?? 0),
-        };
-      }),
+  const chargeControl = computeControl(
+    objectives
+      .filter((o) => !o.rollover)
+      .map((o) => ({
+        categoryId: o.categoryId,
+        categoryName: o.categoryName,
+        categoryColor: o.categoryColor,
+        assigned: o.assigned,
+        consumed: o.consumed,
+        weekConsumed: round(weekByObjective.get(o.categoryId) ?? 0),
+        fixedTotal: o.base,
+        fixedMatched: round(matchedBaseByObjective.get(o.categoryId) ?? 0),
+      })),
     daysElapsedForControl,
     daysInMonth
   );
+  const control = chargeControl.filter((r) => r.fixedTotal === 0);
 
   return {
     year,
@@ -734,6 +755,7 @@ export async function buildMonthStatus(
     composition,
     variableSpentMonth,
     control,
+    chargeControl,
     objectives,
     incomeObjectives,
     reconciliation,

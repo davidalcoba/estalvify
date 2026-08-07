@@ -6,7 +6,7 @@
 // with the sync alerts, which can produce several per outage.
 
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { NotificationList } from "@/components/notifications/notification-list";
@@ -21,14 +21,16 @@ export default async function NotificationsPage({
 }: {
   searchParams: Promise<{ unread?: string; page?: string }>;
 }) {
-  const session = await auth();
-  const userId = session!.user.id;
+  const scope = await requireScope("read");
+  const userId = scope.dataUserId;
 
   const params = await searchParams;
   const unreadOnly = params.unread === "1";
   const page = Math.max(1, Number(params.page) || 1);
 
-  const where = { userId, ...(unreadOnly ? { readAt: null } : {}) };
+  // "Unread" is the acting member's read state, not the household's.
+  const unreadFilter = { reads: { none: { userId: scope.actorUserId } } };
+  const where = { userId, ...(unreadOnly ? unreadFilter : {}) };
 
   const [rows, unreadCount, total] = await Promise.all([
     prisma.notification.findMany({
@@ -44,9 +46,13 @@ export default async function NotificationsPage({
         body: true,
         readAt: true,
         createdAt: true,
+        reads: {
+          where: { userId: scope.actorUserId },
+          select: { id: true },
+        },
       },
     }),
-    prisma.notification.count({ where: { userId, readAt: null } }),
+    prisma.notification.count({ where: { userId, ...unreadFilter } }),
     prisma.notification.count({ where }),
   ]);
 

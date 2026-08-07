@@ -758,11 +758,17 @@ function rethrowDuplicateMatcher(err: unknown): never {
   throw err;
 }
 
-export async function createSeriesForUser(userId: string, fields: SeriesFields) {
+// `actorUserId` (optional): the MEMBER who performed the change, for the
+// audit column — the app actions pass it, MCP writes leave it null.
+export async function createSeriesForUser(
+  userId: string,
+  fields: SeriesFields,
+  actorUserId?: string,
+) {
   const data = await normalizeSeriesFields(userId, fields);
   try {
     const created = await prisma.recurringSeries.create({
-      data: { userId, ...data },
+      data: { userId, ...data, actorUserId: actorUserId ?? null },
       select: { id: true },
     });
     return { id: created.id };
@@ -775,6 +781,7 @@ export async function updateSeriesForUser(
   userId: string,
   seriesId: string,
   fields: SeriesFields,
+  actorUserId?: string,
 ) {
   const existing = await prisma.recurringSeries.findFirst({
     where: { id: seriesId, userId },
@@ -783,7 +790,10 @@ export async function updateSeriesForUser(
   if (!existing) throw new Error("Series not found");
   const data = await normalizeSeriesFields(userId, fields);
   try {
-    await prisma.recurringSeries.update({ where: { id: seriesId }, data });
+    await prisma.recurringSeries.update({
+      where: { id: seriesId },
+      data: { ...data, ...(actorUserId ? { actorUserId } : {}) },
+    });
   } catch (err) {
     rethrowDuplicateMatcher(err);
   }

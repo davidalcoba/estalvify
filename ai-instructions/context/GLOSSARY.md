@@ -3,7 +3,30 @@
 ## Product Terms
 
 - Personal finance app: application for users to track accounts, transactions, budgets, and reports.
-- Multi-user: each authenticated user has an isolated data space.
+- Multi-user: each *household* has an isolated data space; several members can share it.
+
+## Household Terms (PLAN_MULTIUSER.md)
+
+- Household (`Household`): the unit that owns the data. Its `ownerUserId` is the User whose
+  `userId` anchors every domain row — the "data scope". A user OWNS at most one household but
+  can belong to several (phase 6-lite).
+- Active household: the one a member is currently acting in — the `estalvify.hh` cookie
+  (a validated preference, never an access grant), oldest membership as fallback; switched
+  from the sidebar user menu. Resolved by `getScope` (`lib/auth/scope.ts`) and, on the OAuth
+  surfaces, `lib/household/active.ts`.
+- `/welcome`: where a signed-in user with no membership lands. Household creation is an
+  explicit choice there (or accept a pending invite, or sign out) — never a sign-in side effect.
+- Member (`HouseholdMember`): a user's membership in a household, with a role.
+- Role (`HouseholdRole`): `OWNER` (everything: banks, members, deletion, Privacy & data),
+  `EDITOR` (domain writes: categorize, rules, plan, recurring, connections, settings),
+  `VIEWER` (read-only).
+- Scope level: what a server action/page/route requires — `read`, `write` or `admin` —
+  resolved against the member's role by `requireScope` (`lib/auth/scope.ts`; pure matrix in
+  `lib/auth/roles.ts`).
+- `dataUserId` vs `actorUserId`: the household owner's id (filters every domain query) vs
+  the signed-in member's id (personal prefs, audit, OAuth grants). Never confuse them.
+- Invite (`HouseholdInvite`): a pending, expiring invitation by email + role, delivered as a
+  copyable link (token stored hashed). The acceptance flow is phase 2.
 
 ## Banking Terms
 

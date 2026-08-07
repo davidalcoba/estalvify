@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useCanWrite } from "@/components/layout/role-provider";
 
 // Spanish banks available via Enable Banking
 // In the future this list can be fetched from /api/banking/banks
@@ -42,6 +43,9 @@ export function ConnectBankDialog() {
   const [isPending, startTransition] = useTransition();
   const [connectingBank, setConnectingBank] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const canWrite = useCanWrite();
+
+  if (!canWrite) return null;
 
   const filtered = SUPPORTED_BANKS.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase())

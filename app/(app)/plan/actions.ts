@@ -1,14 +1,13 @@
 "use server";
 
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { upsertBudgetItemForUser, deleteBudgetItemForUser } from "@/lib/mcp/manage";
 
 async function requireUserId(): Promise<string> {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  return session.user.id;
+  const { dataUserId } = await requireScope("write");
+  return dataUserId;
 }
 
 function revalidate(): void {
@@ -86,7 +85,7 @@ export interface PlannedOneOffInput {
 }
 
 export async function createPlannedOneOff(input: PlannedOneOffInput): Promise<void> {
-  const userId = await requireUserId();
+  const { dataUserId: userId, actorUserId } = await requireScope("write");
   const description = input.description?.trim();
   if (!description) throw new Error("Description is required");
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Invalid amount");
@@ -111,6 +110,7 @@ export async function createPlannedOneOff(input: PlannedOneOffInput): Promise<vo
       year: input.year,
       month: input.month,
       dueDay: input.dueDay,
+      actorUserId,
     },
   });
   revalidate();

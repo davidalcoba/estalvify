@@ -20,6 +20,7 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
+import { useCanWrite } from "@/components/layout/role-provider";
 import {
   transactionMerchant,
   transactionOperationType,
@@ -82,6 +83,7 @@ export function TransactionsMobileView({
   categories,
 }: TransactionsMobileViewProps) {
   const router = useRouter();
+  const canWrite = useCanWrite();
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
@@ -198,6 +200,7 @@ export function TransactionsMobileView({
                   )}
                 </div>
 
+                {canWrite && (
                 <div className="flex items-center gap-2">
                   <CategorySelect
                     key={activeTx.id}
@@ -232,6 +235,7 @@ export function TransactionsMobileView({
                     <Repeat className="h-4 w-4" />
                   </Button>
                 </div>
+                )}
               </div>
             </>
           )}

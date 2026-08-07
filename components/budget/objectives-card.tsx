@@ -11,6 +11,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useCanWrite } from "@/components/layout/role-provider";
 import {
   ChevronRight,
   Loader2,
@@ -38,7 +39,7 @@ import { upsertBudgetObjective, removeBudgetObjective } from "@/app/(app)/plan/a
 interface ObjectivesCardProps {
   objectives: CategoryObjective[];
   incomeObjectives: IncomeObjective[];
-  /** v4 control rows: manual objectives only, ordered by projected deviation. */
+  /** Every non-rollover objective, ordered by projected deviation. */
   control: ControlRow[];
   /** 0–1, how much of the month has elapsed — the pace reference. */
   monthElapsed: number;
@@ -83,6 +84,7 @@ export function ObjectivesCard({
   locale,
 }: ObjectivesCardProps) {
   const router = useRouter();
+  const canWrite = useCanWrite();
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirm, setConfirm] = useState<{ categoryId: string; name: string } | null>(null);
@@ -129,10 +131,12 @@ export function ObjectivesCard({
     });
   }
 
-  // v4: the Charges list shows ONLY the manual objectives (the control rows,
-  // already ordered by projected deviation). Planned/recurring-fed categories
-  // are noise here — nothing to decide about them mid-month. The objective
-  // detail (transactions, edit/remove) is joined back by category.
+  // The Charges list shows every non-rollover objective (`chargeControl`,
+  // already ordered by projected deviation) — the fixed ones included: on the
+  // MONTH screen they are half the money, and their bar carries the committed
+  // rule. It is the daily dashboard that narrows to the discretionary ones.
+  // The objective detail (transactions, edit/remove) is joined back by
+  // category.
   const detailById = new Map(objectives.map((o) => [o.categoryId, o]));
   const funds = objectives.filter((o) => o.rollover);
 
@@ -145,6 +149,7 @@ export function ObjectivesCard({
             {elapsedPct}% elapsed
           </span>
         </CardTitle>
+        {canWrite && (
         <Button
           variant="ghost"
           size="sm"
@@ -157,6 +162,7 @@ export function ObjectivesCard({
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add
         </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {incomeObjectives.length > 0 && (
@@ -201,12 +207,25 @@ export function ObjectivesCard({
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {o.categoryName}
                       </span>
+                      {/* Received over expected — the Charges pair with the
+                          polarity flipped. A fully arrived month keeps its tick
+                          instead of repeating the same figure twice. */}
                       <span
                         className={`shrink-0 text-[13px] font-semibold tabular-nums ${
                           pending > 0.005 ? "text-muted-foreground" : "text-success"
                         }`}
                       >
-                        {pending > 0.005 ? fmt0(pending) : "✓"}
+                        {pending > 0.005 ? (
+                          <>
+                            {fmt0(o.received)}
+                            <span className="text-muted-foreground/50">
+                              <span className="mx-1">/</span>
+                              {fmt0(o.expected)}
+                            </span>
+                          </>
+                        ) : (
+                          "✓"
+                        )}
                       </span>
                       <ChevronRight
                         className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
@@ -346,12 +365,19 @@ export function ObjectivesCard({
                             }}
                           />
                         )}
-                        {c.state !== "OK" && (
-                          <span
-                            className="absolute inset-y-0 right-0 -z-10 w-[3px]"
-                            style={{ background: tone }}
-                          />
-                        )}
+                        {/* No wall at the right edge for a non-OK state. The
+                            fill is already painted in that state's colour, so
+                            the wall repeated in a hard 3px edge what the whole
+                            bar was saying in amber or red — and read as a
+                            border on the row rather than as part of it. */}
+                        {/* No mark for the committed slice in the row. A rule
+                            along the bottom was tried and removed: the
+                            recurring-fed objectives are the ones whose budget
+                            IS their recurring total, so it came out full-width
+                            on every row that had it — distinguishing nothing,
+                            and reading as a black border on the row rather
+                            than as a marking inside the bar. The committed
+                            amount is stated in the panel, as `Fixed`. */}
                         <span
                           className="inline-block h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: o.categoryColor }}
@@ -359,20 +385,23 @@ export function ObjectivesCard({
                         <span className="min-w-0 flex-1 truncate font-medium">
                           {o.categoryName}
                         </span>
-                        {c.projectedDeviation > 0 && (
-                          <span
-                            className={`shrink-0 rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums ${pctTone}`}
-                            style={{ background: `color-mix(in oklch, ${tone} 16%, transparent)` }}
-                          >
-                            +{fmt0(c.projectedDeviation)}
-                          </span>
-                        )}
+                        {/* Spent over budget, the same pair the dashboard's
+                            Categories card shows — the two numbers that are
+                            simply true right now. Everything derived from them
+                            (projected, its overshoot, fixed, pace) waits in the
+                            panel: a row carrying five figures stops being
+                            readable at a glance, which is the whole point of
+                            the bar. */}
                         <span
                           className={`shrink-0 text-[13px] font-semibold tabular-nums ${
                             left < 0 ? "text-destructive" : "text-muted-foreground"
                           }`}
                         >
-                          {fmt0(left)}
+                          {fmt0(c.consumed)}
+                          <span className="text-muted-foreground/50">
+                            <span className="mx-1">/</span>
+                            {fmt0(c.assigned)}
+                          </span>
                         </span>
                         <ChevronRight
                           className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
@@ -383,8 +412,11 @@ export function ObjectivesCard({
 
                       {isOpen && (
                         <div className="space-y-2 rounded-b-lg border border-t-0 bg-muted/40 p-3 text-xs">
-                          {/* The detail is where the full numbers belong. */}
-                          <dl className="grid grid-cols-4 gap-2">
+                          {/* The detail is where the full numbers belong.
+                              Right-aligned like every amount below it, so the
+                              last column lands on the same edge as the
+                              composition and transaction figures. */}
+                          <dl className="grid grid-cols-4 gap-2 text-right">
                             <div>
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                 Spent
@@ -412,11 +444,14 @@ export function ObjectivesCard({
                               </dd>
                             </div>
                             <div>
+                              {/* Pace explains a projection built from a run
+                                  rate; on a committed budget it explains
+                                  nothing, so that slot shows the commitment. */}
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Pace
+                                {c.fixedTotal > 0 ? "Fixed" : "Pace"}
                               </dt>
                               <dd className="font-semibold tabular-nums text-muted-foreground">
-                                {elapsedPct}%
+                                {c.fixedTotal > 0 ? fmt0(c.fixedTotal) : `${elapsedPct}%`}
                               </dd>
                             </div>
                           </dl>
@@ -469,9 +504,10 @@ export function ObjectivesCard({
                             </ul>
                           )}
 
-                          {/* `xs` + wrap: at `sm` the two labels overflowed the
-                              panel on a phone. Short labels — the panel is
-                              already about this category's manual amount. */}
+                          {canWrite && (
+                          /* `xs` + wrap: at `sm` the two labels overflowed the
+                             panel on a phone. Short labels — the panel is
+                             already about this category's manual amount. */
                           <div className="flex flex-wrap justify-end gap-2 border-t pt-2">
                             {o.extra > 0 && (
                               <Button
@@ -504,6 +540,7 @@ export function ObjectivesCard({
                               {o.extra > 0 ? "Edit manual" : "Add manual"}
                             </Button>
                           </div>
+                          )}
                         </div>
                       )}
                     </li>
@@ -523,6 +560,7 @@ export function ObjectivesCard({
                     <li key={o.categoryId} className="text-sm">
                       <div className="flex items-center gap-3">
                         <PiggyBank className="h-3.5 w-3.5 shrink-0 text-success" />
+                        {canWrite ? (
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
@@ -537,6 +575,11 @@ export function ObjectivesCard({
                         >
                           {o.categoryName}
                         </button>
+                        ) : (
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {o.categoryName}
+                        </span>
+                        )}
                         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                           {fmt0(o.assigned)}/mo
                         </span>
@@ -547,6 +590,7 @@ export function ObjectivesCard({
                         >
                           {fmt0(o.balance ?? 0)}
                         </span>
+                        {canWrite && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -559,6 +603,7 @@ export function ObjectivesCard({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                        )}
                       </div>
                     </li>
                   ))}

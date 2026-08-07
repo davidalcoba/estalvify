@@ -3,7 +3,7 @@
 // rent-before-salary squeeze is visible with days to act on it.
 
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -22,9 +22,8 @@ const CASHFLOW_HORIZON_DAYS = 60;
 const LIST_MONTHS_AHEAD = 2;
 
 export default async function ForecastPage() {
-  const session = await auth();
-  const userId = session!.user.id;
-  const { locale, language, timezone, currency } = await getUserPrefs(userId);
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
+  const { locale, language, timezone, currency } = await getUserPrefs(userId, actorUserId);
 
   await syncPlannedState(userId, timezone, currency, locale);
   const cashflow = await buildCashflowData(userId, timezone, CASHFLOW_HORIZON_DAYS);

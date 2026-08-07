@@ -2,21 +2,25 @@
 // Provides sidebar + header. Redirects unauthenticated users to /login.
 
 import { redirect } from "next/navigation";
-import { auth, signOut } from "@/auth";
+import { signOut } from "@/auth";
+import { getScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { RoleProvider } from "@/components/layout/role-provider";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const scope = await getScope();
 
-  if (!session?.user) {
+  if (!scope) {
     redirect("/login");
   }
 
-  const userId = session.user.id;
+  // Domain data (counts, notifications) is the household's; the sidebar
+  // identity is the signed-in member's.
+  const userId = scope.dataUserId;
 
   const [pendingCategorizations, notificationRows, unreadCount] =
     await Promise.all([
@@ -41,9 +45,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           body: true,
           readAt: true,
           createdAt: true,
+          // Read state is the ACTING member's, not the household's.
+          reads: {
+            where: { userId: scope.actorUserId },
+            select: { id: true },
+          },
         },
       }),
-      prisma.notification.count({ where: { userId, readAt: null } }),
+      prisma.notification.count({
+        where: { userId, reads: { none: { userId: scope.actorUserId } } },
+      }),
       // Cached — detection is too heavy to rerun on every navigation.
     ]);
 
@@ -55,9 +66,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <RoleProvider role={scope.role}>
     <SidebarProvider>
       <AppSidebar
-        user={session.user}
+        user={scope.actor}
+        households={scope.households}
+        activeHouseholdId={scope.householdId}
         pendingCategorizations={pendingCategorizations}
         onSignOut={handleSignOut}
       />
@@ -68,5 +82,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </RoleProvider>
   );
 }

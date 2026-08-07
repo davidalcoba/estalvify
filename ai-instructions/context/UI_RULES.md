@@ -129,7 +129,19 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 - **Light tint (15%)** of the *same* colour continuing to where the current
   pace lands, plus a **1.5px line** at that point. No hatching, no second
   colour — projection is the same quantity, less certain.
-- **3px wall** at the right edge when the state is not `OK`.
+- **No wall at the right edge for a non-`OK` state.** A 3px one was tried and
+  removed: the fill is already painted in that state's colour, so it repeated
+  in a hard edge what the whole bar was saying in amber or red, and read as a
+  border on the row rather than as part of it. The colour is the state.
+- **No mark for the committed slice.** A 3px rule along the bottom covering
+  `fixedTotal / assigned` was tried and removed. The premise was wrong: an
+  objective fed by recurring charges has no manual `extra`, so its budget
+  *is* its recurring total and the rule came out full-width on every row that
+  had one — distinguishing nothing, and reading as a black border on the row
+  instead of as a marking inside the bar (worse on an expanded row, where it
+  became a heavy divider above the panel). The committed amount is stated in
+  the panel, as `Fixed`, which is where a number that does not vary within
+  the month belongs.
 - **No elapsed-month tick inside the row.** It was tried and removed: it sits
   at the same x in every row (it is the same month for all of them), so it
   reads as a per-category limit — the first question it got was "shouldn't
@@ -140,10 +152,17 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 - Colour comes from the control state (`--success` / `--warning` /
   `--destructive`), and is **grey while nothing has been spent** — `OK` on an
   untouched category is not news.
-- **One number on the right**: what is left (or still to arrive). A chip with
-  the projected overshoot appears *only* when there is one. Everything else —
-  spent, budget, projected, pace — lives in the panel that the row expands
-  into, which is where the detail, the composition and the actions belong.
+- **On the right, what is true now and what was planned**: `spent/budget`
+  (`received/expected` for income), the budget half in
+  `text-muted-foreground/50` — the same pair, in the same shape, as the
+  dashboard's Categories card, so the two screens do not describe a category
+  differently. A fully arrived income row keeps a `✓` rather than printing the
+  same figure twice.
+- **Nothing derived goes in the row.** Projected, its overshoot, fixed and
+  pace are all computed *from* those two numbers, and they live in the panel
+  the row expands into. A remaining-amount and an overshoot chip were both
+  tried in the row and removed: five figures on one line stops being readable
+  at a glance, which is the only thing the bar is for.
 
 Zero targets must not paint `NaN`: clamp every percentage through a
 finite-checked helper.
@@ -223,6 +242,20 @@ from the `(app)` layout — never by special-casing a URL in the render. The bad
 is `variant="brand"`, hidden at zero, and caps at `99+`. Anything the layout
 computes runs on **every** navigation, so a count that is not a cheap query
 belongs behind a cache (see `ARCHITECTURE.md` → "Cached Reads").
+
+## Role-Aware Affordances (household roles)
+
+A household member can be a read-only VIEWER (PLAN_MULTIUSER.md §5). Every
+**mutation affordance** — a button, inline editor, dialog trigger or row click
+that ends in a server action or write API call — must not render for a member
+whose role can't use it. Client components get the role from
+`useCanWrite()` / `useHouseholdRole()` (`components/layout/role-provider.tsx`,
+mounted in the `(app)` layout); server components read `scope.role` from
+`requireScope`. Pages that are pure work queues (`/categorize`, `/rules`)
+render a read-only `EmptyState` for VIEWER instead of dead controls, and their
+sidebar items are filtered out (`WRITE_ONLY_URLS` in `app-sidebar.tsx`).
+This is presentation only: the server action/route still enforces its own
+level — hiding a button is never the access control.
 
 ## Desktop and Mobile: First-Class Views
 

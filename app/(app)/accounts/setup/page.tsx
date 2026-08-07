@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { AccountSelectionForm } from "@/components/accounts/account-selection-form";
 import { PageHeader } from "@/components/layout/page-header";
@@ -22,13 +22,13 @@ export default async function SetupPage({
 }: {
   searchParams: Promise<{ connectionId?: string }>;
 }) {
-  const session = await auth();
+  const { dataUserId } = await requireScope("read");
   const { connectionId } = await searchParams;
 
   if (!connectionId) redirect("/accounts");
 
   const connection = await prisma.bankConnection.findFirst({
-    where: { id: connectionId, userId: session!.user.id, status: "PENDING_SETUP" },
+    where: { id: connectionId, userId: dataUserId, status: "PENDING_SETUP" },
     select: { id: true, bankName: true, pendingAccounts: true },
   });
 
@@ -39,7 +39,7 @@ export default async function SetupPage({
   // Filter out accounts already imported into any of the user's bank connections.
   const allUids = rawAccounts.map((a) => a.uid);
   const alreadyImported = await prisma.bankAccount.findMany({
-    where: { userId: session!.user.id, externalAccountId: { in: allUids } },
+    where: { userId: dataUserId, externalAccountId: { in: allUids } },
     select: { externalAccountId: true },
   });
   const importedUids = new Set(alreadyImported.map((a) => a.externalAccountId));

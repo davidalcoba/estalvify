@@ -51,8 +51,81 @@ model User {
   mcpAuthCodes          McpAuthCode[]
   mcpRefreshTokens      McpRefreshToken[]
   dismissedSuggestions  DismissedRecurringSuggestion[]
+  ownedHousehold        Household?                     @relation("OwnedHousehold")
+  householdMemberships  HouseholdMember[]
+  notificationReads     NotificationRead[]
 
   @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// HOUSEHOLD - Membership + roles over the owner's data scope
+// See ai-instructions/context/PLAN_MULTIUSER.md. Domain tables keep hanging
+// off the OWNER's userId (the household's data scope); this layer only decides
+// which userId a session resolves to and with which role.
+// ─────────────────────────────────────────────
+
+model Household {
+  id   String @id @default(cuid())
+  name String // Display only, e.g. "Casa Alcoba"
+
+  // The User whose `userId` anchors ALL of the household's data. Unique: a
+  // user anchors at most one household. Not transferable in v1.
+  ownerUserId String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User              @relation("OwnedHousehold", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members HouseholdMember[]
+  invites HouseholdInvite[]
+
+  @@map("households")
+}
+
+enum HouseholdRole {
+  OWNER // Everything: banks, members, household deletion, Privacy & data
+  EDITOR // Domain writes: categorize, rules, plan, recurring, connections
+  VIEWER // Read-only
+}
+
+model HouseholdMember {
+  id          String        @id @default(cuid())
+  householdId String
+  // A user can belong to SEVERAL households (phase 6-lite); the active one is
+  // a cookie resolved by lib/auth/scope.ts (oldest membership as fallback).
+  userId      String
+  role        HouseholdRole
+  createdAt   DateTime      @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@index([userId])
+  @@map("household_members")
+}
+
+// A pending invitation to join a household (phase 2 flow: copyable link).
+// The link carries the raw token; only its hash is stored — same pattern as
+// McpAuthCode/McpRefreshToken.
+model HouseholdInvite {
+  id              String        @id @default(cuid())
+  householdId     String
+  // Compared case-insensitively against the session email, like signIn does.
+  email           String
+  role            HouseholdRole // Never OWNER
+  tokenHash       String        @unique
+  invitedByUserId String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime      @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@map("household_invites")
 }
 
 model Account {
@@ -333,6 +406,12 @@ model CategoryRule {
   priority           Int     @default(0)
   applyRetroactively Boolean @default(false)
 
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
+
   // Observability: refreshed on every run so a rule that matches nothing is visible
   matchCount  Int       @default(0) // Matches in the most recent run, not cumulative
   lastRunAt   DateTime?
@@ -363,6 +442,12 @@ model TransactionCategorization {
 
   // Which rule triggered this (if source = RULE)
   categoryRuleId String?
+
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
 
   // Undo trail for rule runs: what this row held before a rule overwrote it.
   // previousCategoryId has no FK on purpose — it is a historical value and a
@@ -492,6 +577,12 @@ model PlannedItem {
   // hand-typed one-off. One instance per series per month.
   recurringSeriesId String?
 
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
+
   status               PlannedStatus @default(PENDING)
   // matchedTransactionIds is THE source of truth for what a matched item
   // absorbed: always 1..n ids, also for single-charge matches. Consumers read
@@ -577,6 +668,12 @@ model RecurringSeries {
   // inference — rent leaves Despeses, Mònica's salary lands in Estalvis.
   bankAccountId String?
 
+  // Audit (PLAN_MULTIUSER.md phase 5): which MEMBER performed the manual
+  // mutation. No FK on purpose — historical value; a removed member must not
+  // block or cascade. Null = pre-audit rows, system paths (sync, rule runs)
+  // and MCP writes.
+  actorUserId String?
+
   active           Boolean   @default(true)
   lastSeenAt       DateTime? @db.Date
   nextExpectedDate DateTime? @db.Date
@@ -638,14 +735,36 @@ model Notification {
   dedupeKey String
   metadata  Json? // Extra context for future deep-links (categoryId, merchantKey…)
 
+  // AGGREGATE first-read timestamp: set when the FIRST member reads it, and
+  // what retention purges on (read > 90 days). The per-member read state the
+  // UI shows lives in NotificationRead — never read readAt for display.
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reads NotificationRead[]
 
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// Per-member read state for the shared household bell (PLAN_MULTIUSER.md
+// phase 5): one row = this member has read this notification. Notifications
+// hang off the household's dataUserId, so without this table one member's
+// "mark read" blanked the other's bell.
+model NotificationRead {
+  id             String   @id @default(cuid())
+  notificationId String
+  userId         String // the MEMBER who read it (actorUserId)
+  readAt         DateTime @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId])
+  @@map("notification_reads")
 }
 
 enum NotificationType {
@@ -738,6 +857,10 @@ model McpAuthCode {
   codeChallenge       String
   codeChallengeMethod String    @default("S256")
   scope               String?
+  // The household ACTIVE at consent time — the tokens bind to it. Null =
+  // pre-multi-household grant; the token endpoint falls back to the user's
+  // oldest membership. No FK: validated live against household_members.
+  householdId         String?
   expiresAt           DateTime
   usedAt              DateTime?
   createdAt           DateTime  @default(now())
@@ -751,14 +874,16 @@ model McpAuthCode {
 }
 
 model McpRefreshToken {
-  id        String    @id @default(cuid())
-  tokenHash String    @unique
-  clientId  String
-  userId    String
-  scope     String?
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  clientId    String
+  userId      String
+  scope       String?
+  // Carried forward through rotation from the auth code (see McpAuthCode).
+  householdId String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   client McpOAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)

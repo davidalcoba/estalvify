@@ -2,7 +2,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { auth } from "@/auth";
+import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +11,8 @@ import { CategorizeView } from "@/components/categorize/categorize-view";
 import { CategorizeSearchProvider, CategorizeSearchBar } from "@/components/categorize/search-context";
 import { buildUncategorizedWhere } from "@/lib/categorize";
 import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Eye } from "lucide-react";
 
 export const metadata: Metadata = { title: "Categorize" };
 
@@ -96,8 +98,7 @@ interface CategorizeBodyProps {
 }
 
 async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBodyProps) {
-  const session = await auth();
-  const userId = session!.user.id;
+  const { dataUserId: userId, actorUserId } = await requireScope("read");
   const where = buildUncategorizedWhere(userId);
 
   const [total, transactions, categories, prefs] = await Promise.all([
@@ -113,7 +114,7 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
       where: { isActive: true, OR: [{ userId }, { userId: null }] },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
-    getUserPrefs(userId),
+    getUserPrefs(userId, actorUserId),
   ]);
 
   return (
@@ -132,6 +133,23 @@ async function CategorizeBody({ page, pageSize, pageSizeOptions }: CategorizeBod
 }
 
 export default async function CategorizePage({ searchParams }: PageProps) {
+  // The inbox is a pure work queue — every affordance on it writes. A VIEWER
+  // gets an explanation instead of controls that would only error (the
+  // sidebar also hides this route for them).
+  const scope = await requireScope("read");
+  if (scope.role === "VIEWER") {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Categorize" />
+        <EmptyState
+          icon={Eye}
+          title="Read-only access"
+          description="Your role in this household is Viewer: you can browse transactions, plans and reports, but categorizing is up to the household's editors."
+        />
+      </div>
+    );
+  }
+
   const { page: pageStr, size: sizeStr } = await searchParams;
 
   const page = Math.max(1, parseInt(pageStr ?? "1") || 1);

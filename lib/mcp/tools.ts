@@ -126,19 +126,27 @@ function errorResult(err: unknown, fallback: string): CallToolResult {
 
 // Minimal shape of the auth context we attach in verifyToken.
 type ToolExtra = {
-  authInfo?: { scopes?: string[]; extra?: { userId?: string } };
+  authInfo?: {
+    scopes?: string[];
+    extra?: { userId?: string; dataUserId?: string };
+  };
 };
 
 /**
- * Resolve the acting user AND enforce the token's scope in one place. Every
+ * Resolve the DATA scope AND enforce the token's scope in one place. Every
  * tool declares whether it reads or writes; a token granted only `read` gets
  * an error from write tools instead of silently full access. The scopes on
- * authInfo are set by verifyToken (app/api/mcp/route.ts), which already
- * defaults legacy scope-less tokens to full access.
+ * authInfo are set by verifyToken (app/api/mcp/route.ts), which defaults
+ * legacy scope-less tokens to full access and caps a VIEWER's token at read.
+ *
+ * The returned id is the HOUSEHOLD's data scope (`dataUserId` — the owner's
+ * User.id), not the acting member's, mirroring requireScope in the app
+ * (PLAN_MULTIUSER.md phase 4). Legacy tokens carry no dataUserId; for them
+ * the actor was the owner, so the fallback is exact.
  */
 function requireUserId(extra: ToolExtra, scope: KnownScope): string {
-  const userId = extra.authInfo?.extra?.userId;
-  if (!userId) throw new Error("Unauthenticated");
+  const actorUserId = extra.authInfo?.extra?.userId;
+  if (!actorUserId) throw new Error("Unauthenticated");
   const granted = extra.authInfo?.scopes ?? [];
   if (!hasScope(granted, scope)) {
     throw new Error(
@@ -147,7 +155,7 @@ function requireUserId(extra: ToolExtra, scope: KnownScope): string {
         `re-consent with the ${scope} scope.`,
     );
   }
-  return userId;
+  return extra.authInfo?.extra?.dataUserId ?? actorUserId;
 }
 
 function json(data: unknown): CallToolResult {
@@ -441,8 +449,12 @@ export function registerTools(server: McpServer): void {
         "charges - fund quotas - savingsTarget = variableBudget (the residue; " +
         "assignedVariable is the category split and assignmentGap the mismatch, shown " +
         "never auto-squared). weekly: the daily-rate available (never month/4; ISO weeks). " +
-        "control: manual objectives only, each with consumed vs assigned, weekConsumed, " +
-        "end-of-month projection and OK/RIESGO/EXCEDIDO, ordered by projected deviation. " +
+        "chargeControl: EVERY non-rollover objective, each with consumed vs assigned, " +
+        "weekConsumed, fixedTotal (the recurring, already-committed slice of the budget) " +
+        "and fixedMatched, plus the end-of-month projection — fixedTotal + the run rate of " +
+        "the discretionary part only, since extrapolating rent daily is meaningless — and " +
+        "OK/RIESGO/EXCEDIDO, ordered by projected deviation. control: the subset with " +
+        "fixedTotal 0, the purely discretionary ones the daily screen acts on. " +
         "funds: rollover accumulation (quota + balance). Defaults to the current month.",
       inputSchema: {
         year: z.number().int().optional(),
@@ -468,6 +480,7 @@ export function registerTools(server: McpServer): void {
           spentThisWeek: s.spentThisWeek,
           variableSpentMonth: s.variableSpentMonth,
           control: s.control,
+          chargeControl: s.chargeControl,
           funds: s.objectives
             .filter((o) => o.rollover)
             .map((o) => ({

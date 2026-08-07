@@ -8,6 +8,7 @@
 // No Prisma — unit-tested in isolation.
 
 import { normalizeDescriptor } from "@/lib/planned/matching";
+import { merchantDisplayName } from "@/lib/transactions/merchant";
 
 export interface TxForDetection {
   date: string; // YYYY-MM-DD
@@ -159,7 +160,13 @@ export function detectRecurringSuggestions(
 
     suggestions.push({
       merchantKey: key,
-      displayName: (byDateDesc[0].merchant?.trim() || byDateDesc[0].descriptor.trim())
+      // The clean merchant when the sync extracted one; otherwise the raw
+      // descriptor with the bank's operation prefix stripped — falling back to
+      // it untouched named suggestions "PAGO DE ADEUDO DIRECTO SEPA …", which
+      // is the one part of a suggestion the user cannot fix by editing amounts.
+      displayName: (
+        byDateDesc[0].merchant?.trim() || merchantDisplayName(byDateDesc[0].descriptor, null)
+      )
         .replace(/\s+/g, " ")
         .slice(0, 60),
       direction: group[0].direction,

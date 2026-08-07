@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setSavingsTarget } from "@/app/(app)/plan/actions";
+import { useCanWrite } from "@/components/layout/role-provider";
 import { formatCurrency } from "@/lib/formatters";
 import { Pencil } from "lucide-react";
 
@@ -30,6 +31,15 @@ export function SavingsTargetInput({
   const [draft, setDraft] = useState(String(value));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const canWrite = useCanWrite();
+
+  if (!canWrite) {
+    return (
+      <span className="tabular-nums">
+        −{formatCurrency(value, currency, locale)}
+      </span>
+    );
+  }
 
   function save() {
     const amount = Number(draft.replace(",", "."));

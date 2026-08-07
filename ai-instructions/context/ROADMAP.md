@@ -11,7 +11,8 @@
 **Última actualización:** 2026-08-04 · **Fase en curso:** ninguna ·
 **Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
-recurrentes, etc.).
+recurrentes, etc.). **Plan aprobado pendiente de ejecución:** multiusuario por hogar
+(invitaciones + roles) — ver `PLAN_MULTIUSER.md`, fases en su §9.
 
 > **Post-roadmap — MODELO DE PLANIFICACIÓN V3 (spec definitivo, 2026-08-04).** Sustituye
 > a los dos specs anteriores (el batch de 8 features y el modelo v2 del mismo día).
@@ -135,14 +136,21 @@ recurrentes, etc.).
 >   El semanal ya era tasa diaria (nunca /4, semana ISO). **Dashboard = dos
 >   números**: disponible esta semana + operaciones (contra mediana), con la
 >   composición informativa (sin semáforo); todo lo demás a un toque.
->   **Control por categoría** (`lib/budget/control.ts`, puro): solo objetivos
->   manuales (línea sin base recurrente — las categorías alimentadas por
->   planned/series y los fondos rollover se excluyen; los fondos van en su
->   sección con polaridad de acumulación). Cada fila: % consumido junto a % de
->   mes transcurrido, **proyección fin de mes** (consumido/días×díasDelMes) y
->   estado OK/RIESGO (proyección>asignado)/EXCEDIDO (consumido>asignado),
->   ordenado por desviación proyectada. MCP: `set_savings_target` nuevo;
->   `get_budgets` expone `savingsTarget` y `rollover`.
+>   **Control por categoría** (`lib/budget/control.ts`, puro): se calcula sobre
+>   **todos** los objetivos no-rollover (los fondos van en su sección, con
+>   polaridad de acumulación) y de ahí salen dos vistas — `chargeControl`
+>   (todas, para la pantalla del mes, donde los fijos son la mitad del dinero) y
+>   `control` (las de `fixedTotal === 0`, las discrecionales, para el dashboard
+>   diario: del alquiler no se decide nada a mitad de mes). Cada fila: %
+>   consumido junto a % de mes transcurrido, `fixedTotal`/`fixedMatched` (el
+>   tramo recurrente ya comprometido del presupuesto), **proyección fin de mes**
+>   = `fixedTotal + tasa diaria de la parte discrecional` — extrapolar un
+>   alquiler a ritmo diario no significa nada; la fórmula degenera a la tasa
+>   pura cuando `fixedTotal` es 0 y al plan cuando lo es todo — y estado
+>   OK/RIESGO (proyección>asignado)/EXCEDIDO (consumido>asignado), ordenado por
+>   desviación proyectada. MCP: `set_savings_target` nuevo; `get_budgets` expone
+>   `savingsTarget` y `rollover`; `get_month_status` expone `chargeControl`
+>   además de `control`.
 
 > **Post-roadmap — Auditar el árbol de categorías desde MCP.** `list_transactions` acepta
 > `categoryId` (con subcategorías incluidas por defecto, vía `subtreeIds` puro en
