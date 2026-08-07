@@ -146,7 +146,11 @@ recurrentes, etc.). **Plan aprobado pendiente de ejecución:** multiusuario por 
 >   tramo recurrente ya comprometido del presupuesto), **proyección fin de mes**
 >   = `fixedTotal + tasa diaria de la parte discrecional` — extrapolar un
 >   alquiler a ritmo diario no significa nada; la fórmula degenera a la tasa
->   pura cuando `fixedTotal` es 0 y al plan cuando lo es todo — y estado
+>   pura cuando `fixedTotal` es 0 y al plan cuando lo es todo. La tasa solo se
+>   aplica si hay presupuesto discrecional (`assigned > fixedTotal`): un
+>   presupuesto íntegramente comprometido dice que ahí no se gasta fuera del
+>   plan, así que un cargo imprevisto en él es un evento y cuenta **una vez**
+>   (extrapolarlo convertía una reparación de 200 € el día 5 en 1.240 €) — y estado
 >   OK/RIESGO (proyección>asignado)/EXCEDIDO (consumido>asignado), ordenado por
 >   desviación proyectada. MCP: `set_savings_target` nuevo; `get_budgets` expone
 >   `savingsTarget` y `rollover`; `get_month_status` expone `chargeControl`

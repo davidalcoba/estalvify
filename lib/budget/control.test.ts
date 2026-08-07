@@ -126,4 +126,40 @@ describe("computeControl", () => {
     expect(row.fixedMatched).toBe(30);
     expect(row.projectedEndOfMonth).toBe(100);
   });
+
+  it("an unplanned charge in a fully committed budget counts once, not as a rate", () => {
+    // Vivienda is entirely recurring (2645 planned, 2645 budget): the user
+    // does not spend there outside the plan. A 200 € repair on day 5 is an
+    // event. Extrapolating it would project 2645 + 200/5×31 = 3885.
+    const [row] = computeControl(
+      [{ ...cat("Vivienda", 2645, 1624), fixedTotal: 2645, fixedMatched: 1424 }],
+      5,
+      31
+    );
+    expect(row.projectedEndOfMonth).toBe(2845);
+    expect(row.projectedDeviation).toBe(200);
+    expect(row.state).toBe("RIESGO");
+  });
+
+  it("a fully committed budget with nothing unplanned projects exactly the plan", () => {
+    const [row] = computeControl(
+      [{ ...cat("Vivienda", 2645, 1424), fixedTotal: 2645, fixedMatched: 1424 }],
+      5,
+      31
+    );
+    expect(row.projectedEndOfMonth).toBe(2645);
+    expect(row.state).toBe("OK");
+  });
+
+  it("one euro of manual allowance is enough to bring the run rate back", () => {
+    // The switch is "is there a discretionary budget at all", so a mixed
+    // objective keeps extrapolating: 2645 + 200/5×31 = 3885.
+    const [row] = computeControl(
+      [{ ...cat("Vivienda", 2745, 1624), fixedTotal: 2645, fixedMatched: 1424 }],
+      5,
+      31
+    );
+    expect(row.projectedEndOfMonth).toBe(3885);
+    expect(row.state).toBe("RIESGO");
+  });
 });
