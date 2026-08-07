@@ -16,6 +16,12 @@
 //   - fully fixed (assigned == fixedTotal) → projection IS the plan
 //   - mixed → the plan for what's committed, the pace for what isn't
 //
+// The rate applies only where there is a manual allowance to spend down. A
+// budget that is entirely committed says the user does not spend there outside
+// the plan, so an unplanned charge in it is an event and not a rate: it counts
+// once. Rent plus an unexpected repair projects to rent plus that repair, not
+// to rent plus a repair every few days.
+//
 // Consumers that only want the discretionary rows filter on `fixedTotal === 0`
 // (the daily dashboard does; rollover funds are excluded upstream either way,
 // their polarity being inverted).
@@ -76,7 +82,17 @@ export function computeControl(
       // beyond what the category has actually consumed.
       const fixedMatched = Math.min(fixedTotal, Math.max(0, c.fixedMatched ?? 0), c.consumed);
       const discretionary = Math.max(0, c.consumed - fixedMatched);
-      const projected = round(fixedTotal + (discretionary / elapsed) * daysInMonth);
+      // A run rate needs a budget to run against. When the whole budget is
+      // committed there is no manual allowance, which is the user saying "I do
+      // not spend here outside the plan" — so anything unplanned that lands is
+      // a one-off and counts once. Extrapolating it instead turned a 200 €
+      // repair on day 5 into a 1 240 € projection.
+      const hasDiscretionaryBudget = c.assigned - fixedTotal > 0.005;
+      const projected = round(
+        hasDiscretionaryBudget
+          ? fixedTotal + (discretionary / elapsed) * daysInMonth
+          : fixedTotal + discretionary
+      );
       const state: ControlState =
         c.consumed > c.assigned ? "EXCEDIDO" : projected > c.assigned ? "RIESGO" : "OK";
       return {
