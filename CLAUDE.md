@@ -103,6 +103,23 @@ signatures seen that day, both infrastructure:
   workflow never reached `Checkout`. Waiting it out and re-triggering is the
   whole fix — there is nothing to change in the repo.
 
+**You cannot read the status page from here.** `githubstatus.com` and the
+`statuspage.io` host behind it are both blocked at the sandbox proxy
+(`curl: (56) CONNECT tunnel failed, response 403`), so confirming an incident
+means asking the user to look. Worth doing before a long retry loop: on
+2026-08-06 the page showed Actions in **Incident** for the whole afternoon,
+which retrospectively explained every failure above — including the last one,
+where the events stopped producing runs at all (a push to `preview` sat with
+only Vercel's check on it). Runs created but dying in setup, and runs never
+created, were the same outage at different depths.
+
+While the incident is open, remember that **`preview` has no branch rules at
+all** (`GET /repos/{repo}/rules/branches/preview` → `[]`) — only `main` is
+protected. A pull request into `preview` therefore merges perfectly well with
+CI down, which is the way to keep shipping there; verify the tree locally
+first (`npm ci && npx prisma generate && npm run typecheck && npm run lint &&
+npm run test`) since nothing else will.
+
 A Vercel API token is provided as the `VERCEL_TOKEN` environment variable in the
 Claude Code environment (it is a secret — never commit it or print its value).
 Use it against the Vercel REST API at `https://api.vercel.com`.
