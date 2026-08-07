@@ -17,16 +17,20 @@ import { normalizeDescriptor, isProvisionalMonth } from "@/lib/planned/matching"
 import { nearestInSet, rootOf, type ParentMap } from "@/lib/categories/hierarchy";
 import { merchantDisplayName } from "@/lib/transactions/merchant";
 import { AFTER_TRANSACTION } from "@/lib/banking/daily-balances";
-import type { Prisma } from "@/app/generated/prisma";
+import {
+  pickAnchor,
+  walkWindow,
+  balanceAt,
+  anchorGap,
+  type BalanceAnchor,
+} from "./balance-history";
 import {
   computeCascade,
   computeActualResult,
   performance,
-  reconciliationGap,
   rolloverBalance,
   monthsOfCushion,
   expectedResultToDate,
-  openingSnapshotIsUsable,
   type MonthCascade,
   type ActualResult,
 } from "./cascade";
@@ -42,14 +46,8 @@ import {
 } from "./weekly";
 
 const OPS_LOOKBACK_DAYS = 98; // 14 weeks: current + 12 complete + margin
-/** A date can hold several balance types; a handful is always enough. */
-const SNAPSHOT_CANDIDATES = 6;
-/**
- * How stale the opening snapshot may be. The sync writes one a day, so the
- * honest window is "the last days of the previous month". Three allows for a
- * weekend of missed runs; eight weeks of silence is what this rejects.
- */
-const OPENING_SNAPSHOT_MAX_AGE_DAYS = 3;
+/** How far back a balance anchor may be looked for. */
+const ANCHOR_LOOKBACK_DAYS = 120;
 const CUSHION_BASELINE_MONTHS = 6;
 
 export interface ObjectiveRecurring {
@@ -121,8 +119,14 @@ export interface Reconciliation extends ActualResult {
    * so the change cannot be measured. Distinct from having no accounts.
    */
   openingBalanceUnknown: boolean;
-  /** consolidatedDelta − actualResult: uncaptured flow when non-zero. */
+  /**
+   * What two REAL bank readings bracketing the month leave unexplained after
+   * the ledger between them is applied. Non-zero means flow we never saw.
+   * Null when there are not two anchors to compare.
+   */
   discrepancy: number | null;
+  /** Gross flow over the window `discrepancy` spans — its scale reference. */
+  discrepancyGrossFlow: number;
   consolidatedBalance: number | null;
   monthsOfCushion: number | null;
 }
@@ -180,23 +184,16 @@ function todayInTimezone(timezone: string, now: Date = new Date()): string {
 const round = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * The balance to use out of a date-descending candidate list.
- *
- * A day can now hold two rows: what /balances answered when the sync ran, and
- * the close derived from `balance_after_transaction`. The endpoint row wins
- * wherever it exists — it is what every month has been read from until now,
- * and the derived rows exist to fill the days no sync ever covered, not to
- * restate the days it did. Only the newest date is considered; an older date
- * never outranks a newer one whatever its type.
+ * Which reading to trust when a date holds more than one. `CLBD` is the booked
+ * balance the whole app has always been read from; other endpoint types come
+ * next; a figure derived from `balance_after_transaction` is the last resort,
+ * since it exists to cover days no sync reached rather than to restate the
+ * days it did.
  */
-function pickSnapshot(
-  rows: { balance: Prisma.Decimal; date: Date; balanceType: string | null }[]
-): { balance: number; date: Date } | null {
-  if (rows.length === 0) return null;
-  const newest = rows[0].date.getTime();
-  const sameDay = rows.filter((r) => r.date.getTime() === newest);
-  const chosen = sameDay.find((r) => r.balanceType !== AFTER_TRANSACTION) ?? sameDay[0];
-  return { balance: Number(chosen.balance.toString()), date: chosen.date };
+function balanceRank(balanceType: string | null): number {
+  if (balanceType === "CLBD") return 0;
+  if (balanceType === AFTER_TRANSACTION) return 2;
+  return 1;
 }
 
 /**
@@ -457,7 +454,12 @@ export async function buildMonthStatus(
     }
   }
   const baselineStart = new Date(Date.UTC(year, month - 1 - CUSHION_BASELINE_MONTHS, 1));
-  const [fundRows, startSnapshots, endSnapshots, baselineAgg] = await Promise.all([
+  // How far back to look for a bank reading to anchor on. Four months covers
+  // a long consent outage without dragging the whole history into memory.
+  const anchorWindowStart = new Date(start);
+  anchorWindowStart.setUTCDate(anchorWindowStart.getUTCDate() - ANCHOR_LOOKBACK_DAYS);
+
+  const [fundRows, balanceRows, dailyFlowRows, baselineAgg] = await Promise.all([
     fundCategoryIds.length > 0 && fundEpoch
       ? prisma.transaction.findMany({
           where: {
@@ -475,26 +477,24 @@ export async function buildMonthStatus(
           },
         })
       : Promise.resolve([]),
-    Promise.all(
-      accounts.map((a) =>
-        prisma.accountBalance.findMany({
-          where: { bankAccountId: a.id, date: { lt: start } },
-          orderBy: { date: "desc" },
-          take: SNAPSHOT_CANDIDATES,
-          select: { balance: true, date: true, balanceType: true },
-        })
-      )
-    ),
-    Promise.all(
-      accounts.map((a) =>
-        prisma.accountBalance.findMany({
-          where: { bankAccountId: a.id, date: { lt: end } },
-          orderBy: { date: "desc" },
-          take: SNAPSHOT_CANDIDATES,
-          select: { balance: true, date: true, balanceType: true },
-        })
-      )
-    ),
+    // Every balance reading in a window around the month, and the daily net
+    // flow over the same window. Two queries instead of one per account: the
+    // anchoring walk needs whatever dates exist, not a fixed "last before the
+    // month", and fetching the flows by day lets any window be summed in
+    // memory rather than issuing a follow-up query once the anchor is picked.
+    prisma.accountBalance.findMany({
+      where: {
+        bankAccountId: { in: accounts.map((a) => a.id) },
+        date: { gte: anchorWindowStart, lt: end },
+      },
+      orderBy: { date: "asc" },
+      select: { bankAccountId: true, balance: true, date: true, balanceType: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ["valueDate", "direction"],
+      where: { userId, valueDate: { gte: anchorWindowStart, lt: end } },
+      _sum: { amount: true },
+    }),
     prisma.transaction.aggregate({
       // Average monthly spend over the trailing full months, for the cushion.
       where: {
@@ -698,31 +698,109 @@ export async function buildMonthStatus(
     unmatchedDebit,
   });
 
-  // Consolidated balance entering and leaving the viewed month (accounts have
-  // no semantics — always the sum of all of them). For the current month the
-  // "end" snapshot is simply the latest one; for a past month it is the last
-  // snapshot inside it, so navigation shows that month's own delta.
-  const endPicks = endSnapshots.map(pickSnapshot);
-  const startPicks = startSnapshots.map(pickSnapshot);
-  const consolidatedBalance =
-    accounts.length > 0 && endPicks.some((p) => p !== null)
-      ? round(endPicks.reduce<number>((sum, p) => sum + (p?.balance ?? 0), 0))
-      : null;
-  // Every account needs an opening snapshot, and it has to be RECENT — see
-  // openingSnapshotIsUsable. Reaching past a sync outage produced a two-month
-  // "monthly" saving and a 7.544 € phantom discrepancy.
-  const haveAllStarts =
-    accounts.length > 0 &&
-    startPicks.every((p) =>
-      openingSnapshotIsUsable(p?.date ?? null, start, OPENING_SNAPSHOT_MAX_AGE_DAYS)
-    );
+  // ── Consolidated balance, anchored on real bank readings ────────────────
+  // `/balances` only knows "now", so the history is a diary with holes wherever
+  // the sync did not run. Rather than reach back to the last surviving row —
+  // which opened August on a 7 JUNE figure and invented 4.597 € of saving — the
+  // nearest real reading is picked and the ledger walks the short distance to
+  // the date wanted. The endpoints stay the bank's; only the interpolation is
+  // ours, and `anchorGap` below keeps checking that the two agree.
+  const isoOf = (d: Date) => d.toISOString().slice(0, 10);
+
+  // A date is an anchor only when EVERY active account has a reading on it —
+  // a consolidated total assembled from a partial day would be a fiction.
+  const perDate = new Map<string, Map<string, { balance: number; rank: number }>>();
+  for (const row of balanceRows) {
+    const day = isoOf(row.date);
+    let accountsOnDay = perDate.get(day);
+    if (!accountsOnDay) {
+      accountsOnDay = new Map();
+      perDate.set(day, accountsOnDay);
+    }
+    const rank = balanceRank(row.balanceType);
+    const held = accountsOnDay.get(row.bankAccountId);
+    if (!held || rank < held.rank) {
+      accountsOnDay.set(row.bankAccountId, {
+        balance: Number(row.balance.toString()),
+        rank,
+      });
+    }
+  }
+  const anchors: BalanceAnchor[] =
+    accounts.length === 0
+      ? []
+      : [...perDate.entries()]
+          .filter(([, onDay]) => onDay.size === accounts.length)
+          .map(([date, onDay]) => ({
+            date,
+            balance: round([...onDay.values()].reduce((sum, v) => sum + v.balance, 0)),
+          }))
+          .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  // Net and gross flow per day, so any window can be summed without another
+  // round trip once the anchor is known. Transfers between the user's own
+  // accounts are INCLUDED: they net to zero across a consolidated total, and
+  // excluding them would open a hole whenever one leg is miscategorised.
+  const netByDay = new Map<string, number>();
+  const grossByDay = new Map<string, number>();
+  for (const row of dailyFlowRows) {
+    const day = isoOf(row.valueDate);
+    const amount = Number(row._sum.amount?.toString() ?? 0);
+    netByDay.set(day, (netByDay.get(day) ?? 0) + (row.direction === "CREDIT" ? amount : -amount));
+    grossByDay.set(day, (grossByDay.get(day) ?? 0) + Math.abs(amount));
+  }
+  const sumBetween = (source: Map<string, number>, after: string, upTo: string) => {
+    let total = 0;
+    for (const [day, value] of source) if (day > after && day <= upTo) total += value;
+    return round(total);
+  };
+
+  // A balance is stated at the END of its day, so the month opens on the close
+  // of the day before it.
+  const openingTarget = isoOf(new Date(start.getTime() - 86_400_000));
+  const monthLastDay = isoOf(new Date(end.getTime() - 86_400_000));
+
+  const openingAnchor = pickAnchor(anchors, openingTarget);
+  const openingBalance = openingAnchor
+    ? (() => {
+        const w = walkWindow(openingAnchor.date, openingTarget);
+        return balanceAt(openingAnchor, openingTarget, sumBetween(netByDay, w.after, w.upTo));
+      })()
+    : null;
+
+  // Closing: the newest real reading that belongs to the month. For the current
+  // month that is today's; for a past one, its own last, so navigating months
+  // shows each one's own change.
+  const closingAnchor = [...anchors].reverse().find((a) => a.date <= monthLastDay) ?? null;
+  const consolidatedBalance = closingAnchor?.balance ?? null;
   const consolidatedDelta =
-    consolidatedBalance != null && haveAllStarts
-      ? round(consolidatedBalance - startPicks.reduce<number>((sum, p) => sum + p!.balance, 0))
+    consolidatedBalance != null && openingBalance != null
+      ? round(consolidatedBalance - openingBalance)
       : null;
-  // Distinguishes "we cannot measure this month's saving" from "there are no
-  // accounts at all", so the card can say which.
-  const openingBalanceUnknown = consolidatedBalance != null && !haveAllStarts;
+  // Only when there is no anchor at all — a connection with no history yet.
+  const openingBalanceUnknown = consolidatedBalance != null && openingBalance == null;
+
+  // The reconciliation check, moved from "this month's balance change vs its
+  // flows" to "do two REAL readings agree with the ledger between them". The
+  // old form needed a perfect daily history, which PSD2 cannot promise; this
+  // one survives an outage and still catches flow we never saw. Measured on
+  // production across the eight-week hole: 33,49 € over 487 transactions.
+  const priorAnchor = [...anchors].reverse().find((a) => a.date <= openingTarget) ?? null;
+  const discrepancy =
+    priorAnchor && closingAnchor
+      ? anchorGap(
+          priorAnchor,
+          closingAnchor,
+          sumBetween(netByDay, priorAnchor.date, closingAnchor.date)
+        )
+      : null;
+  // Judged against the flow of the window it spans, not the month's — the gap
+  // can cover two months when the sync was down, and 33 € across 487
+  // transactions is noise while the same figure over one day would not be.
+  const discrepancyGrossFlow =
+    priorAnchor && closingAnchor
+      ? sumBetween(grossByDay, priorAnchor.date, closingAnchor.date)
+      : 0;
 
   const avgMonthlySpend = baselineAgg._sum.amount
     ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
@@ -755,7 +833,8 @@ export async function buildMonthStatus(
     performance: performance(actual.actualResult, expectedToDate),
     consolidatedDelta,
     openingBalanceUnknown,
-    discrepancy: reconciliationGap(consolidatedDelta, actual.actualResult),
+    discrepancy,
+    discrepancyGrossFlow,
     consolidatedBalance,
     monthsOfCushion: monthsOfCushion(consolidatedBalance, avgMonthlySpend),
   };

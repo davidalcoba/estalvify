@@ -173,19 +173,6 @@ export function expectedResultToDate(input: {
 }
 
 /**
- * The free reconciliation check: income − expenses should equal the
- * consolidated balance change. A gap means uncaptured flow — an unsynced
- * account, a sync hole. Shown, never hidden. Null when balances are unknown.
- */
-export function reconciliationGap(
-  consolidatedDelta: number | null,
-  actualResult: number
-): number | null {
-  if (consolidatedDelta == null) return null;
-  return round(consolidatedDelta - actualResult);
-}
-
-/**
  * Whether a flows-vs-balance gap is worth showing. An absolute threshold of
  * one euro fires on rounding and on a single card authorisation still settling,
  * and a warning that is always on is a warning nobody reads. Material means
@@ -198,35 +185,6 @@ export function discrepancyIsMaterial(
 ): boolean {
   if (discrepancy == null) return false;
   return Math.abs(discrepancy) >= Math.max(25, grossFlow * 0.01);
-}
-
-/**
- * Whether the snapshot found before a month can serve as its opening balance.
- *
- * `buildMonthStatus` looks for the last balance row dated before the month and
- * uses it as the opening figure. With a daily sync that row is from the last
- * day of the previous month and the reading is exact. When the sync stops —
- * a PSD2 consent lapsing unnoticed is the way it happens — no row is written
- * for those weeks, and the search happily reaches back past them: August 2026
- * opened on a 7 JUNE snapshot, so "the month's balance change" silently became
- * a two-month change carrying two salaries, and the reconciliation check
- * reported 7.544 € of movement that nothing had failed to capture.
- *
- * Nothing can repair that after the fact. PSD2 has no historical-balance
- * endpoint, and BBVA sends `balance_after_transaction` as null, so the balance
- * on 1 August was never recorded anywhere and never will be. The only honest
- * move left is to admit it: too old, and the opening balance is UNKNOWN, which
- * removes the month's savings figure and the discrepancy warning rather than
- * quoting a number measured from the wrong place.
- */
-export function openingSnapshotIsUsable(
-  snapshotDate: Date | null,
-  monthStart: Date,
-  maxAgeDays: number
-): boolean {
-  if (!snapshotDate) return false;
-  const ageDays = (monthStart.getTime() - snapshotDate.getTime()) / 86_400_000;
-  return ageDays <= maxAgeDays;
 }
 
 export interface RolloverMonthRow {
