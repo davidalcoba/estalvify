@@ -712,6 +712,15 @@ transactions**. Two things to keep in mind when touching this:
   transaction never reached us, the bank's running balance still moved by its
   amount and our sum did not — which is exactly what the check looks for.
 
+**Measured 2026-08-07: BBVA sends the field as `null`.** The key name was
+right; the bank does not fill it. So for that connection nothing is derived,
+and July's hole is unrepairable — PSD2 has no historical-balance endpoint
+either. Which leaves the second half of the fix: `openingSnapshotIsUsable`
+refuses an opening snapshot more than `OPENING_SNAPSHOT_MAX_AGE_DAYS` (3)
+before the month, so `consolidatedDelta` becomes null and the card says "no
+opening balance recorded" instead of quoting a change measured from eight
+weeks earlier. The gap survives in the data; it no longer survives on screen.
+
 ## Cached Reads
 
 Pages read live from Prisma. The one exception is a value the **app shell**

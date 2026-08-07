@@ -70,6 +70,18 @@ export function MonthProgressCard({
               was the card contradicting itself. When the gap is material the
               figure drops to muted and says so — a number the app knows is
               unreliable must not look like one that isn't. */}
+          {/* No opening balance near the month's start means the change
+              cannot be measured — say so instead of leaving a silent hole
+              where a figure used to be, or worse, quoting one measured from
+              eight weeks earlier. */}
+          {r.openingBalanceUnknown && (
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Actual savings</dt>
+              <dd className="text-xs text-muted-foreground">
+                No opening balance recorded
+              </dd>
+            </div>
+          )}
           {r.consolidatedDelta != null && (
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Actual savings</dt>
