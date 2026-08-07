@@ -119,4 +119,20 @@ describe("detectRecurringSuggestions", () => {
     expect(result[0].expectedAmount).toBe(2253);
     expect(result).toHaveLength(2);
   });
+
+  it("names a suggestion after the merchant when the sync extracted one", () => {
+    const txs = monthly("PAGO DE ADEUDO DIRECTO SEPA ENDESA ENERGIA", 61.4, 9, MONTHS).map(
+      (t) => ({ ...t, merchant: "Endesa Energía" })
+    );
+    const [s] = detectRecurringSuggestions(txs, { existingMatchers: [], dismissedKeys: [] });
+    expect(s.displayName).toBe("Endesa Energía");
+  });
+
+  it("strips the bank's operation prefix when there is no merchant to fall back on", () => {
+    // Without this the suggestion is offered as "PAGO DE ADEUDO DIRECTO SEPA …",
+    // and the name is the one field the accept flow does not invite editing.
+    const txs = monthly("PAGO DE ADEUDO DIRECTO SEPA ENDESA ENERGIA", 61.4, 9, MONTHS);
+    const [s] = detectRecurringSuggestions(txs, { existingMatchers: [], dismissedKeys: [] });
+    expect(s.displayName).toBe("ENDESA ENERGIA");
+  });
 });

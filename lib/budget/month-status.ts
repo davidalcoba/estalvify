@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
 import { normalizeDescriptor, isProvisionalMonth } from "@/lib/planned/matching";
 import { nearestInSet, rootOf, type ParentMap } from "@/lib/categories/hierarchy";
+import { merchantDisplayName } from "@/lib/transactions/merchant";
 import {
   computeCascade,
   computeActualResult,
@@ -519,7 +520,11 @@ export async function buildMonthStatus(
     const list = txsByObjective.get(target) ?? [];
     list.push({
       date,
-      description: (tx.description ?? tx.remittanceInfo ?? "").trim().slice(0, 80),
+      // The raw descriptor leads with the bank's operation scaffolding, so a
+      // list of direct debits reads as a column of "PAGO DE ADEUDO DIRECTO
+      // SEPA …" with the actual creditor truncated away. Strip it the same way
+      // the merchants report does.
+      description: merchantDisplayName(tx.description, tx.remittanceInfo),
       amount: round(amount),
     });
     txsByObjective.set(target, list);
