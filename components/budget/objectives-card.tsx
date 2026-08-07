@@ -218,7 +218,10 @@ export function ObjectivesCard({
                         {pending > 0.005 ? (
                           <>
                             {fmt0(o.received)}
-                            <span className="text-muted-foreground/50">/{fmt0(o.expected)}</span>
+                            <span className="text-muted-foreground/50">
+                              <span className="mx-1">/</span>
+                              {fmt0(o.expected)}
+                            </span>
                           </>
                         ) : (
                           "✓"
@@ -362,12 +365,11 @@ export function ObjectivesCard({
                             }}
                           />
                         )}
-                        {c.state !== "OK" && (
-                          <span
-                            className="absolute inset-y-0 right-0 -z-10 w-[3px]"
-                            style={{ background: tone }}
-                          />
-                        )}
+                        {/* No wall at the right edge for a non-OK state. The
+                            fill is already painted in that state's colour, so
+                            the wall repeated in a hard 3px edge what the whole
+                            bar was saying in amber or red — and read as a
+                            border on the row rather than as part of it. */}
                         {/* No mark for the committed slice in the row. A rule
                             along the bottom was tried and removed: the
                             recurring-fed objectives are the ones whose budget
@@ -396,7 +398,10 @@ export function ObjectivesCard({
                           }`}
                         >
                           {fmt0(c.consumed)}
-                          <span className="text-muted-foreground/50">/{fmt0(c.assigned)}</span>
+                          <span className="text-muted-foreground/50">
+                            <span className="mx-1">/</span>
+                            {fmt0(c.assigned)}
+                          </span>
                         </span>
                         <ChevronRight
                           className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${

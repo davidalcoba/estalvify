@@ -129,7 +129,10 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 - **Light tint (15%)** of the *same* colour continuing to where the current
   pace lands, plus a **1.5px line** at that point. No hatching, no second
   colour — projection is the same quantity, less certain.
-- **3px wall** at the right edge when the state is not `OK`.
+- **No wall at the right edge for a non-`OK` state.** A 3px one was tried and
+  removed: the fill is already painted in that state's colour, so it repeated
+  in a hard edge what the whole bar was saying in amber or red, and read as a
+  border on the row rather than as part of it. The colour is the state.
 - **No mark for the committed slice.** A 3px rule along the bottom covering
   `fixedTotal / assigned` was tried and removed. The premise was wrong: an
   objective fed by recurring charges has no manual `extra`, so its budget

@@ -69,7 +69,10 @@ export function ControlMini({
                 </span>
                 <span className={`whitespace-nowrap text-right tabular-nums ${tone}`}>
                   {fmt0(c.consumed)}
-                  <span className="text-muted-foreground/50">/{fmt0(c.assigned)}</span>
+                  <span className="text-muted-foreground/50">
+                    <span className="mx-1">/</span>
+                    {fmt0(c.assigned)}
+                  </span>
                 </span>
               </Fragment>
             );
