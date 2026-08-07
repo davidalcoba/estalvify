@@ -207,12 +207,22 @@ export function ObjectivesCard({
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {o.categoryName}
                       </span>
+                      {/* Received over expected — the Charges pair with the
+                          polarity flipped. A fully arrived month keeps its tick
+                          instead of repeating the same figure twice. */}
                       <span
                         className={`shrink-0 text-[13px] font-semibold tabular-nums ${
                           pending > 0.005 ? "text-muted-foreground" : "text-success"
                         }`}
                       >
-                        {pending > 0.005 ? fmt0(pending) : "✓"}
+                        {pending > 0.005 ? (
+                          <>
+                            {fmt0(o.received)}
+                            <span className="text-muted-foreground/50">/{fmt0(o.expected)}</span>
+                          </>
+                        ) : (
+                          "✓"
+                        )}
                       </span>
                       <ChevronRight
                         className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
@@ -373,20 +383,20 @@ export function ObjectivesCard({
                         <span className="min-w-0 flex-1 truncate font-medium">
                           {o.categoryName}
                         </span>
-                        {c.projectedDeviation > 0 && (
-                          <span
-                            className={`shrink-0 rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums ${pctTone}`}
-                            style={{ background: `color-mix(in oklch, ${tone} 16%, transparent)` }}
-                          >
-                            +{fmt0(c.projectedDeviation)}
-                          </span>
-                        )}
+                        {/* Spent over budget, the same pair the dashboard's
+                            Categories card shows — the two numbers that are
+                            simply true right now. Everything derived from them
+                            (projected, its overshoot, fixed, pace) waits in the
+                            panel: a row carrying five figures stops being
+                            readable at a glance, which is the whole point of
+                            the bar. */}
                         <span
                           className={`shrink-0 text-[13px] font-semibold tabular-nums ${
                             left < 0 ? "text-destructive" : "text-muted-foreground"
                           }`}
                         >
-                          {fmt0(left)}
+                          {fmt0(c.consumed)}
+                          <span className="text-muted-foreground/50">/{fmt0(c.assigned)}</span>
                         </span>
                         <ChevronRight
                           className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
