@@ -12,6 +12,13 @@
 // The consolidated balance and the months of cushion used to sit here. They
 // are not facts about THIS month — they do not move when August's decisions
 // change — so they live on /accounts now.
+//
+// `Actual savings` is the change between the month's opening and closing
+// balance, both anchored on real bank readings and walked over the ledger
+// where a reading is missing (`lib/budget/balance-history.ts`). The warning
+// below is no longer "this month's change does not match this month's flows"
+// but "two real readings do not agree with the ledger between them", which is
+// the same question asked where it can actually be answered.
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,10 +41,9 @@ export function MonthProgressCard({
   const signed = (n: number) => `${n >= 0 ? "+" : "−"}${fmt(Math.abs(n))}`;
   const tone = (n: number) => (n >= 0 ? "text-success" : "text-destructive");
   const { reconciliation: r } = status;
-  const showGap = discrepancyIsMaterial(
-    r.discrepancy,
-    r.actualIncome + r.actualExpenses
-  );
+  // Scaled to the window the gap actually spans, which is anchor-to-anchor and
+  // can be two months wide when the sync was down — not to this month's flow.
+  const showGap = discrepancyIsMaterial(r.discrepancy, r.discrepancyGrossFlow);
 
   return (
     <Card>
@@ -78,7 +84,7 @@ export function MonthProgressCard({
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Actual savings</dt>
               <dd className="text-xs text-muted-foreground">
-                No opening balance recorded
+                No balance reading yet
               </dd>
             </div>
           )}
@@ -106,7 +112,7 @@ export function MonthProgressCard({
         {showGap && r.discrepancy != null && (
           <InlineNotice
             figure={`${fmt(Math.abs(r.discrepancy))} unreconciled`}
-            detail="Your account balances moved by more than the transactions explain, so anything derived from them — actual savings above — cannot be trusted this month. Usually an account that has not finished syncing."
+            detail="Two balance readings from your bank do not agree with the transactions recorded between them, so some movement never reached the app. Usually an account that has not finished syncing."
             action={
               <Link href="/accounts" className="shrink-0 font-medium underline underline-offset-2">
                 Check accounts

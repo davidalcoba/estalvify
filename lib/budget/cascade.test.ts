@@ -3,11 +3,9 @@ import {
   computeCascade,
   computeActualResult,
   performance,
-  reconciliationGap,
   rolloverBalance,
   monthsOfCushion,
   expectedResultToDate,
-  openingSnapshotIsUsable,
 } from "./cascade";
 
 describe("computeCascade (v4: savings target in, variable as residue)", () => {
@@ -102,13 +100,6 @@ describe("computeActualResult / performance", () => {
       unmatchedDebit: 4800,
     });
     expect(performance(july.actualResult, 800)).toBe(52);
-  });
-});
-
-describe("reconciliationGap", () => {
-  it("plan test #12: a gap between flows and balance change is SHOWN", () => {
-    expect(reconciliationGap(900, 852)).toBe(48);
-    expect(reconciliationGap(null, 852)).toBeNull();
   });
 });
 
@@ -226,30 +217,5 @@ describe("expectedResultToDate", () => {
       daysInMonth: 31,
     });
     expect(toDate).toBe(1519.83);
-  });
-});
-
-describe("openingSnapshotIsUsable", () => {
-  const augustStart = new Date("2026-08-01T00:00:00Z");
-
-  it("accepts the last days of the previous month", () => {
-    expect(openingSnapshotIsUsable(new Date("2026-07-31T00:00:00Z"), augustStart, 3)).toBe(true);
-    expect(openingSnapshotIsUsable(new Date("2026-07-29T00:00:00Z"), augustStart, 3)).toBe(true);
-  });
-
-  it("rejects the snapshot that opened August on a June figure", () => {
-    // The production case: the sync stopped on 7 June and resumed on 3 August,
-    // so the search for "last row before the month" reached back eight weeks
-    // and turned two salaries into August's savings.
-    expect(openingSnapshotIsUsable(new Date("2026-06-07T00:00:00Z"), augustStart, 3)).toBe(false);
-  });
-
-  it("rejects a missing snapshot", () => {
-    expect(openingSnapshotIsUsable(null, augustStart, 3)).toBe(false);
-  });
-
-  it("accepts a snapshot exactly at the limit, and rejects one past it", () => {
-    expect(openingSnapshotIsUsable(new Date("2026-07-29T00:00:00Z"), augustStart, 3)).toBe(true);
-    expect(openingSnapshotIsUsable(new Date("2026-07-28T00:00:00Z"), augustStart, 3)).toBe(false);
   });
 });
