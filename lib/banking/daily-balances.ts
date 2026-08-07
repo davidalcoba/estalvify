@@ -60,6 +60,16 @@ function dateOf(tx: EnableBankingTransaction): string | null {
  * Days whose transactions carry no `balance_after_transaction` are skipped:
  * the field is optional in the API and not every bank populates it. Skipping
  * leaves the previous behaviour untouched rather than inventing a number.
+ *
+ * MEASURED, 2026-08-07: **BBVA sends the field and sets it to `null`** on every
+ * transaction. The key name is right — it is there among the 24 the API
+ * returns — the bank simply does not fill it. So this produces nothing for
+ * BBVA today and the July hole cannot be repaired from the API at all: PSD2
+ * has no historical-balance endpoint either, `/balances` answers only for
+ * right now. It is kept because it is correct and free for any connection
+ * that does populate the field, and because the alternative — deriving the
+ * balance from our own transactions — would force the reconciliation gap to
+ * zero and delete the check that surfaced this in the first place.
  */
 export function dailyClosingBalances(
   transactions: EnableBankingTransaction[]

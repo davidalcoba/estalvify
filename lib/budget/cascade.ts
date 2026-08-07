@@ -173,19 +173,6 @@ export function expectedResultToDate(input: {
 }
 
 /**
- * The free reconciliation check: income − expenses should equal the
- * consolidated balance change. A gap means uncaptured flow — an unsynced
- * account, a sync hole. Shown, never hidden. Null when balances are unknown.
- */
-export function reconciliationGap(
-  consolidatedDelta: number | null,
-  actualResult: number
-): number | null {
-  if (consolidatedDelta == null) return null;
-  return round(consolidatedDelta - actualResult);
-}
-
-/**
  * Whether a flows-vs-balance gap is worth showing. An absolute threshold of
  * one euro fires on rounding and on a single card authorisation still settling,
  * and a warning that is always on is a warning nobody reads. Material means

@@ -3,7 +3,6 @@ import {
   computeCascade,
   computeActualResult,
   performance,
-  reconciliationGap,
   rolloverBalance,
   monthsOfCushion,
   expectedResultToDate,
@@ -101,13 +100,6 @@ describe("computeActualResult / performance", () => {
       unmatchedDebit: 4800,
     });
     expect(performance(july.actualResult, 800)).toBe(52);
-  });
-});
-
-describe("reconciliationGap", () => {
-  it("plan test #12: a gap between flows and balance change is SHOWN", () => {
-    expect(reconciliationGap(900, 852)).toBe(48);
-    expect(reconciliationGap(null, 852)).toBeNull();
   });
 });
 

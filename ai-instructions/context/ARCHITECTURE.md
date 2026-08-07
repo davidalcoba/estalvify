@@ -712,6 +712,43 @@ transactions**. Two things to keep in mind when touching this:
   transaction never reached us, the bank's running balance still moved by its
   amount and our sum did not — which is exactly what the check looks for.
 
+**Measured 2026-08-07: BBVA sends the field as `null`.** The key name was
+right; the bank does not fill it. So nothing is derived for that connection.
+
+### Balances are anchored, not assumed
+
+`lib/budget/balance-history.ts`. Because the history has holes, the balance at
+a past date is not "the last row before it" — that reached back to **7 June**
+for August's opening and invented 4.597 € of saving. Instead the NEAREST real
+reading is picked and the ledger walks the short distance to the date wanted.
+
+Deriving a balance from our own transactions is circular on its own: the
+reconciliation check compares the balance change against those same
+transactions, so it would report zero by construction and stop detecting
+anything. **Anchoring is what removes the circularity** — the endpoints come
+from the bank, only the interpolation is ours. And the anchors are checked
+against each other: measured across the eight-week hole, 7 June to 7 August,
+the two real readings differ by 4.405,18 € and 487 transactions explain
+4.371,69 € of it. A 33,49 € residue over two months is what licenses the
+interpolation.
+
+So the reconciliation check did not disappear, it **moved**: from "does each
+month's balance change match its flows", which needs a perfect daily history
+PSD2 cannot promise, to `anchorGap` — "do two real bank readings agree with the
+ledger between them", which survives an outage and still catches uncaptured
+flow. It is judged against the gross flow of the window it spans, not the
+month's, since that window can be two months wide.
+
+Rules for anyone touching this:
+
+- **A date is an anchor only when every active account has a reading on it.** A
+  consolidated total assembled from a partial day is a fiction.
+- **Transfers between the user's own accounts are included** in the walk. They
+  net to zero across a consolidated total, and excluding them would open a hole
+  whenever one leg is miscategorised.
+- `balanceRank` decides which reading wins when a date holds several: `CLBD`
+  first, other endpoint types next, `afterTransaction` last.
+
 ## Cached Reads
 
 Pages read live from Prisma. The one exception is a value the **app shell**
