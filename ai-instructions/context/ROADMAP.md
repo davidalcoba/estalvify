@@ -8,8 +8,10 @@
 > como un PR independiente siguiendo `PLAYBOOK_NEW_FEATURE.md`, y **marca la fase como
 > hecha aquí** en el mismo cambio.
 
-**Última actualización:** 2026-08-04 · **Fase en curso:** ninguna ·
-**Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** mantenimiento y mejoras
+**Última actualización:** 2026-08-07 · **Fase en curso:** ninguna ·
+**Estado:** 🎉 roadmap completo (Fases 1–6 hechas) · **Siguiente:** revisar §6.1
+(tres pendientes de la proyección de categoría) a finales de septiembre, con un
+mes de uso real
 (push/email para notificaciones, persistencia/caché de insights de IA, asignar categoría a
 recurrentes, etc.). **Plan aprobado pendiente de ejecución:** multiusuario por hogar
 (invitaciones + roles) — ver `PLAN_MULTIUSER.md`, fases en su §9.
@@ -384,6 +386,91 @@ Para no volver a decidir cuando lleguen estas fases:
 - **Charts (Fase 4).** Una sola librería para todo (Recharts como candidata), consumiendo
   `--chart-1..5` de `app/globals.css`. Envolver siempre en `components/ui/` — nunca
   hand-rollear gráficas dentro de un `page.tsx`.
+
+---
+
+## 6.1. Proyección de categoría — tres pendientes, a revisar en septiembre
+
+Revisión del 2026-08-07, después de soltar el control v4 y el rediseño de la
+lista de objetivos. **Se decide explícitamente NO tocar nada de esto ahora**:
+la app lleva semanas sin usarse para lo que se hizo, y un mes de datos reales
+es mejor base para decidir que un razonamiento a priori. Si en septiembre la
+proyección de Alimentación avisa a tiempo, el punto 1 da igual; y si no avisa,
+se sabrá exactamente por qué falló.
+
+### 1. El interruptor binario discrimina por la variable equivocada
+
+La única de las tres que es **decisión de diseño**, no mejora incremental.
+
+Hoy la tasa diaria se aplica si `assigned > fixedTotal`. Con `extra = 0` no hay
+tasa; con `extra = 1 €` vuelve la tasa completa sobre todo lo discrecional —
+2.845 € contra 3.885 € de diferencia por un euro de configuración.
+
+El discriminador está mal elegido. La distinción real no es si un objetivo
+tiene presupuesto discrecional, sino si el gasto de esa categoría es un
+**flujo** o un **evento**: Alimentación hace ~87 operaciones al mes y una tasa
+diaria la describe bien; Vivienda hace 2 o 3 y no la describe en absoluto. Y
+la reparación de 200 € del día 5 sigue sin ser un ritmo aunque la categoría
+tuviera 1 € de `extra`. Ese dato ya está medido — es el conteo de operaciones
+que la app usa para el contador semanal.
+
+Propuesta a evaluar:
+
+```
+ops = nº de transacciones discrecionales de la categoría en el mes
+ops >= 15    → tasa diaria pura sobre lo discrecional
+ops <= 3     → el imprevisto cuenta una vez
+3 < ops < 15 → ponderación lineal entre ambos
+```
+
+Desaparece el salto de 1.040 €, y el comportamiento deja de depender de una
+decisión de configuración para depender de cómo se comporta el gasto de verdad.
+
+Contraargumento por el que se aplaza: un salto feo en una proyección no lleva a
+una decisión equivocada — es señal de aviso, no cifra contable.
+
+### 2. El desbordamiento de la línea de proyección no es hipotético
+
+Prioridad media, por encima de lo que parecía al quitar el muro de estado.
+
+La línea de proyección solo se dibuja si cae dentro de la barra (`projPct <
+99`), así que en una categoría que se desborda no se ve nada. Con los datos
+reales de julio eso no es un caso raro sino el habitual en las dos categorías
+más miradas:
+
+| Categoría | Real julio | Objetivo | % |
+|---|---|---|---|
+| Alimentación (con cafeterías) | 1.636 € | 1.300 € | 126% |
+| Combustible | 292 € | 200 € | 146% |
+| Ropa y calzado | 333 € | 300 € | 111% |
+| Restaurantes | 584 € | 550 € | 106% |
+
+Lo que **no** hay que hacer es recuperar el muro de 3px tal cual: saltaba en
+todas las filas no-OK cuando solo algunas se desbordan, y esa crítica sigue
+siendo correcta (ver `UI_RULES.md` → "Progress rows"). Hace falta un indicador
+que aparezca **solo** cuando `projected > assigned` por un margen que no quepa
+en la barra.
+
+### 3. El filtro del dashboard usa el criterio correcto por accidente
+
+Prioridad baja, sin efecto observable hoy.
+
+El dashboard diario filtra a `fixedTotal === 0`. Funciona porque ahora mismo no
+hay ninguna categoría mixta: las seis alimentadas por recurrentes tienen
+`extra = 0`. Pero el criterio conceptual —"¿hay algo que yo pueda decidir aquí
+a mitad de mes?"— es `extra > 0`, no `fixedTotal === 0`.
+
+El día que Educación tenga colegio recurrente **más** 80 € de material escolar,
+la parte discrecional es justo lo accionable, y con el filtro actual la
+categoría entera quedaría escondida del dashboard. Cambio de una línea en
+`lib/budget/month-status.ts`.
+
+### Nota operativa
+
+El preview corre contra la rama Neon `preview`, una base de datos distinta de
+la que lee la herramienta MCP. **No se pueden reconciliar cifras de una captura
+del preview con lo que devuelve el MCP**, y cualquier verificación por MCP hay
+que hacerla contra producción.
 
 ---
 
