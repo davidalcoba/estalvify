@@ -67,6 +67,8 @@ async function PlanBody({
         incomeObjectives={status.incomeObjectives}
         control={status.chargeControl}
         monthElapsed={status.monthElapsed}
+        daysElapsed={status.daysElapsed}
+        daysInMonth={status.daysInMonth}
         categories={categories}
         year={status.year}
         month={status.month}

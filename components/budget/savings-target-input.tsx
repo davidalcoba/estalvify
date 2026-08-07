@@ -63,6 +63,9 @@ export function SavingsTargetInput({
     return (
       <button
         type="button"
+        // The assignment-gap notice reaches for this to open the editor:
+        // "Adjust savings" is the action that squares the gap.
+        id="savings-target-trigger"
         className="inline-flex items-center gap-1.5 tabular-nums underline decoration-dotted underline-offset-4 hover:text-foreground"
         onClick={() => {
           setDraft(String(value));
