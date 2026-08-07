@@ -127,6 +127,9 @@ export interface MonthStatus {
   provisional: boolean;
   /** 0–1, how much of the month has elapsed (the pace reference). */
   monthElapsed: number;
+  /** Days of the viewed month already run; 0 for a month that has not begun. */
+  daysElapsed: number;
+  daysInMonth: number;
   /** False until at least one budget assignment exists. */
   configured: boolean;
   cascade: MonthCascade;
@@ -773,6 +776,8 @@ export async function buildMonthStatus(
     today,
     provisional,
     monthElapsed,
+    daysElapsed,
+    daysInMonth,
     configured: assignedVariable > 0,
     cascade,
     weekly,

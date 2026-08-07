@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/formatters";
 import type { MonthStatus } from "@/lib/budget/month-status";
 import { SavingsTargetInput } from "@/components/budget/savings-target-input";
+import { InlineNotice, RaiseSavingsAction } from "@/components/budget/inline-notice";
 
 export function PlanCard({
   status,
@@ -43,14 +44,22 @@ export function PlanCard({
             <dt className="text-muted-foreground">Money coming in</dt>
             <dd className="tabular-nums text-success">+{fmt(cascade.expectedIncome)}</dd>
           </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Fixed costs</dt>
-            <dd className="tabular-nums">−{fmt(cascade.expectedCharges)}</dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Set aside for later</dt>
-            <dd className="tabular-nums">−{fmt(cascade.rolloverQuotas)}</dd>
-          </div>
+          {/* A line at zero is not information, and "−0,00 €" is worse than
+              not information. Only the savings target is unconditional: it is
+              the input of the whole cascade and has to stay reachable even at
+              zero. */}
+          {cascade.expectedCharges > 0 && (
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Fixed costs</dt>
+              <dd className="tabular-nums">−{fmt(cascade.expectedCharges)}</dd>
+            </div>
+          )}
+          {cascade.rolloverQuotas > 0 && (
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Set aside for later</dt>
+              <dd className="tabular-nums">−{fmt(cascade.rolloverQuotas)}</dd>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <dt className="text-muted-foreground">Savings target</dt>
             <dd>
@@ -72,23 +81,23 @@ export function PlanCard({
           </div>
         </dl>
 
-        {/* The one line on this screen that asks for an action, so it is a
-            sentence and not a figure in grey 10px under the total. Silent
-            when the split squares. */}
+        {/* The one line on this screen that asks for an action. Figure plus
+            action on the surface, the sentence behind the ⓘ. Silent when the
+            split squares. */}
         {Math.abs(gap) > 1 && (
-          <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-            {gap < 0 ? (
-              <>
-                You have {fmt(Math.abs(gap))} left to hand out. Give it to a
-                category below, or raise your savings target.
-              </>
-            ) : (
-              <>
-                Your categories add up to {fmt(gap)} more than you have. Spend
-                it all and you will miss the savings target.
-              </>
-            )}
-          </p>
+          <InlineNotice
+            figure={
+              gap < 0
+                ? `${fmt(Math.abs(gap))} unassigned`
+                : `${fmt(gap)} over-assigned`
+            }
+            detail={
+              gap < 0
+                ? "Your categories claim less than the month can afford. Hand the rest to a category, or raise your savings target so it is saved instead of drifting."
+                : "Your categories claim more than the month can afford. Spend all of it and you will miss the savings target."
+            }
+            action={<RaiseSavingsAction />}
+          />
         )}
       </CardContent>
     </Card>

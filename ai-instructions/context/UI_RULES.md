@@ -191,13 +191,29 @@ Two more rules came out of the same pass:
   against the plan accrued to today for exactly this reason; against the whole
   month it was red from the 1st to the 26th, every month, because the charges
   land in the first week and the salaries on the 27th.
-- **The line that asks for an action is a sentence, not a figure.** The
-  assignment gap used to read `Lines 4598,00 € · gap −1,93 €` in grey under the
-  total — the only thing on the screen that needed doing, and the least
-  visible. It now says what happened and what to do about it, and only when
-  there is something to do. Same for the flows-vs-balance warning, which also
-  gained a relative threshold (`discrepancyIsMaterial`) so it stops firing on
-  three euros of rounding.
+- **A warning is a figure and an action, not a paragraph.** The assignment gap
+  first read `Lines 4598,00 € · gap −1,93 €` in grey under the total — the only
+  thing on the screen that needed doing, and the least visible. Spelling it out
+  as a full sentence fixed the visibility and cost three lines of card; two
+  such notices pushed the objectives list below the fold. Both now use
+  `components/budget/inline-notice.tsx`: **amount on the surface, action beside
+  it, explanation behind the ⓘ.** The flows-vs-balance one also has a relative
+  threshold (`discrepancyIsMaterial`: ≥ 25 € and ≥ 1 % of gross flow) so it
+  stops firing on rounding.
+- **A number the app knows is wrong must not look like one that isn't.**
+  `Actual savings` is the balance change, so an active reconciliation warning is
+  literally a statement that the figure is unreliable — the gap IS the
+  difference between it and the month's balance shown two rows above. It was
+  painted green at full weight next to that warning, i.e. the card contradicting
+  itself. When the gap is material the figure drops to muted and carries an
+  `unreliable` tag. Generally: if a check has failed, everything derived from
+  the failing calculation degrades visually.
+- **A line at zero is not information**, and `−0,00 €` is worse than none. The
+  cascade hides its zero rows. The one exception is the savings target: it is
+  the input of the whole cascade and has to stay reachable at zero.
+- **State the pace in days, not per cent.** `23% elapsed` next to a list of
+  objectives was read as "23 % of the objectives"; `Day 7 of 31` cannot be
+  mistaken for progress against a goal.
 
 ## Copy: terse, SaaS-style
 

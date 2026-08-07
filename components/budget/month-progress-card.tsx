@@ -13,8 +13,10 @@
 // are not facts about THIS month — they do not move when August's decisions
 // change — so they live on /accounts now.
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/formatters";
+import { InlineNotice } from "@/components/budget/inline-notice";
 import { discrepancyIsMaterial } from "@/lib/budget/cascade";
 import type { MonthStatus } from "@/lib/budget/month-status";
 import { ProvisionalBadge } from "@/components/budget/provisional-badge";
@@ -61,23 +63,44 @@ export function MonthProgressCard({
               {signed(r.performance)}
             </dd>
           </div>
+          {/* Actual savings is the balance change, so a failed reconciliation
+              is precisely a statement that this figure is wrong: the gap below
+              IS the difference between it and the balance above. Painting it
+              green at full weight next to a warning saying it does not add up
+              was the card contradicting itself. When the gap is material the
+              figure drops to muted and says so — a number the app knows is
+              unreliable must not look like one that isn't. */}
           {r.consolidatedDelta != null && (
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Actual savings</dt>
-              <dd className={`tabular-nums ${tone(r.consolidatedDelta)}`}>
+              <dd
+                className={`flex items-center gap-1.5 tabular-nums ${
+                  showGap ? "text-muted-foreground" : tone(r.consolidatedDelta)
+                }`}
+              >
+                {showGap && (
+                  <span className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide">
+                    unreliable
+                  </span>
+                )}
                 {signed(r.consolidatedDelta)}
               </dd>
             </div>
           )}
         </dl>
 
-        {/* Written for whoever has to act on it, not for whoever wrote the
-            check. Only when it is material — see discrepancyIsMaterial. */}
+        {/* Figure and action on the surface, explanation behind the ⓘ. Only
+            when it is material — see discrepancyIsMaterial. */}
         {showGap && r.discrepancy != null && (
-          <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-            {fmt(Math.abs(r.discrepancy))} moved through your accounts without a
-            matching transaction. Check whether an account still has to sync.
-          </p>
+          <InlineNotice
+            figure={`${fmt(Math.abs(r.discrepancy))} unreconciled`}
+            detail="Your account balances moved by more than the transactions explain, so anything derived from them — actual savings above — cannot be trusted this month. Usually an account that has not finished syncing."
+            action={
+              <Link href="/accounts" className="shrink-0 font-medium underline underline-offset-2">
+                Check accounts
+              </Link>
+            }
+          />
         )}
       </CardContent>
     </Card>
