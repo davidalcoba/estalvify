@@ -5,6 +5,7 @@ import { getBalances, getTransactions } from "./enable-banking";
 import type { EnableBankingTransaction } from "./enable-banking";
 import { buildExternalId, parseRemittanceFields } from "./transaction-parse";
 import { extractMerchant } from "./merchant";
+import { dailyClosingBalances, AFTER_TRANSACTION } from "./daily-balances";
 import {
   isAuthError,
   isRateLimitError,
@@ -106,6 +107,9 @@ export async function syncAccount(
     try {
       let continuationKey: string | undefined;
       let pageCount = 0;
+      // Every page's transactions, in API order, so the per-day closing
+      // balance can be derived once the whole range has arrived.
+      const allTxs: EnableBankingTransaction[] = [];
 
       do {
         const page = await getTransactions(account.externalAccountId, {
@@ -145,6 +149,7 @@ export async function syncAccount(
             continue;
           }
           validTxs.push({ externalId, tx });
+          allTxs.push(tx);
         }
 
         if (validTxs.length > 0) {
@@ -172,6 +177,46 @@ export async function syncAccount(
           transactionsFetched += count;
         }
       } while (continuationKey);
+
+      // Daily closing balances from `balance_after_transaction`. These
+      // backfill along with the transactions, which the /balances endpoint
+      // cannot do — it only ever knows today. Written under their own
+      // balanceType so they never collide with an endpoint row for the same
+      // day; the reader prefers whichever suits the question it is asking.
+      const derived = dailyClosingBalances(allTxs);
+      for (const d of derived) {
+        await prisma.accountBalance
+          .upsert({
+            where: {
+              bankAccountId_date_balanceType: {
+                bankAccountId: account.id,
+                date: new Date(d.date),
+                balanceType: AFTER_TRANSACTION,
+              },
+            },
+            create: {
+              bankAccountId: account.id,
+              date: new Date(d.date),
+              balance: d.balance,
+              currency: d.currency,
+              balanceType: AFTER_TRANSACTION,
+            },
+            update: { balance: d.balance },
+          })
+          .catch((err) => {
+            // A derived balance is a bonus, never a reason to fail a sync that
+            // has already stored its transactions.
+            console.warn(
+              `[sync] Account ${account.externalAccountId}: could not store derived balance for ${d.date}:`,
+              err instanceof Error ? err.message : err
+            );
+          });
+      }
+      if (derived.length > 0) {
+        console.log(
+          `[sync] Account ${account.externalAccountId}: ${derived.length} daily balances derived from transactions`
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       const is404 = msg.includes("404");

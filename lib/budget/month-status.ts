@@ -16,6 +16,8 @@ import { currentYearMonth, monthRange } from "@/lib/analytics/spending";
 import { normalizeDescriptor, isProvisionalMonth } from "@/lib/planned/matching";
 import { nearestInSet, rootOf, type ParentMap } from "@/lib/categories/hierarchy";
 import { merchantDisplayName } from "@/lib/transactions/merchant";
+import { AFTER_TRANSACTION } from "@/lib/banking/daily-balances";
+import type { Prisma } from "@/app/generated/prisma";
 import {
   computeCascade,
   computeActualResult,
@@ -39,6 +41,8 @@ import {
 } from "./weekly";
 
 const OPS_LOOKBACK_DAYS = 98; // 14 weeks: current + 12 complete + margin
+/** A date can hold several balance types; a handful is always enough. */
+const SNAPSHOT_CANDIDATES = 6;
 const CUSHION_BASELINE_MONTHS = 6;
 
 export interface ObjectiveRecurring {
@@ -162,6 +166,26 @@ function todayInTimezone(timezone: string, now: Date = new Date()): string {
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The balance to use out of a date-descending candidate list.
+ *
+ * A day can now hold two rows: what /balances answered when the sync ran, and
+ * the close derived from `balance_after_transaction`. The endpoint row wins
+ * wherever it exists — it is what every month has been read from until now,
+ * and the derived rows exist to fill the days no sync ever covered, not to
+ * restate the days it did. Only the newest date is considered; an older date
+ * never outranks a newer one whatever its type.
+ */
+function pickSnapshot(
+  rows: { balance: Prisma.Decimal; date: Date; balanceType: string | null }[]
+): number | null {
+  if (rows.length === 0) return null;
+  const newest = rows[0].date.getTime();
+  const sameDay = rows.filter((r) => r.date.getTime() === newest);
+  const fromEndpoint = sameDay.find((r) => r.balanceType !== AFTER_TRANSACTION);
+  return Number((fromEndpoint ?? sameDay[0]).balance.toString());
+}
 
 /**
  * "The month arrives already assigned": copy last month's budget items
@@ -441,19 +465,21 @@ export async function buildMonthStatus(
       : Promise.resolve([]),
     Promise.all(
       accounts.map((a) =>
-        prisma.accountBalance.findFirst({
+        prisma.accountBalance.findMany({
           where: { bankAccountId: a.id, date: { lt: start } },
           orderBy: { date: "desc" },
-          select: { balance: true },
+          take: SNAPSHOT_CANDIDATES,
+          select: { balance: true, date: true, balanceType: true },
         })
       )
     ),
     Promise.all(
       accounts.map((a) =>
-        prisma.accountBalance.findFirst({
+        prisma.accountBalance.findMany({
           where: { bankAccountId: a.id, date: { lt: end } },
           orderBy: { date: "desc" },
-          select: { balance: true },
+          take: SNAPSHOT_CANDIDATES,
+          select: { balance: true, date: true, balanceType: true },
         })
       )
     ),
@@ -664,23 +690,16 @@ export async function buildMonthStatus(
   // no semantics — always the sum of all of them). For the current month the
   // "end" snapshot is simply the latest one; for a past month it is the last
   // snapshot inside it, so navigation shows that month's own delta.
+  const endBalances = endSnapshots.map(pickSnapshot);
+  const startBalances = startSnapshots.map(pickSnapshot);
   const consolidatedBalance =
-    accounts.length > 0 && endSnapshots.some((s) => s !== null)
-      ? round(
-          endSnapshots.reduce(
-            (sum, s) => sum + (s ? Number(s.balance.toString()) : 0),
-            0
-          )
-        )
+    accounts.length > 0 && endBalances.some((b) => b !== null)
+      ? round(endBalances.reduce<number>((sum, b) => sum + (b ?? 0), 0))
       : null;
-  const haveAllStarts =
-    accounts.length > 0 && startSnapshots.every((s) => s !== null);
+  const haveAllStarts = accounts.length > 0 && startBalances.every((b) => b !== null);
   const consolidatedDelta =
     consolidatedBalance != null && haveAllStarts
-      ? round(
-          consolidatedBalance -
-            startSnapshots.reduce((sum, s) => sum + Number(s!.balance.toString()), 0)
-        )
+      ? round(consolidatedBalance - startBalances.reduce<number>((sum, b) => sum + b!, 0))
       : null;
 
   const avgMonthlySpend = baselineAgg._sum.amount
