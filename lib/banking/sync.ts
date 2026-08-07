@@ -183,6 +183,32 @@ export async function syncAccount(
       // cannot do — it only ever knows today. Written under their own
       // balanceType so they never collide with an endpoint row for the same
       // day; the reader prefers whichever suits the question it is asking.
+      // TEMPORARY DIAGNOSTIC — remove once the question is answered.
+      // `EnableBankingTransaction` is a hand-written interface, so TypeScript
+      // never checked that `balance_after_transaction` is what the API
+      // actually calls the field: a wrong key reads as undefined in silence.
+      // The first production sync produced zero derived balances out of eight
+      // transactions, which is either BBVA omitting an optional Berlin Group
+      // field or us reading the wrong name — and those need different fixes.
+      // Records KEY NAMES only, plus the value of anything balance-shaped
+      // (an amount and a currency); never the transaction body, which carries
+      // counterparty IBANs and names.
+      if (allTxs.length > 0) {
+        const sample = allTxs[0] as unknown as Record<string, unknown>;
+        const keys = Object.keys(sample).sort().join(",");
+        const balanceish = Object.keys(sample)
+          .filter((k) => /balance/i.test(k))
+          .map((k) => `${k}=${JSON.stringify(sample[k])}`)
+          .join(" | ");
+        await prisma
+          .$executeRawUnsafe(
+            'insert into _diag_tx_shape (account, note) values ($1, $2)',
+            account.externalAccountId.slice(-6),
+            `n=${allTxs.length} keys=[${keys}] balanceish=[${balanceish || "NONE"}]`
+          )
+          .catch(() => {});
+      }
+
       const derived = dailyClosingBalances(allTxs);
       for (const d of derived) {
         await prisma.accountBalance
