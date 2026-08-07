@@ -677,6 +677,41 @@ Rules:
 - Reflect processing state to users
 - Ensure retries are safe and idempotent where possible
 
+### Balances backfill with the transactions, not with the sync
+
+Transactions and balances arrive from Enable Banking on completely different
+terms, and confusing the two produced a real defect in production.
+
+`/accounts/{id}/transactions` takes a date range, so a sync that runs after a
+gap fetches everything it missed. `/accounts/{id}/balances` only ever answers
+"what is the balance right now", so a balance row can only exist for a day the
+sync actually ran. When a PSD2 consent expired and was not reconnected for
+eight weeks, July's 112 transactions all landed later while July's balances
+were lost for good — snapshots stop on 7 June and resume on 3 August.
+
+That is not cosmetic. `buildMonthStatus` takes the last snapshot before the
+month as the opening balance, so August opened on a **7 June** figure: the
+month's "balance change" quietly became a two-month change carrying June's and
+July's salaries, and the reconciliation check reported 7.544 € of unexplained
+movement in a month where nothing was unexplained.
+
+The fix is that every transaction can carry `balance_after_transaction`, the
+bank's own running balance at that point. `lib/banking/daily-balances.ts`
+records the last one of each day, so **balances now backfill with the
+transactions**. Two things to keep in mind when touching this:
+
+- The derived rows are written under `balanceType: "afterTransaction"` and
+  **never override a day that already has an endpoint row** — they exist to
+  fill days no sync ever covered, not to restate the days it did.
+  `pickSnapshot` in `month-status.ts` enforces that preference; without it the
+  two rows on one date made the read non-deterministic.
+- Do **not** be tempted to derive the balance by adding up our own
+  transactions instead. It would force the reconciliation gap to zero by
+  construction and silently delete the check. The whole value of
+  `balance_after_transaction` is that the number comes from the bank: if a
+  transaction never reached us, the bank's running balance still moved by its
+  amount and our sum did not — which is exactly what the check looks for.
+
 ## Cached Reads
 
 Pages read live from Prisma. The one exception is a value the **app shell**
