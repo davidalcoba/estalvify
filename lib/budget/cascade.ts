@@ -115,6 +115,63 @@ export function performance(actualResult: number, expectedResult: number): numbe
   return round(actualResult - expectedResult);
 }
 
+export interface PlannedForToDate {
+  direction: "DEBIT" | "CREDIT";
+  /** The PLANNED amount — comparing it against the matched one is the point. */
+  amount: number;
+  matched: boolean;
+  /** Last day of the item's window; null when it has none. */
+  windowToDay: number | null;
+  anchorMonthEnd: boolean;
+}
+
+/**
+ * The plan accrued TO DATE — what the month was supposed to look like today,
+ * not on the 31st.
+ *
+ * Comparing the real result against the WHOLE month's plan puts every screen in
+ * the red for the first three weeks by construction: the fixed charges land
+ * between the 1st and the 8th and the salaries arrive on the 27th, so on day 7
+ * reality is −2 877 € against a plan of +860 € and the app screams about a
+ * month that is going exactly as designed. An indicator that is red half of
+ * every month teaches you to ignore red.
+ *
+ * The plan is lumpy and the spending is smooth, so the two halves accrue
+ * differently:
+ *
+ *   - **Planned items** accrue by their own state, which is what makes this
+ *     symmetric with `computeActualResult`. An item counts once it has been
+ *     matched — at its PLANNED amount, so that the gap against the amount that
+ *     actually arrived is exactly what `performance` reports — or once its
+ *     window has closed without a match, because then it is overdue and
+ *     pretending it is not due yet would flatter the month.
+ *   - **The variable side** (rollover quotas + the variable budget) is a rate
+ *     by definition, so it accrues linearly. Leaving it out would book every
+ *     café as underperformance against a plan that pretended you spend nothing.
+ */
+export function expectedResultToDate(input: {
+  plannedItems: PlannedForToDate[];
+  /** rolloverQuotas + variableBudget: the part of the plan that IS a rate. */
+  linearSpend: number;
+  daysElapsed: number;
+  daysInMonth: number;
+}): number {
+  const elapsed = Math.min(Math.max(0, input.daysElapsed), input.daysInMonth);
+  let income = 0;
+  let charges = 0;
+  for (const item of input.plannedItems) {
+    const dueDay = item.anchorMonthEnd
+      ? input.daysInMonth
+      : (item.windowToDay ?? input.daysInMonth);
+    const accrued = item.matched || dueDay < elapsed;
+    if (!accrued) continue;
+    if (item.direction === "CREDIT") income += item.amount;
+    else charges += item.amount;
+  }
+  const linear = (Math.max(0, input.linearSpend) / input.daysInMonth) * elapsed;
+  return round(income - charges - linear);
+}
+
 /**
  * The free reconciliation check: income − expenses should equal the
  * consolidated balance change. A gap means uncaptured flow — an unsynced
@@ -126,6 +183,21 @@ export function reconciliationGap(
 ): number | null {
   if (consolidatedDelta == null) return null;
   return round(consolidatedDelta - actualResult);
+}
+
+/**
+ * Whether a flows-vs-balance gap is worth showing. An absolute threshold of
+ * one euro fires on rounding and on a single card authorisation still settling,
+ * and a warning that is always on is a warning nobody reads. Material means
+ * both big enough to matter on its own and big enough relative to the month's
+ * gross movement.
+ */
+export function discrepancyIsMaterial(
+  discrepancy: number | null,
+  grossFlow: number
+): boolean {
+  if (discrepancy == null) return false;
+  return Math.abs(discrepancy) >= Math.max(25, grossFlow * 0.01);
 }
 
 export interface RolloverMonthRow {

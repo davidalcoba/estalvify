@@ -6,6 +6,7 @@ import {
   reconciliationGap,
   rolloverBalance,
   monthsOfCushion,
+  expectedResultToDate,
 } from "./cascade";
 
 describe("computeCascade (v4: savings target in, variable as residue)", () => {
@@ -124,5 +125,105 @@ describe("rolloverBalance / monthsOfCushion", () => {
     expect(monthsOfCushion(47664, 7700)).toBe(6.2);
     expect(monthsOfCushion(null, 7700)).toBeNull();
     expect(monthsOfCushion(47664, 0)).toBeNull();
+  });
+});
+
+describe("expectedResultToDate", () => {
+  // The month that made this necessary: charges land 1–8, salaries on 27–29.
+  const rent = {
+    direction: "DEBIT" as const,
+    amount: 1389.17,
+    windowToDay: 6,
+    anchorMonthEnd: false,
+  };
+  const salary = {
+    direction: "CREDIT" as const,
+    amount: 6009,
+    windowToDay: 29,
+    anchorMonthEnd: false,
+  };
+
+  it("does not book income whose window has not opened yet", () => {
+    // Day 7: the rent has been charged, the salary is three weeks away. The
+    // whole-month plan would compare against +4 620 and report a catastrophe.
+    const toDate = expectedResultToDate({
+      plannedItems: [
+        { ...rent, matched: true },
+        { ...salary, matched: false },
+      ],
+      linearSpend: 0,
+      daysElapsed: 7,
+      daysInMonth: 31,
+    });
+    expect(toDate).toBe(-1389.17);
+  });
+
+  it("a matched item accrues at its PLANNED amount, so the gap is the deviation", () => {
+    // Planned 1389.17, actually charged 1409.17: the 20 € rise is exactly what
+    // performance should report, and it can only do that if the plan side
+    // holds the planned figure.
+    const toDate = expectedResultToDate({
+      plannedItems: [{ ...rent, matched: true }],
+      linearSpend: 0,
+      daysElapsed: 7,
+      daysInMonth: 31,
+    });
+    expect(performance(-1409.17, toDate)).toBe(-20);
+  });
+
+  it("an unmatched item accrues once its window has closed", () => {
+    // Day 10, window closed on the 6th and nothing arrived: the month still
+    // owes it, and hiding it would flatter the result.
+    const toDate = expectedResultToDate({
+      plannedItems: [{ ...rent, matched: false }],
+      linearSpend: 0,
+      daysElapsed: 10,
+      daysInMonth: 31,
+    });
+    expect(toDate).toBe(-1389.17);
+  });
+
+  it("a month-end anchored item is due on the last day, not on day null", () => {
+    const mortgage = {
+      direction: "DEBIT" as const,
+      amount: 562.48,
+      matched: false,
+      windowToDay: null,
+      anchorMonthEnd: true,
+    };
+    expect(
+      expectedResultToDate({
+        plannedItems: [mortgage],
+        linearSpend: 0,
+        daysElapsed: 30,
+        daysInMonth: 31,
+      })
+    ).toBe(0);
+  });
+
+  it("the variable side accrues linearly, so on-pace spending nets to zero", () => {
+    // 3100 € of variable budget over 31 days, 700 € spent by day 7 — exactly
+    // on pace. Nothing planned has moved, so performance must be 0.
+    const toDate = expectedResultToDate({
+      plannedItems: [],
+      linearSpend: 3100,
+      daysElapsed: 7,
+      daysInMonth: 31,
+    });
+    expect(toDate).toBe(-700);
+    expect(performance(-700, toDate)).toBe(0);
+  });
+
+  it("a fully elapsed month accrues the whole plan", () => {
+    const toDate = expectedResultToDate({
+      plannedItems: [
+        { ...rent, matched: true },
+        { ...salary, matched: true },
+      ],
+      linearSpend: 3100,
+      daysElapsed: 31,
+      daysInMonth: 31,
+    });
+    expect(toDate).toBe(1519.83);
   });
 });
