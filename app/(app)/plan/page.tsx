@@ -17,7 +17,8 @@ import { buildMonthStatus } from "@/lib/budget/month-status";
 import { currentYearMonth } from "@/lib/analytics/spending";
 import { syncPlannedState } from "@/lib/planned/engine";
 import { MonthShell, BudgetBodySkeleton } from "@/components/budget/month-shell";
-import { CascadeCard } from "@/components/budget/cascade-card";
+import { PlanCard } from "@/components/budget/plan-card";
+import { MonthProgressCard } from "@/components/budget/month-progress-card";
 import { ObjectivesCard } from "@/components/budget/objectives-card";
 
 export const metadata: Metadata = { title: "Budget" };
@@ -54,7 +55,13 @@ async function PlanBody({
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <CascadeCard status={status} currency={prefs.currency} locale={prefs.locale} />
+      {/* Decisions and observation are two different things and used to share
+          one card separated by a hairline, which made `Savings target` and
+          `Actual savings` read as comparable. Two cards, two titles. */}
+      <div className="space-y-4">
+        <PlanCard status={status} currency={prefs.currency} locale={prefs.locale} />
+        <MonthProgressCard status={status} currency={prefs.currency} locale={prefs.locale} />
+      </div>
       <ObjectivesCard
         objectives={status.objectives}
         incomeObjectives={status.incomeObjectives}

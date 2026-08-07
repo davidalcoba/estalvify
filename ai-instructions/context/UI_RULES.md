@@ -167,6 +167,38 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 Zero targets must not paint `NaN`: clamp every percentage through a
 finite-checked helper.
 
+## No database words on screen
+
+`rollover`, `accrual`, `variable budget`, `flows vs balance` are vocabulary of
+the implementation. **No field name from the schema may reach the interface.**
+If the user has to learn the data model to read a label, the label is not
+finished. The Budget screen was rewritten for this: `Fund quotas (rollover)` →
+`Set aside for later`, `Variable budget` → `To spend this month`, `Actual
+result (accrual)` → `This month's balance`. When the method genuinely needs
+explaining, it goes behind a tap, never into the label.
+
+Two more rules came out of the same pass:
+
+- **Decisions and observations do not share a card.** A block the user changes
+  by editing (the plan) and a block that changes when a transaction lands (how
+  the month is going) have opposite natures, and putting them under one title
+  separated by a hairline made `Savings target −860` and `Actual savings
+  +4 597` read as comparable figures. Two cards, two titles.
+- **An indicator that is red by construction for part of the cycle is not an
+  indicator, it is noise** — and it trains the user to ignore the warnings that
+  do matter. Either compare against the right reference *to date*, or do not
+  show the comparison until it means something. `Against plan so far` measures
+  against the plan accrued to today for exactly this reason; against the whole
+  month it was red from the 1st to the 26th, every month, because the charges
+  land in the first week and the salaries on the 27th.
+- **The line that asks for an action is a sentence, not a figure.** The
+  assignment gap used to read `Lines 4598,00 € · gap −1,93 €` in grey under the
+  total — the only thing on the screen that needed doing, and the least
+  visible. It now says what happened and what to do about it, and only when
+  there is something to do. Same for the flows-vs-balance warning, which also
+  gained a relative threshold (`discrepancyIsMaterial`) so it stops firing on
+  three euros of rounding.
+
 ## Copy: terse, SaaS-style
 
 - **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)
