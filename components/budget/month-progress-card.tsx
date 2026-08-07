@@ -59,14 +59,32 @@ export function MonthProgressCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <dl className="space-y-1.5 text-sm">
-          <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">This month&apos;s balance</dt>
-            <dd className="tabular-nums">{signed(r.actualResult)}</dd>
+          {/* First, because it is the only line here that can be acted on
+              while the month runs. The two cash figures below are negative
+              from the 1st to the 26th no matter how the month is going — the
+              charges land in the first week and the salaries on the 27th — so
+              leading with them says "disaster" every month until it is too
+              late to change anything. */}
+          <div className="flex items-baseline justify-between">
+            <dt className="font-medium">Heading for</dt>
+            <dd className="text-lg font-semibold tabular-nums">
+              {signed(r.projectedResult)}
+            </dd>
           </div>
+          {/* The one judgement on the card. Everything else is a fact. */}
           <div className="flex items-center justify-between">
             <dt className="text-muted-foreground">Against plan so far</dt>
             <dd className={`tabular-nums ${tone(r.performance)}`}>
               {signed(r.performance)}
+            </dd>
+          </div>
+          {/* Deliberately uncoloured: red here would fire on 26 days out of
+              31 by construction, which is the habit that makes people stop
+              reading red. */}
+          <div className="flex items-center justify-between">
+            <dt className="text-muted-foreground">This month&apos;s balance</dt>
+            <dd className="tabular-nums text-muted-foreground">
+              {signed(r.actualResult)}
             </dd>
           </div>
           {/* Actual savings is the balance change, so a failed reconciliation
@@ -91,11 +109,7 @@ export function MonthProgressCard({
           {r.consolidatedDelta != null && (
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Actual savings</dt>
-              <dd
-                className={`flex items-center gap-1.5 tabular-nums ${
-                  showGap ? "text-muted-foreground" : tone(r.consolidatedDelta)
-                }`}
-              >
+              <dd className="flex items-center gap-1.5 tabular-nums text-muted-foreground">
                 {showGap && (
                   <span className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide">
                     unreliable
@@ -114,7 +128,10 @@ export function MonthProgressCard({
             figure={`${fmt(Math.abs(r.discrepancy))} unreconciled`}
             detail="Two balance readings from your bank do not agree with the transactions recorded between them, so some movement never reached the app. Usually an account that has not finished syncing."
             action={
-              <Link href="/accounts" className="shrink-0 font-medium underline underline-offset-2">
+              <Link
+                href="/accounts"
+                className="shrink-0 font-medium underline underline-offset-2"
+              >
                 Check accounts
               </Link>
             }

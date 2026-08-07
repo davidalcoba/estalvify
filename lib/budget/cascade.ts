@@ -173,6 +173,32 @@ export function expectedResultToDate(input: {
 }
 
 /**
+ * Where the month lands if the rest of the plan holds.
+ *
+ * Everything else in the result block looks backwards, and looking backwards
+ * alone is useless while the month runs: the charges land in the first week
+ * and the salaries on the 27th, so the cash figures are negative for 26 days
+ * out of every 31 no matter how well the month is going. By the time they turn
+ * positive the month is over and there is nothing left to decide.
+ *
+ * `expectedResult − expectedResultToDate` is precisely the part of the plan
+ * that has NOT accrued yet — the salaries still to come, less the variable
+ * budget still to be spent. Adding it to what has actually happened gives a
+ * figure that is meaningful on day 8: heading for 735 € against a target of
+ * 860 € means 23 days to make up 125 €, which is something a person can act on.
+ *
+ * It converges on the real result as the month closes, since the unaccrued
+ * remainder shrinks to zero.
+ */
+export function projectedResult(
+  actualResult: number,
+  expectedResult: number,
+  expectedResultToDate: number
+): number {
+  return round(actualResult + (expectedResult - expectedResultToDate));
+}
+
+/**
  * Whether a flows-vs-balance gap is worth showing. An absolute threshold of
  * one euro fires on rounding and on a single card authorisation still settling,
  * and a warning that is always on is a warning nobody reads. Material means

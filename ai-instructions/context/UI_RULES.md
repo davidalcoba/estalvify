@@ -200,6 +200,16 @@ Two more rules came out of the same pass:
   it, explanation behind the ⓘ.** The flows-vs-balance one also has a relative
   threshold (`discrepancyIsMaterial`: ≥ 25 € and ≥ 1 % of gross flow) so it
   stops firing on rounding.
+- **Lead an "how is it going" block with something that can still be acted
+  on.** Every backward-looking figure on the Budget result card is negative
+  from the 1st to the 26th by construction — the charges land in the first week
+  and the salaries on the 27th — so leading with them announces a disaster
+  every month until it is too late to change anything. `Heading for` (real
+  result plus the part of the plan not yet accrued) is positive, meaningful on
+  day 8, and converges on the real result as the month closes. Corollary: the
+  cash figures underneath carry **no colour at all**, since red on 26 days out
+  of 31 is the habit that teaches people to stop reading red. One coloured
+  number per card — the one that is a judgement rather than a fact.
 - **A number the app knows is wrong must not look like one that isn't.**
   `Actual savings` is the balance change, so an active reconciliation warning is
   literally a statement that the figure is unreliable — the gap IS the
