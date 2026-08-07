@@ -7,6 +7,7 @@ import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { getUserPrefs } from "@/lib/user-prefs";
 import { expireStaleConsents } from "@/lib/banking/connection-status";
+import { monthsOfCushion } from "@/lib/budget/cascade";
 import { formatDate, formatCurrency } from "@/lib/formatters";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -71,12 +72,15 @@ export default async function AccountsPage({
   // Auto-recover connections stuck in SYNCING for more than 10 minutes.
   // This happens when a Vercel function timeout kills the sync job without
   // updating the connection status back to ACTIVE.
+  // One clock read for the whole request: the stuck-sync cutoff and the
+  // cushion baseline window both hang off it. (An async server component runs
+  // once per request on the server, never during a React render.)
+  const now = new Date();
   await prisma.bankConnection.updateMany({
     where: {
       userId: dataUserId,
       status: "SYNCING",
-      // eslint-disable-next-line react-hooks/purity -- async server component: runs once per request on the server, not during a React render
-      updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
+      updatedAt: { lt: new Date(now.getTime() - 10 * 60 * 1000) },
     },
     data: { status: "ACTIVE" },
   });
@@ -85,7 +89,16 @@ export default async function AccountsPage({
   // the Reconnect button appears without waiting for a sync to 401.
   await expireStaleConsents({ userId: dataUserId });
 
-  const [connections, prefs] = await Promise.all([
+  // Six trailing months of non-transfer spend: the denominator of the cushion.
+  // It used to be computed inside the month status and shown on Budget, where
+  // it competed for attention with figures that actually belong to the month.
+  const CUSHION_BASELINE_MONTHS = 6;
+  const baselineStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - CUSHION_BASELINE_MONTHS, 1)
+  );
+  const baselineEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+  const [connections, prefs, baselineAgg] = await Promise.all([
     prisma.bankConnection.findMany({
       where: {
         userId: dataUserId,
@@ -103,9 +116,35 @@ export default async function AccountsPage({
       orderBy: { createdAt: "desc" },
     }),
     getUserPrefs(dataUserId, actorUserId),
+    prisma.transaction.aggregate({
+      where: {
+        userId: dataUserId,
+        direction: "DEBIT",
+        valueDate: { gte: baselineStart, lt: baselineEnd },
+        NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
+      },
+      _sum: { amount: true },
+    }),
   ]);
 
-  const { locale, language, timezone } = prefs;
+  const { locale, currency, language, timezone } = prefs;
+
+  // Where you stand, as opposed to how this month is going. Both figures used
+  // to live on Budget, where they did not belong: neither moves when August's
+  // decisions change, and next to numbers that do they only competed for
+  // attention. Deliberately not on the daily dashboard either — that screen is
+  // one number and a counter.
+  const balancedAccounts = connections.flatMap((c) =>
+    c.bankAccounts.filter((a) => a.balances.length > 0)
+  );
+  const consolidatedBalance =
+    balancedAccounts.length > 0
+      ? balancedAccounts.reduce((sum, a) => sum + Number(a.balances[0].balance.toString()), 0)
+      : null;
+  const avgMonthlySpend = baselineAgg._sum.amount
+    ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
+    : 0;
+  const cushion = monthsOfCushion(consolidatedBalance, avgMonthlySpend);
 
   // Group connections by bankId so same-bank connections appear in one card
   type BankGroup = {
@@ -182,6 +221,29 @@ export default async function AccountsPage({
         </div>
       )}
       <PageHeader title="Bank Accounts" actions={<ConnectBankDialog />} />
+
+      {consolidatedBalance != null && (
+        <Card>
+          <CardContent className="flex flex-wrap items-baseline gap-x-8 gap-y-2 pt-4 pb-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Total balance
+              </p>
+              <p className="text-2xl font-semibold tabular-nums">
+                {formatCurrency(consolidatedBalance, currency, locale)}
+              </p>
+            </div>
+            {cushion != null && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Months of cushion
+                </p>
+                <p className="text-2xl font-semibold tabular-nums">{cushion}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-brand/5 border-brand/20">
         <CardContent className="flex items-center gap-3 pt-4 pb-4">

@@ -167,6 +167,54 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 Zero targets must not paint `NaN`: clamp every percentage through a
 finite-checked helper.
 
+## No database words on screen
+
+`rollover`, `accrual`, `variable budget`, `flows vs balance` are vocabulary of
+the implementation. **No field name from the schema may reach the interface.**
+If the user has to learn the data model to read a label, the label is not
+finished. The Budget screen was rewritten for this: `Fund quotas (rollover)` →
+`Set aside for later`, `Variable budget` → `To spend this month`, `Actual
+result (accrual)` → `This month's balance`. When the method genuinely needs
+explaining, it goes behind a tap, never into the label.
+
+Two more rules came out of the same pass:
+
+- **Decisions and observations do not share a card.** A block the user changes
+  by editing (the plan) and a block that changes when a transaction lands (how
+  the month is going) have opposite natures, and putting them under one title
+  separated by a hairline made `Savings target −860` and `Actual savings
+  +4 597` read as comparable figures. Two cards, two titles.
+- **An indicator that is red by construction for part of the cycle is not an
+  indicator, it is noise** — and it trains the user to ignore the warnings that
+  do matter. Either compare against the right reference *to date*, or do not
+  show the comparison until it means something. `Against plan so far` measures
+  against the plan accrued to today for exactly this reason; against the whole
+  month it was red from the 1st to the 26th, every month, because the charges
+  land in the first week and the salaries on the 27th.
+- **A warning is a figure and an action, not a paragraph.** The assignment gap
+  first read `Lines 4598,00 € · gap −1,93 €` in grey under the total — the only
+  thing on the screen that needed doing, and the least visible. Spelling it out
+  as a full sentence fixed the visibility and cost three lines of card; two
+  such notices pushed the objectives list below the fold. Both now use
+  `components/budget/inline-notice.tsx`: **amount on the surface, action beside
+  it, explanation behind the ⓘ.** The flows-vs-balance one also has a relative
+  threshold (`discrepancyIsMaterial`: ≥ 25 € and ≥ 1 % of gross flow) so it
+  stops firing on rounding.
+- **A number the app knows is wrong must not look like one that isn't.**
+  `Actual savings` is the balance change, so an active reconciliation warning is
+  literally a statement that the figure is unreliable — the gap IS the
+  difference between it and the month's balance shown two rows above. It was
+  painted green at full weight next to that warning, i.e. the card contradicting
+  itself. When the gap is material the figure drops to muted and carries an
+  `unreliable` tag. Generally: if a check has failed, everything derived from
+  the failing calculation degrades visually.
+- **A line at zero is not information**, and `−0,00 €` is worse than none. The
+  cascade hides its zero rows. The one exception is the savings target: it is
+  the input of the whole cascade and has to stay reachable at zero.
+- **State the pace in days, not per cent.** `23% elapsed` next to a list of
+  objectives was read as "23 % of the objectives"; `Day 7 of 31` cannot be
+  mistaken for progress against a goal.
+
 ## Copy: terse, SaaS-style
 
 - **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)

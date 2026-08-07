@@ -12,8 +12,12 @@ export default function PlanLoading() {
       <PageHeaderSkeleton titleWidth="w-40" actionsWidth="w-56" />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Monthly cascade + reconciliation */}
-        <ListCardSkeleton rows={9} titleWidth="w-40" />
+        <div className="space-y-4">
+          {/* "Your plan" — the cascade, five lines to the total */}
+          <ListCardSkeleton rows={5} titleWidth="w-24" />
+          {/* "How the month is going" — three observed figures */}
+          <ListCardSkeleton rows={3} titleWidth="w-44" />
+        </div>
         {/* Category objectives — bar-as-row list */}
         <BarListCardSkeleton rows={6} titleWidth="w-44" />
       </div>

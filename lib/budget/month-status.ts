@@ -23,6 +23,7 @@ import {
   reconciliationGap,
   rolloverBalance,
   monthsOfCushion,
+  expectedResultToDate,
   type MonthCascade,
   type ActualResult,
 } from "./cascade";
@@ -98,6 +99,9 @@ export interface IncomeObjective {
 
 export interface Reconciliation extends ActualResult {
   expectedResult: number;
+  /** The plan accrued to today — what `performance` is measured against. */
+  expectedResultToDate: number;
+  /** actualResult − expectedResultToDate. Positive = ahead of plan so far. */
   performance: number;
   /** The month's consolidated balance change — the REAL savings, derived. */
   consolidatedDelta: number | null;
@@ -123,6 +127,9 @@ export interface MonthStatus {
   provisional: boolean;
   /** 0–1, how much of the month has elapsed (the pace reference). */
   monthElapsed: number;
+  /** Days of the viewed month already run; 0 for a month that has not begun. */
+  daysElapsed: number;
+  daysInMonth: number;
   /** False until at least one budget assignment exists. */
   configured: boolean;
   cascade: MonthCascade;
@@ -270,6 +277,8 @@ export async function buildMonthStatus(
           status: true,
           categoryId: true,
           description: true,
+          windowToDay: true,
+          anchorMonthEnd: true,
         },
       }),
       prisma.plannedItem.findMany({
@@ -678,10 +687,31 @@ export async function buildMonthStatus(
     ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
     : 0;
 
+  // Days of the viewed month that have run: a past month is over, a future one
+  // has not started. Same reading the category control uses.
+  const daysElapsed = ahead === 0 ? Number(today.slice(8, 10)) : ahead < 0 ? daysInMonth : 0;
+  // Performance compares against the plan ACCRUED TO DATE, not the whole
+  // month's. Against the whole month the screen is red from the 1st to the
+  // 26th by construction — the charges land in the first week and the salaries
+  // on the 27th — and an indicator that is red half of every month is noise.
+  const expectedToDate = expectedResultToDate({
+    plannedItems: plannedMonth.map((p) => ({
+      direction: p.direction,
+      amount: Number(p.amount.toString()),
+      matched: p.status === "MATCHED",
+      windowToDay: p.windowToDay,
+      anchorMonthEnd: p.anchorMonthEnd,
+    })),
+    linearSpend: cascade.rolloverQuotas + cascade.variableBudget,
+    daysElapsed,
+    daysInMonth,
+  });
+
   const reconciliation: Reconciliation = {
     ...actual,
     expectedResult: cascade.expectedResult,
-    performance: performance(actual.actualResult, cascade.expectedResult),
+    expectedResultToDate: expectedToDate,
+    performance: performance(actual.actualResult, expectedToDate),
     consolidatedDelta,
     discrepancy: reconciliationGap(consolidatedDelta, actual.actualResult),
     consolidatedBalance,
@@ -746,6 +776,8 @@ export async function buildMonthStatus(
     today,
     provisional,
     monthElapsed,
+    daysElapsed,
+    daysInMonth,
     configured: assignedVariable > 0,
     cascade,
     weekly,

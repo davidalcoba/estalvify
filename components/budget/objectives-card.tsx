@@ -43,6 +43,9 @@ interface ObjectivesCardProps {
   control: ControlRow[];
   /** 0–1, how much of the month has elapsed — the pace reference. */
   monthElapsed: number;
+  /** The same reference in days, which is how the header states it. */
+  daysElapsed: number;
+  daysInMonth: number;
   categories: Category[];
   year: number;
   month: number;
@@ -77,6 +80,8 @@ export function ObjectivesCard({
   incomeObjectives,
   control,
   monthElapsed,
+  daysElapsed,
+  daysInMonth,
   categories,
   year,
   month,
@@ -145,8 +150,10 @@ export function ObjectivesCard({
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">
           Objectives
+          {/* "23% elapsed" was read as "23% of the objectives". Days say the
+              same thing and cannot be mistaken for progress against a goal. */}
           <span className="ml-2 align-middle text-xs font-normal text-muted-foreground">
-            {elapsedPct}% elapsed
+            {daysElapsed > 0 ? `Day ${daysElapsed} of ${daysInMonth}` : "Not started"}
           </span>
         </CardTitle>
         {canWrite && (
