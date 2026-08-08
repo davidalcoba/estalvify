@@ -597,7 +597,7 @@ Three constraints worth knowing before touching this:
     `formatCurrency`; `language` (date language, default `en-GB`) is passed to
     `formatDate`. Never reuse `locale` for dates — pass `language` (threaded to
     client components as a `dateLocale`/`userLanguage` prop). `language` also
-    picks the INTERFACE language — see "Internationalization" below; `locale`
+    picks the INTERFACE language — see "Internationalization" above; `locale`
     never does. Both are editable in
     Settings ("Number format" and "Language"). Since multi-user phase 5,
     `getUserPrefs(dataUserId, actorUserId)` is THE module that splits personal
