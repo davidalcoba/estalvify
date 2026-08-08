@@ -48,7 +48,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Suspense } from "react";
+import { PendingBadge } from "@/components/layout/pending-badge";
 import { LogoMark } from "@/components/brand/logo";
 import { useCanWrite } from "@/components/layout/role-provider";
 
@@ -139,8 +140,13 @@ interface AppSidebarProps {
   /** The member's households (oldest first) and which one is active. */
   households?: { id: string; name: string }[];
   activeHouseholdId?: string;
-  pendingCategorizations?: number;
-  recurringToReview?: number;
+  /**
+   * Outstanding-work counts, as promises the shell deliberately does not
+   * await: the sidebar renders straight away and each badge fills in when its
+   * query returns. See components/layout/pending-badge.tsx.
+   */
+  pendingCategorizations?: Promise<number>;
+  recurringToReview?: Promise<number>;
   onSignOut: () => void;
 }
 
@@ -148,8 +154,8 @@ export function AppSidebar({
   user,
   households = [],
   activeHouseholdId,
-  pendingCategorizations = 0,
-  recurringToReview = 0,
+  pendingCategorizations,
+  recurringToReview,
   onSignOut,
 }: AppSidebarProps) {
   const pathname = usePathname();
@@ -159,7 +165,7 @@ export function AppSidebar({
 
   // Outstanding work per route: transactions left to categorize, detected series
   // left to review. Rendered as a count badge on that nav item.
-  const pendingByUrl: Record<string, number> = {
+  const pendingByUrl: Record<string, Promise<number> | undefined> = {
     "/categorize": pendingCategorizations,
     "/recurring": recurringToReview,
   };
@@ -214,7 +220,7 @@ export function AppSidebar({
                   const isActive =
                     pathname === item.url ||
                     (item.url !== "/dashboard" && pathname.startsWith(item.url));
-                  const pending = pendingByUrl[item.url] ?? 0;
+                  const pending = pendingByUrl[item.url];
 
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -228,13 +234,12 @@ export function AppSidebar({
                         <Link href={item.url}>
                           <item.icon />
                           <span>{item.title}</span>
-                          {pending > 0 && (
-                            <Badge
-                              variant="brand"
-                              className="ml-auto h-5 min-w-5 px-1 text-xs"
-                            >
-                              {pending > 99 ? "99+" : pending}
-                            </Badge>
+                          {pending && (
+                            // No fallback: an empty slot that fills in beats a
+                            // placeholder flashing where a badge may never go.
+                            <Suspense fallback={null}>
+                              <PendingBadge count={pending} />
+                            </Suspense>
                           )}
                         </Link>
                       </SidebarMenuButton>

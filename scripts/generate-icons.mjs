@@ -142,3 +142,66 @@ await write("app/apple-icon.png", await png(tileSvg({ size: 512, radiusFrac: 0 }
 
 // Legacy `/favicon.ico`, kept alongside `app/icon.svg` for old clients.
 await write("app/favicon.ico", pngToIco(await png(rounded, 32), 32));
+
+// ── iOS launch screens ────────────────────────────────────────────────────────
+// iOS does NOT derive a splash from the manifest the way Android does: without
+// `apple-touch-startup-image` an installed PWA shows a blank white screen while
+// the first page loads. Each entry needs an exact-resolution image plus a media
+// query naming the device, which is why this is a list rather than one file.
+//
+// Portrait only — the manifest pins `orientation: portrait-primary`, so the
+// landscape half of the matrix would never be used.
+//
+// The wordless mark on a brand field: a launch screen is glanced at, not read,
+// and it must match the icon the user just tapped.
+const LAUNCH_SCREENS = [
+  { w: 1320, h: 2868, dw: 440, dh: 956, dpr: 3 }, // iPhone 16 Pro Max
+  { w: 1206, h: 2622, dw: 402, dh: 874, dpr: 3 }, // iPhone 16 Pro
+  { w: 1290, h: 2796, dw: 430, dh: 932, dpr: 3 }, // 14/15 Pro Max, 16 Plus
+  { w: 1179, h: 2556, dw: 393, dh: 852, dpr: 3 }, // 14/15 Pro, 16
+  { w: 1284, h: 2778, dw: 428, dh: 926, dpr: 3 }, // 12/13 Pro Max
+  { w: 1170, h: 2532, dw: 390, dh: 844, dpr: 3 }, // 12/13/14
+  { w: 1125, h: 2436, dw: 375, dh: 812, dpr: 3 }, // X, XS, 11 Pro
+  { w: 1242, h: 2688, dw: 414, dh: 896, dpr: 3 }, // XS Max, 11 Pro Max
+  { w: 828, h: 1792, dw: 414, dh: 896, dpr: 2 }, // XR, 11
+  { w: 1242, h: 2208, dw: 414, dh: 736, dpr: 3 }, // 6+/7+/8+
+  { w: 750, h: 1334, dw: 375, dh: 667, dpr: 2 }, // 6/7/8, SE 2/3
+  { w: 2048, h: 2732, dw: 1024, dh: 1366, dpr: 2 }, // iPad Pro 12.9"
+  { w: 1668, h: 2388, dw: 834, dh: 1194, dpr: 2 }, // iPad Pro 11"
+  { w: 1668, h: 2224, dw: 834, dh: 1112, dpr: 2 }, // iPad Air 10.5"
+  { w: 1536, h: 2048, dw: 768, dh: 1024, dpr: 2 }, // iPad 9.7"
+];
+
+/** Brand field with the glyph centred, sized as a fraction of the short edge. */
+function launchSvg(width, height, glyphFrac = 0.28) {
+  const box = Math.min(width, height) * glyphFrac;
+  const scale = box / GLYPH_VIEWBOX;
+  const x = (width - box) / 2;
+  const y = (height - box) / 2;
+  const round = (n) => Number(n.toFixed(4));
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`,
+    `<rect width="${width}" height="${height}" fill="${BRAND}"/>`,
+    `<g transform="translate(${round(x)} ${round(y)}) scale(${round(scale)})">`,
+    glyphRects(GLYPH_FG),
+    `</g></svg>`,
+  ].join("");
+}
+
+for (const s of LAUNCH_SCREENS) {
+  const buffer = await sharp(Buffer.from(launchSvg(s.w, s.h)))
+    .resize(s.w, s.h)
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+  await write(`public/splash/launch-${s.w}x${s.h}.png`, buffer);
+}
+
+// The <link> media queries that pair each image with its device. Printed so the
+// list in app/layout.tsx can be regenerated rather than hand-maintained.
+console.log("\n// startupImage entries for app/layout.tsx:");
+for (const s of LAUNCH_SCREENS) {
+  console.log(
+    `  { url: "/splash/launch-${s.w}x${s.h}.png", media: "(device-width: ${s.dw}px) and (device-height: ${s.dh}px) and (-webkit-device-pixel-ratio: ${s.dpr}) and (orientation: portrait)" },`,
+  );
+}

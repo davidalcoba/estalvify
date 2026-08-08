@@ -90,8 +90,11 @@ export async function sendTestPush(): Promise<{ ok: boolean; message: string }> 
   const result = await sendPushToSelf(actorUserId, {
     type: "LOW_BALANCE_PROJECTED",
     severity: "INFO",
-    title: "Estalvify",
-    body: "Push is working.",
+    // Never put the app name in the title: iOS already prints "from Estalvify"
+    // under it, so a branded title shows the word twice and wastes the one
+    // line that carries meaning. Titles say what happened.
+    title: "Test notification",
+    body: "Push is working on this device.",
     dedupeKey: `test:${actorUserId}`,
   });
 

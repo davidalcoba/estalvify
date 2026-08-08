@@ -58,6 +58,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/icon") || // /icon.svg and /icons/*
     pathname.startsWith("/apple-icon") ||
     pathname.startsWith("/logo") ||
+    // iOS fetches the launch screen as the app opens, before any page runs and
+    // regardless of session state. A redirect here is a blank splash.
+    pathname.startsWith("/splash") ||
     pathname.startsWith("/manifest") ||
     pathname.startsWith("/sw.js") ||
     // The service worker precaches /offline at install time, with no session.
