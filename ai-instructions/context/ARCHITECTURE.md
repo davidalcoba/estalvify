@@ -11,7 +11,7 @@
 - `scripts/`: operational scripts
 - Tests live next to code as `lib/**/*.test.ts` (Vitest, config in `vitest.config.ts`);
   CI is `.github/workflows/ci.yml`. The other workflow,
-  `.github/workflows/prune-neon-branch.yml`, is infrastructure housekeeping —
+  `.github/workflows/prune-merged-branch.yml`, is infrastructure housekeeping —
   see "Databases (Neon)" → branch cap.
 
 ## Deployment Context
@@ -243,17 +243,40 @@ fails closed rather than falling through to another database. Three slots are
 permanent (`main`, `preview`, `development`); the rest absorb concurrent feature
 branches.
 
-`.github/workflows/prune-neon-branch.yml` reclaims a slot automatically: on
-`pull_request: closed` it deletes the Neon branch named `preview/<head-ref>`. It
-needs a `NEON_API_KEY` repository secret and, when that is missing, logs and
-exits 0 rather than reddening every closed PR. Deleting is safe — the
-integration recreates the branch from `main` on the next deployment of that git
-branch, so the only thing lost is throwaway preview data.
+It has been hit for real: on 2026-08-08 six `preview/` branches from
+already-merged pull requests (merged before the prune workflow reached both
+`main` and `preview`) held the remaining slots, and every new feature branch
+deployed straight to `ERROR / Resource provisioning failed` with **zero build
+events** — no log to read, nothing wrong with the code. If a preview fails that
+way, count the branches before looking at the diff:
+`GET /api/v2/projects/{id}/branches`.
+
+`.github/workflows/prune-merged-branch.yml` reclaims a slot automatically, in two
+jobs that answer to different things:
+
+- **`Delete preview/<head-ref>`** runs on *any* `pull_request: closed`, merged or
+  abandoned — an abandoned branch holds a slot just as hard. It needs a
+  `NEON_API_KEY` repository secret and, when that is missing, logs and exits 0
+  rather than reddening every closed PR. Deleting is safe: the integration
+  recreates the branch from `main` on the next deployment of that git branch, so
+  the only thing lost is throwaway preview data. It always logs the branches
+  still in use, so an orphan that survives is visible in the next run.
+- **`Delete the merged git branch`** runs only when the pull request actually
+  **merged into `preview`**, and deletes the head ref on GitHub. Not on an
+  abandoned pull request: closing one is not a decision to throw the commits
+  away, and the ref is the only thing still holding them.
+
+Both skip forks and both refuse `main` and `preview` outright. That exclusion is
+the point on the release pull request: `preview` → `main` must fall through
+untouched, since deleting `preview` would take the release candidate, its fixed
+URL and its Neon branch with it. It is also why GitHub's own **"Automatically
+delete head branches" repository setting is the wrong tool here** — it has no
+idea `preview` is special and would delete it on every release. Leave it off.
 
 **A `pull_request: closed` workflow is resolved from the PR's base branch**, so it
 prunes nothing unless the file exists on the branch being merged *into*. That is
 measured, not assumed: PR #55 had head `main` at `c711175`, a commit that does not
-contain `prune-neon-branch.yml`, and base `preview`, which did — and the run fired
+contain the workflow, and base `preview`, which did — and the run fired
 anyway. Conversely PR #53 merged with base `main` while the file lived only on
 `preview`, and left `preview/claude/mcp-delete-category-filter-elc9vw` orphaned
 (deleted by hand afterwards).

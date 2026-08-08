@@ -359,6 +359,32 @@ For related transaction workflows (for example `transactions` and `categorize`):
 - Keep top-level structure aligned: title, filter area, summary/pagination
 - Diverge only where behavior is intentionally different (read-only vs classify actions)
 
+### No popovers inside the mobile sidebar
+
+The mobile sidebar is a sheet that drops in from the top, and it is already a
+dismissable layer. Hanging a second one off it — a dropdown menu anchored to a
+row inside it — is the wrong shape on a phone: the items shrink to desktop hit
+targets, the two layers dismiss independently, and a link inside the popover
+navigates while leaving the sheet open behind the new page (exactly how
+Settings behaved from the user menu).
+
+So the footer user menu is two first-class presentations, not one component
+made responsive (`app-sidebar.tsx` → `UserMenuDesktop` / `UserMenuMobile`,
+sharing `UserIdentity`):
+
+- **Desktop** keeps the `DropdownMenu`, opening to the `right` of the rail.
+- **Mobile** expands the same actions *inline* in the sheet, as `lg`
+  `SidebarMenuButton` rows below the user row, with a chevron that points the
+  way the panel grows. Every action that navigates or switches household calls
+  `setOpenMobile(false)` so the sheet retracts with the transition.
+
+One desktop detail worth keeping: Radix returns focus to the trigger when a
+menu closes, and a script-driven `focus()` right after a *click* still matches
+`:focus-visible` in Chrome — which left the avatar row ringed and reading as
+selected long after the menu was gone. `onCloseAutoFocus` is prevented unless
+the menu was actually driven from the keyboard, where returning focus is the
+whole point.
+
 ## Installed App (standalone mode)
 
 The app is an installable PWA, so on a phone it also runs with no browser chrome

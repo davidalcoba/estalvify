@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   Bell,
   LayoutDashboard,
@@ -23,6 +23,7 @@ import {
   LineChart,
   Home,
   Check,
+  ChevronUp,
 } from "lucide-react";
 import { switchHousehold } from "@/app/(app)/actions";
 
@@ -38,6 +39,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -52,6 +54,7 @@ import { Suspense } from "react";
 import { PendingBadge } from "@/components/layout/pending-badge";
 import { LogoMark } from "@/components/brand/logo";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { cn } from "@/lib/utils";
 
 // Work-queue routes: pure mutation surfaces a read-only member can't use.
 // Their pages also render a read-only notice for VIEWER, so a deep link
@@ -252,73 +255,250 @@ export function AppSidebar({
         ))}
       </SidebarContent>
 
-      {/* ── Footer: user menu ── */}
+      {/* ── Footer: user menu ──
+          Two first-class presentations. A popover anchored to the bottom of a
+          sheet is the wrong shape on a phone (small hit targets, a second
+          dismissable layer over one that is already dismissable), so mobile
+          expands the same actions inline inside the sheet instead. */}
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  id="user-menu-trigger"
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
-                    <AvatarFallback className="rounded-lg bg-brand/10 text-brand text-xs font-semibold">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">{user.name ?? "User"}</span>
-                    <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-                  </div>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-56"
-                side={isMobile ? "top" : "right"}
-                align="end"
-                sideOffset={4}
-              >
-                {/* Household switcher — only when there is a choice to make. */}
-                {households.length > 1 && (
-                  <>
-                    {households.map((h) => {
-                      const isActive = h.id === activeHouseholdId;
-                      return (
-                        <DropdownMenuItem
-                          key={h.id}
-                          disabled={switching || isActive}
-                          onClick={() => startSwitching(() => switchHousehold(h.id))}
-                        >
-                          <Home className="mr-2 h-4 w-4" />
-                          <span className="truncate">{h.name}</span>
-                          {isActive && <Check className="ml-auto h-4 w-4" />}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem asChild>
-                  <Link href="/settings">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onSignOut} className="text-destructive focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {isMobile ? (
+          <UserMenuMobile
+            user={user}
+            initials={initials}
+            households={households}
+            activeHouseholdId={activeHouseholdId}
+            switching={switching}
+            onSwitchHousehold={(id) => startSwitching(() => switchHousehold(id))}
+            onNavigate={() => setOpenMobile(false)}
+            onSignOut={onSignOut}
+          />
+        ) : (
+          <UserMenuDesktop
+            user={user}
+            initials={initials}
+            households={households}
+            activeHouseholdId={activeHouseholdId}
+            switching={switching}
+            onSwitchHousehold={(id) => startSwitching(() => switchHousehold(id))}
+            onSignOut={onSignOut}
+          />
+        )}
       </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+interface UserMenuProps {
+  user: AppSidebarProps["user"];
+  initials: string;
+  households: { id: string; name: string }[];
+  activeHouseholdId?: string;
+  switching: boolean;
+  onSwitchHousehold: (id: string) => void;
+  onSignOut: () => void;
+}
+
+/** Avatar + name/email, shared by both presentations. */
+function UserIdentity({
+  user,
+  initials,
+}: Pick<UserMenuProps, "user" | "initials">) {
+  return (
+    <>
+      <Avatar className="h-8 w-8 rounded-lg">
+        <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
+        <AvatarFallback className="rounded-lg bg-brand/10 text-brand text-xs font-semibold">
+          {initials}
+        </AvatarFallback>
+      </Avatar>
+      <div className="grid flex-1 min-w-0 text-left text-sm leading-tight">
+        <span className="truncate font-semibold">{user.name ?? "User"}</span>
+        <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+      </div>
+    </>
+  );
+}
+
+function UserMenuDesktop({
+  user,
+  initials,
+  households,
+  activeHouseholdId,
+  switching,
+  onSwitchHousehold,
+  onSignOut,
+}: UserMenuProps) {
+  // Radix returns focus to the trigger when the menu closes, and a
+  // script-driven focus right after a click still matches :focus-visible in
+  // Chrome — which left the user row ringed and reading as "selected" long
+  // after the menu was gone. Restore focus only when the menu was actually
+  // driven from the keyboard, where it is the whole point.
+  const viaKeyboard = useRef(false);
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              id="user-menu-trigger"
+              size="lg"
+              onPointerDown={() => {
+                viaKeyboard.current = false;
+              }}
+              onKeyDown={() => {
+                viaKeyboard.current = true;
+              }}
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <UserIdentity user={user} initials={initials} />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-56"
+            side="right"
+            align="end"
+            sideOffset={4}
+            onKeyDown={() => {
+              viaKeyboard.current = true;
+            }}
+            onCloseAutoFocus={(event) => {
+              if (!viaKeyboard.current) event.preventDefault();
+            }}
+          >
+            {/* Household switcher — only when there is a choice to make. */}
+            {households.length > 1 && (
+              <>
+                {households.map((h) => {
+                  const isActive = h.id === activeHouseholdId;
+                  return (
+                    <DropdownMenuItem
+                      key={h.id}
+                      disabled={switching || isActive}
+                      onClick={() => onSwitchHousehold(h.id)}
+                    >
+                      <Home className="mr-2 h-4 w-4" />
+                      <span className="truncate">{h.name}</span>
+                      {isActive && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem asChild>
+              <Link href="/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onSignOut}
+              className="text-destructive focus:text-destructive"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
+function UserMenuMobile({
+  user,
+  initials,
+  households,
+  activeHouseholdId,
+  switching,
+  onSwitchHousehold,
+  onNavigate,
+  onSignOut,
+}: UserMenuProps & { onNavigate: () => void }) {
+  // Closing the sidebar unmounts the sheet's contents, so the menu comes back
+  // collapsed on the next open without resetting anything by hand.
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            id="user-menu-trigger"
+            size="lg"
+            aria-expanded={expanded}
+            aria-controls="user-menu-actions"
+            onClick={() => setExpanded((open) => !open)}
+          >
+            <UserIdentity user={user} initials={initials} />
+            {/* The mobile sidebar drops in from the top, so the actions open
+                downwards and the chevron points the way. */}
+            <ChevronUp
+              className={cn(
+                "ml-auto shrink-0 text-muted-foreground transition-transform",
+                !expanded && "rotate-180",
+              )}
+            />
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+
+      {expanded && (
+        <div id="user-menu-actions" className="flex flex-col gap-2">
+          {/* Household switcher — only when there is a choice to make. */}
+          {households.length > 1 && (
+            <>
+              <SidebarSeparator className="mx-0" />
+              <SidebarMenu>
+                {households.map((h) => {
+                  const isActive = h.id === activeHouseholdId;
+                  return (
+                    <SidebarMenuItem key={h.id}>
+                      <SidebarMenuButton
+                        size="lg"
+                        disabled={switching || isActive}
+                        onClick={() => {
+                          onSwitchHousehold(h.id);
+                          onNavigate();
+                        }}
+                      >
+                        <Home />
+                        <span className="truncate">{h.name}</span>
+                        {isActive && <Check className="ml-auto size-4 shrink-0" />}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </>
+          )}
+          <SidebarSeparator className="mx-0" />
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild onClick={onNavigate}>
+                <Link href="/settings">
+                  <Settings />
+                  <span>Settings</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                onClick={onSignOut}
+                className="text-destructive hover:text-destructive active:text-destructive"
+              >
+                <LogOut />
+                <span>Sign out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
+      )}
+    </>
   );
 }
