@@ -331,7 +331,8 @@ installed users on their next launch with no reinstall and no review.
 
 Two delivery channels over one domain layer. `lib/notifications/generators.ts`
 holds the pure spec builders; `generateNotificationsForUser()`
-(`lib/notifications/generate.ts`) persists them, called from the daily cron
+(`lib/notifications/generate.ts`) persists them, called when a sync finishes
+(`app/api/queues/sync-connection/route.ts`), from the daily cron
 (`app/api/cron/sync/route.ts`) and from the "Check now" action on
 `/notifications`.
 
@@ -339,12 +340,27 @@ holds the pure spec builders; `generateNotificationsForUser()`
 - **Web Push** — best-effort, via `lib/notifications/push.ts` and the `push` /
   `notificationclick` handlers in `public/sw.js`. Needs the VAPID env vars; with
   them unset, sending is skipped and the bell is unaffected.
+  - **Best-effort is not the same as silent.** `sendPushBatch` returns a
+    `PushResult` and records `lastError` on the subscription row, which Settings
+    renders. The first version swallowed every failure into `console.error`, and
+    on Vercel that made an Apple rejection indistinguishable from "nothing to
+    send". `vapidConfigError()` validates the subject and key shapes up front,
+    because Apple answers a malformed `VAPID_SUBJECT` with an opaque JWT error.
+  - Each member chooses which types may reach their phone (`User.pushTypes`).
+    `sendPushToSelf` — the Settings test button — bypasses that filter so
+    someone who switched everything off can still answer "is push working?".
 
 Three constraints worth knowing before touching this:
 
 - Generation is idempotent and re-runs daily, so **push is limited to specs that
   did not already exist** (`unseenSpecs()`, read *before* the upsert). Pushing
   the whole spec list re-notifies the same alert on every cron run.
+- **Generation runs when a sync finishes.** The cron only *enqueues* the syncs
+  before calling it, so on its own it always evaluated data from before the
+  sync landed and any push announced a day-old event.
+- Copy lands on a lock screen: keep titles and bodies short, and **do not assert
+  on their exact wording in tests**. Assert the fact (the day count, the amount)
+  so the copy stays free to change.
 - Notifications are anchored at the household's `dataUserId`, but every member
   sees them, so **push fans out to all household members**, not just the anchor.
   Subscriptions are stored per member (`actorUserId`) because they belong to a

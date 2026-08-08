@@ -102,7 +102,9 @@ describe("staleTransactionNotifications", () => {
     const specs = staleTransactionNotifications(account("2026-07-30"), "2026-08-02");
     expect(specs).toHaveLength(1);
     expect(specs[0]).toMatchObject({ type: "NO_TRANSACTIONS", severity: "WARNING" });
-    expect(specs[0].body).toContain("3 days old");
+    // Assert the fact, not the phrasing — the copy is tuned for a lock screen
+    // and should be free to change without breaking this.
+    expect(specs[0].body).toMatch(/\b3 days\b/);
   });
 
   it("stays quiet one day short of the threshold", () => {
@@ -113,7 +115,7 @@ describe("staleTransactionNotifications", () => {
     // The outage this was written for: 8 weeks with nothing.
     const specs = staleTransactionNotifications(account("2026-06-08"), "2026-08-02");
     expect(specs[0].severity).toBe("ALERT");
-    expect(specs[0].body).toContain("55 days old");
+    expect(specs[0].body).toMatch(/\b55 days\b/);
   });
 
   it("skips an account that has never had a transaction", () => {

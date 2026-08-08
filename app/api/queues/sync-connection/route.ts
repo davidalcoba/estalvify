@@ -21,6 +21,7 @@ import { syncAccount, toDateString } from "@/lib/banking/sync";
 import { AUTH_ERROR_PREFIX } from "@/lib/banking/sync-errors";
 import { runRules } from "@/lib/rules/apply";
 import { TOPICS, type SyncConnectionMessage } from "@/lib/queue";
+import { generateNotificationsForUser } from "@/lib/notifications/generate";
 
 // Validate the message shape. The payload is our own, but a consumer endpoint
 // must never trust its body blindly: every lookup below is additionally scoped
@@ -192,6 +193,19 @@ export const POST = handleCallback<SyncConnectionMessage>(
         await prisma.bankConnection
           .update({ where: { id: connectionId }, data: { status: "ACTIVE" } })
           .catch(() => {});
+
+        // Regenerate the alerts now that this connection's fresh transactions
+        // and balances have landed. The cron also calls this, but it does so
+        // right after *enqueuing* the syncs — so it always evaluated
+        // yesterday's data, and any push went out for an event that had
+        // already passed. Here it runs on what just arrived.
+        //
+        // Best-effort and idempotent: generation upserts by (userId,
+        // dedupeKey) and only pushes specs that did not already exist, so
+        // several connections finishing cannot double-notify.
+        await generateNotificationsForUser(userId).catch((err) =>
+          console.warn("[queue/sync] notification refresh failed:", err),
+        );
       }
     }
 
