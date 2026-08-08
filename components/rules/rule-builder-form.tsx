@@ -21,6 +21,7 @@ import {
   executeRuleOnce,
 } from "@/app/(app)/rules/actions";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 const PREVIEW_LIMIT = 50;
 
@@ -38,6 +39,7 @@ interface RuleBuilderFormProps {
 }
 
 export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
+  const t = useT();
   const [conditions, setConditions] = useState<RuleCondition[]>([defaultCondition()]);
   const [match, setMatch] = useState<ConditionGroupOp>("AND");
   const [targetCategoryId, setTargetCategoryId] = useState<string>("");
@@ -82,14 +84,14 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
         const result = await previewRuleTransactions(conditionTree, null);
         setPreview(result);
       } catch {
-        setError("Failed to search transactions. Please try again.");
+        setError(t("rules.searchFailed"));
       }
     });
   }
 
   function handleExecute() {
     if (!targetCategoryId) {
-      setError("Select a target category before executing.");
+      setError(t("rules.needCategory"));
       return;
     }
     setError(null);
@@ -103,16 +105,19 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
           ruleName: ruleName.trim() || null,
         });
         const msg =
-          result.categorized > 0
-            ? `${result.categorized} transaction${result.categorized !== 1 ? "s" : ""} categorized${result.savedRuleId ? " — rule saved" : ""}.`
-            : "No new transactions categorized.";
+          result.categorized === 0
+            ? t("rules.result.none")
+            : t.plural(
+                result.savedRuleId ? "rules.result.countSaved" : "rules.result.count",
+                result.categorized,
+              );
         setExecuteResult(msg);
         if (result.categorized > 0) {
           const updated = await previewRuleTransactions(conditionTree, null);
           setPreview(updated);
         }
       } catch {
-        setError("Failed to execute the rule. Please try again.");
+        setError(t("rules.executeFailed"));
       }
     });
   }
@@ -126,16 +131,16 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
           {/* Rule name */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
-              Rule name{" "}
+              {t("rules.name")}{" "}
               <span className="text-muted-foreground font-normal">
-                (optional — fill to save it)
+                {t("rules.name.optional")}
               </span>
             </label>
             <input
               type="text"
               value={ruleName}
               onChange={(e) => setRuleName(e.target.value)}
-              placeholder="e.g. Netflix, Groceries, Salary..."
+              placeholder={t("rules.name.placeholder")}
               className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
           </div>
@@ -172,18 +177,20 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               className="gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add condition
+              {t("rules.addCondition")}
             </Button>
 
             {/* Target category — inline with conditions block */}
             <div className="flex items-center gap-3 pt-1 flex-wrap sm:flex-nowrap">
-              <span className="text-sm text-muted-foreground shrink-0">→ Categorize as</span>
+              <span className="text-sm text-muted-foreground shrink-0">
+                {t("rules.categorizeAs")}
+              </span>
               <CategorySelect
                 value={targetCategoryId}
                 onValueChange={setTargetCategoryId}
                 categories={categories}
-                placeholder="— Select category —"
-                ariaLabel="Categorize as"
+                placeholder={t("rules.selectCategory")}
+                ariaLabel={t("rules.categorizeAsLabel")}
                 className="flex-1 min-w-[200px]"
               />
             </div>
@@ -208,7 +215,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              Search transactions
+              {t("rules.search")}
             </Button>
 
             <Button
@@ -222,7 +229,7 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
               ) : (
                 <Play className="h-4 w-4" />
               )}
-              Execute
+              {t("rules.execute")}
             </Button>
           </div>
         </CardContent>
@@ -232,13 +239,13 @@ export function RuleBuilderForm({ categories, locale }: RuleBuilderFormProps) {
       {isSearching && (
         <div className="rounded-xl border p-6 text-center">
           <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-          <p className="text-sm text-muted-foreground mt-2">Searching transactions...</p>
+          <p className="text-sm text-muted-foreground mt-2">{t("rules.searching")}</p>
         </div>
       )}
 
       {!isSearching && preview !== null && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Matching transactions</h3>
+          <h3 className="text-sm font-semibold">{t("rules.matching")}</h3>
           <RulePreviewList
             transactions={preview.transactions}
             total={preview.total}

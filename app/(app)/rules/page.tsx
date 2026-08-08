@@ -9,22 +9,27 @@ import { RulesView } from "@/components/rules/rules-view";
 import { toCategoryRuleDTO } from "@/lib/rules/rule-dto";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Eye } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Rules" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.rules") };
+}
 
 export default async function RulesPage() {
   // The rules editor is configuration tooling, all of it mutating (create,
   // reorder, run, toggle). A VIEWER gets an explanation instead of a page of
   // dead controls (the sidebar also hides this route for them).
   const scope = await requireScope("read");
+  const t = await getT();
   if (scope.role === "VIEWER") {
     return (
       <div className="space-y-4">
-        <PageHeader title="Rules" />
+        <PageHeader title={t("nav.rules")} />
         <EmptyState
           icon={Eye}
-          title="Read-only access"
-          description="Your role in this household is Viewer: categorization rules are managed by the household's editors."
+          title={t("rules.viewer.title")}
+          description={t("rules.viewer.body")}
         />
       </div>
     );
@@ -51,7 +56,7 @@ export default async function RulesPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Rules" />
+      <PageHeader title={t("nav.rules")} />
 
       <RulesView
         categories={categories}

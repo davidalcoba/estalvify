@@ -18,6 +18,7 @@ import {
 } from "@/lib/rules/rule-dto";
 import { executeRuleOnce, addConditionToRule, getUserRules } from "@/app/(app)/rules/actions";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface QuickRuleDialogProps {
   open: boolean;
@@ -75,6 +76,7 @@ export function QuickRuleDialog({
   mode = "sheet",
   onSuccess,
 }: QuickRuleDialogProps) {
+  const t = useT();
   const [dialogMode, setDialogMode] = useState<DialogMode>("new");
   const [condition, setCondition] = useState<RuleCondition>(() => buildInitialCondition(transaction));
   const [targetCategoryId, setTargetCategoryId] = useState(categoryId);
@@ -114,12 +116,12 @@ export function QuickRuleDialog({
           const res = await addConditionToRule({ ruleId: selectedRuleId, condition });
           const msg =
             res.categorized > 0
-              ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized — condition added to rule.`
-              : "Condition added to rule — no new transactions matched.";
+              ? t.plural("quickRule.added.count", res.categorized)
+              : t("quickRule.added.none");
           setResult({ msg, categorized: res.categorized });
           if (res.categorized > 0) onSuccess?.();
         } catch {
-          setError("Failed to update rule. Please try again.");
+          setError(t("quickRule.updateFailed"));
         }
       });
     } else {
@@ -134,12 +136,15 @@ export function QuickRuleDialog({
           });
           const msg =
             res.categorized > 0
-              ? `${res.categorized} transaction${res.categorized !== 1 ? "s" : ""} categorized${res.savedRuleId ? " — rule saved" : ""}.`
-              : "Rule applied — no new transactions matched.";
+              ? t.plural(
+                  res.savedRuleId ? "rules.result.countSaved" : "rules.result.count",
+                  res.categorized,
+                )
+              : t("quickRule.applied.none");
           setResult({ msg, categorized: res.categorized });
           if (res.categorized > 0) onSuccess?.();
         } catch {
-          setError("Failed to apply rule. Please try again.");
+          setError(t("quickRule.applyFailed"));
         }
       });
     }
@@ -155,7 +160,7 @@ export function QuickRuleDialog({
       {/* Header */}
       <div className="flex items-center gap-2">
         <Zap className="h-4 w-4 text-warning shrink-0" />
-        <h2 className="font-semibold text-base">Create rule</h2>
+        <h2 className="font-semibold text-base">{t("quickRule.title")}</h2>
       </div>
 
       {/* Mode toggle */}
@@ -170,7 +175,7 @@ export function QuickRuleDialog({
           )}
           onClick={() => { setDialogMode("new"); setResult(null); setError(null); }}
         >
-          New rule
+          {t("quickRule.new")}
         </button>
         <button
           type="button"
@@ -182,13 +187,15 @@ export function QuickRuleDialog({
           )}
           onClick={() => { setDialogMode("existing"); setResult(null); setError(null); }}
         >
-          Add to existing rule
+          {t("quickRule.existing")}
         </button>
       </div>
 
       {/* Condition */}
       <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">When…</p>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t("quickRule.when")}
+        </p>
         <RuleConditionRow
           condition={condition}
           index={0}
@@ -202,13 +209,15 @@ export function QuickRuleDialog({
         <>
           {/* Target category */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Categorize as</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {t("rules.categorizeAsLabel")}
+            </p>
             <CategorySelect
               value={targetCategoryId}
               onValueChange={setTargetCategoryId}
               categories={categories}
-              placeholder="— Select category —"
-              ariaLabel="Categorize as"
+              placeholder={t("rules.selectCategory")}
+              ariaLabel={t("rules.categorizeAsLabel")}
               className="w-full h-10"
             />
           </div>
@@ -216,13 +225,18 @@ export function QuickRuleDialog({
           {/* Rule name */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Rule name <span className="normal-case font-normal">(optional — fill to save it)</span>
+              {t("rules.name")}{" "}
+              <span className="normal-case font-normal">{t("rules.name.optional")}</span>
             </p>
             <input
               type="text"
               value={ruleName}
               onChange={(e) => setRuleName(e.target.value)}
-              placeholder={categoryName ? `e.g. ${categoryName}` : "e.g. Netflix, Groceries…"}
+              placeholder={
+                categoryName
+                  ? t("quickRule.namePlaceholder", { example: categoryName })
+                  : t("quickRule.namePlaceholderFallback")
+              }
               className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -230,17 +244,19 @@ export function QuickRuleDialog({
       ) : (
         /* Existing rule selector */
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add to rule</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t("quickRule.addToRule")}
+          </p>
           <SimpleSelect
             value={selectedRuleId}
             onValueChange={setSelectedRuleId}
-            placeholder="— Select rule —"
-            ariaLabel="Add to rule"
+            placeholder={t("quickRule.selectRule")}
+            ariaLabel={t("quickRule.addToRule")}
             className="w-full h-10"
             options={existingRules.map((r) => ({ value: r.id, label: r.name }))}
           />
           {existingRules.length === 0 && (
-            <p className="text-xs text-muted-foreground">Loading rules…</p>
+            <p className="text-xs text-muted-foreground">{t("quickRule.loading")}</p>
           )}
         </div>
       )}
@@ -252,11 +268,11 @@ export function QuickRuleDialog({
           <p className="text-sm text-success font-medium">{result.msg}</p>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>
-              Close
+              {t("common.close")}
             </Button>
             {result.categorized > 0 && (
               <Button className="flex-1 gap-1" onClick={onClose}>
-                Next <ChevronRight className="h-4 w-4" />
+                {t("common.next")} <ChevronRight className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -264,11 +280,13 @@ export function QuickRuleDialog({
       ) : (
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave}>
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            {dialogMode === "existing" ? "Add condition" : "Apply rule"}
+            {dialogMode === "existing"
+              ? t("quickRule.addCondition")
+              : t("quickRule.apply")}
           </Button>
         </div>
       )}

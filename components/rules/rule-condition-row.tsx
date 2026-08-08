@@ -8,13 +8,14 @@ import {
   type RuleCondition,
   type RuleConditionField,
   type RuleConditionOperator,
-  FIELD_LABELS,
-  OPERATOR_LABELS,
+  FIELD_LABEL_KEYS,
+  OPERATOR_LABEL_KEYS,
   getOperatorsForField,
   getDefaultOperator,
   getDefaultValue,
   isOperatorValidForField,
 } from "@/lib/rules/rule-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 const ALL_FIELDS: RuleConditionField[] = [
   "any",
@@ -25,10 +26,7 @@ const ALL_FIELDS: RuleConditionField[] = [
   "account",
 ];
 
-const DIRECTIONS = [
-  { value: "DEBIT", label: "Money out" },
-  { value: "CREDIT", label: "Money in" },
-];
+
 
 interface RuleConditionRowProps {
   condition: RuleCondition;
@@ -50,6 +48,12 @@ export function RuleConditionRow({
   onRemove,
   canRemove,
 }: RuleConditionRowProps) {
+  const t = useT();
+  const directions = [
+    { value: "DEBIT", label: t("rules.direction.debit") },
+    { value: "CREDIT", label: t("rules.direction.credit") },
+  ];
+
   function handleFieldChange(field: RuleConditionField) {
     // Switching field type can invalidate both the operator and the value
     // (text → amount range), so reset whatever no longer fits.
@@ -103,37 +107,37 @@ export function RuleConditionRow({
       <SimpleSelect
         value={condition.field}
         onValueChange={(v) => handleFieldChange(v as RuleConditionField)}
-        ariaLabel="Condition field"
+        ariaLabel={t("rules.condition.fieldAria")}
         className="col-span-1 w-full sm:w-[140px] sm:shrink-0"
-        options={ALL_FIELDS.map((f) => ({ value: f, label: FIELD_LABELS[f] }))}
+        options={ALL_FIELDS.map((f) => ({ value: f, label: t(FIELD_LABEL_KEYS[f]) }))}
       />
 
       <SimpleSelect
         value={condition.negate ? "not" : "is"}
         onValueChange={(v) => onChange(index, { ...condition, negate: v === "not" })}
-        ariaLabel="Condition negation"
+        ariaLabel={t("rules.condition.negateAria")}
         className="col-span-1 w-full sm:w-[104px] sm:shrink-0"
         options={[
-          { value: "is", label: "does" },
-          { value: "not", label: "does not" },
+          { value: "is", label: t("rules.negate.is") },
+          { value: "not", label: t("rules.negate.not") },
         ]}
       />
 
       <SimpleSelect
         value={condition.operator}
         onValueChange={(v) => handleOperatorChange(v as RuleConditionOperator)}
-        ariaLabel="Condition operator"
+        ariaLabel={t("rules.condition.operatorAria")}
         className="col-span-1 w-full sm:w-[148px] sm:shrink-0"
-        options={operators.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
+        options={operators.map((op) => ({ value: op, label: t(OPERATOR_LABEL_KEYS[op]) }))}
       />
 
       {condition.field === "direction" ? (
         <SimpleSelect
           value={scalarValue || "DEBIT"}
           onValueChange={handleValueChange}
-          ariaLabel="Direction"
+          ariaLabel={t("rules.condition.directionAria")}
           className="col-span-2 w-full sm:col-span-1 sm:flex-1"
-          options={DIRECTIONS}
+          options={directions}
         />
       ) : condition.operator === "between" ? (
         <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:flex-1">
@@ -142,18 +146,18 @@ export function RuleConditionRow({
             step="0.01"
             value={rangeLow}
             onChange={(e) => handleRangeChange(0, e.target.value)}
-            placeholder="Min"
-            aria-label="Minimum amount"
+            placeholder={t("rules.condition.min")}
+            aria-label={t("rules.condition.minAria")}
             className="flex-1"
           />
-          <span className="text-sm text-muted-foreground">and</span>
+          <span className="text-sm text-muted-foreground">{t("rules.condition.and")}</span>
           <Input
             type="number"
             step="0.01"
             value={rangeHigh}
             onChange={(e) => handleRangeChange(1, e.target.value)}
-            placeholder="Max"
-            aria-label="Maximum amount"
+            placeholder={t("rules.condition.max")}
+            aria-label={t("rules.condition.maxAria")}
             className="flex-1"
           />
         </div>
@@ -163,8 +167,8 @@ export function RuleConditionRow({
           step="0.01"
           value={scalarValue}
           onChange={(e) => handleValueChange(e.target.value)}
-          placeholder="Amount..."
-          aria-label="Amount"
+          placeholder={t("rules.condition.amountPlaceholder")}
+          aria-label={t("rules.field.amount")}
           className="col-span-2 sm:col-span-1 sm:flex-1"
         />
       ) : (
@@ -172,7 +176,7 @@ export function RuleConditionRow({
           type="text"
           value={scalarValue}
           onChange={(e) => handleValueChange(e.target.value)}
-          placeholder="Value..."
+          placeholder={t("rules.condition.valuePlaceholder")}
           className="col-span-2 sm:col-span-1 sm:flex-1"
         />
       )}
@@ -184,7 +188,7 @@ export function RuleConditionRow({
           size="icon"
           onClick={() => onRemove(index)}
           className="col-span-2 justify-self-end h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
-          aria-label="Remove condition"
+          aria-label={t("rules.condition.remove")}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
