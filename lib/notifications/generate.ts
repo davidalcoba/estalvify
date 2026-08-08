@@ -15,6 +15,7 @@ import {
   type NotificationSpec,
 } from "./generators";
 import { sendPushBatch } from "./push";
+import { translatorForLanguage } from "@/lib/i18n/server";
 
 /**
  * Generate this user's notifications, upserting by (userId, dedupeKey) so
@@ -28,6 +29,9 @@ export async function generateNotificationsForUser(
   userId: string,
 ): Promise<number> {
   const prefs = await getUserPrefs(userId);
+  // The owner's language: one spec is stored per household and every member
+  // reads (and is pushed) the same row, so it cannot follow the reader.
+  const t = translatorForLanguage(prefs.language);
 
   await syncPlannedState(userId, prefs.timezone, prefs.currency, prefs.locale);
 
@@ -66,6 +70,7 @@ export async function generateNotificationsForUser(
       today,
       prefs.currency,
       prefs.locale,
+      t,
     ),
     ...cashflowBreachNotifications(
       cashflow.accounts
@@ -82,6 +87,7 @@ export async function generateNotificationsForUser(
       today,
       prefs.currency,
       prefs.locale,
+      t,
     ),
     ...consentExpiringNotifications(
       connections
@@ -95,6 +101,7 @@ export async function generateNotificationsForUser(
         })),
       today,
       prefs.language,
+      t,
     ),
     ...staleTransactionNotifications(
       accounts.map((a) => ({
@@ -107,6 +114,7 @@ export async function generateNotificationsForUser(
             .slice(0, 10) ?? null,
       })),
       today,
+      t,
     ),
   ];
 

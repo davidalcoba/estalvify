@@ -10,6 +10,7 @@ import {
   updatePersonalPreferences,
 } from "@/app/(app)/settings/actions";
 import { Check } from "lucide-react";
+import { useT } from "@/components/i18n/i18n-provider";
 
 const TIMEZONES = [
   { value: "UTC", label: "UTC" },
@@ -64,16 +65,23 @@ const LOCALES = [
   { value: "pt-BR", label: "Português (Brasil) — R$ 1.234,56" },
 ];
 
-// Language used to render dates (month/day names), independent of number format.
+// THE language setting: it picks the interface language AND the language dates
+// are rendered in (lib/i18n/locales.ts maps the tag onto a translation).
+//
+// `translated: false` marks the tags the app itself is not translated into.
+// They stay on the list because they still change how dates read, and dropping
+// them would silently reformat the dates of anyone who had chosen one — but the
+// option says so, rather than letting the user pick "Français" and wonder why
+// the buttons are still English.
 const LANGUAGES = [
-  { value: "en-GB", label: "English (UK) — 2 August 2026" },
-  { value: "en-US", label: "English (US) — August 2, 2026" },
-  { value: "es-ES", label: "Español — 2 de agosto de 2026" },
-  { value: "ca-ES", label: "Català — 2 d’agost de 2026" },
-  { value: "fr-FR", label: "Français — 2 août 2026" },
-  { value: "de-DE", label: "Deutsch — 2. August 2026" },
-  { value: "it-IT", label: "Italiano — 2 agosto 2026" },
-  { value: "pt-PT", label: "Português — 2 de agosto de 2026" },
+  { value: "en-GB", label: "English (UK) — 2 August 2026", translated: true },
+  { value: "en-US", label: "English (US) — August 2, 2026", translated: true },
+  { value: "es-ES", label: "Español — 2 de agosto de 2026", translated: true },
+  { value: "ca-ES", label: "Català — 2 d’agost de 2026", translated: true },
+  { value: "fr-FR", label: "Français — 2 août 2026", translated: false },
+  { value: "de-DE", label: "Deutsch — 2. August 2026", translated: false },
+  { value: "it-IT", label: "Italiano — 2 agosto 2026", translated: false },
+  { value: "pt-PT", label: "Português — 2 de agosto de 2026", translated: false },
 ];
 
 interface SettingsFormProps {
@@ -103,6 +111,14 @@ export function SettingsForm({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const t = useT();
+
+  // The language options are literal endonyms — "Català" is Català in every
+  // language — so only the "not translated" note follows the UI locale.
+  const languageOptions = LANGUAGES.map((l) => ({
+    value: l.value,
+    label: l.translated ? l.label : `${l.label} (${t("settings.language.datesOnly")})`,
+  }));
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -120,7 +136,7 @@ export function SettingsForm({
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+        setError(err instanceof Error ? err.message : t("settings.saveFailed"));
       }
     });
   }
@@ -128,71 +144,70 @@ export function SettingsForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Regional preferences</CardTitle>
+        <CardTitle>{t("settings.regional.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <Label>Timezone</Label>
+            <Label>{t("settings.timezone.label")}</Label>
             <SimpleSelect
               value={tz}
               onValueChange={setTz}
               options={TIMEZONES}
-              ariaLabel="Timezone"
+              ariaLabel={t("settings.timezone.label")}
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">For transaction dates.</p>
+            <p className="text-xs text-muted-foreground">{t("settings.timezone.help")}</p>
           </div>
 
           {!personalOnly && (
             <div className="space-y-1.5">
-              <Label>Default currency</Label>
+              <Label>{t("settings.currency.label")}</Label>
               <SimpleSelect
                 value={curr}
                 onValueChange={setCurr}
                 options={CURRENCIES}
-                ariaLabel="Default currency"
+                ariaLabel={t("settings.currency.label")}
                 className="w-full"
               />
               <p className="text-xs text-muted-foreground">
-                For totals; transactions keep their own currency. Shared by the
-                whole household.
+                {t("settings.currency.help")}
               </p>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label>Language</Label>
+            <Label>{t("settings.language.label")}</Label>
             <SimpleSelect
               value={lang}
               onValueChange={setLang}
-              options={LANGUAGES}
-              ariaLabel="Language"
+              options={languageOptions}
+              ariaLabel={t("settings.language.label")}
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">For dates (e.g. 2 August 2026).</p>
+            <p className="text-xs text-muted-foreground">{t("settings.language.help")}</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Number format</Label>
+            <Label>{t("settings.numberFormat.label")}</Label>
             <SimpleSelect
               value={loc}
               onValueChange={setLoc}
               options={LOCALES}
-              ariaLabel="Number format"
+              ariaLabel={t("settings.numberFormat.label")}
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">Decimal and thousands separators.</p>
+            <p className="text-xs text-muted-foreground">{t("settings.numberFormat.help")}</p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : "Save preferences"}
+              {isPending ? t("common.saving") : t("settings.savePreferences")}
             </Button>
             {saved && (
               <span className="flex items-center gap-1 text-sm text-success">
                 <Check className="h-4 w-4" />
-                Saved
+                {t("common.saved")}
               </span>
             )}
             {error && <span className="text-sm text-destructive">{error}</span>}

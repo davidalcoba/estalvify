@@ -26,6 +26,7 @@ import {
   transactionOperationType,
   type TransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface TransactionsMobileViewProps {
   groupedTransactions: Array<{ dateKey: string; items: TransactionListItemDTO[] }>;
@@ -83,6 +84,7 @@ export function TransactionsMobileView({
   categories,
 }: TransactionsMobileViewProps) {
   const router = useRouter();
+  const t = useT();
   const canWrite = useCanWrite();
   const [activeTx, setActiveTx] = useState<TransactionListItemDTO | null>(null);
   const [saving, setSaving] = useState(false);
@@ -112,7 +114,7 @@ export function TransactionsMobileView({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          {rangeStart}–{rangeEnd} of {total}
+          {t("transactions.rangeShort", { from: rangeStart, to: rangeEnd, total })}
         </p>
         <TransactionPagination
           page={page}
@@ -150,7 +152,7 @@ export function TransactionsMobileView({
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-2 pt-1">
           <p className="text-xs text-muted-foreground">
-            Page {page} of {totalPages}
+            {t("transactions.pageOf", { page, total: totalPages })}
           </p>
           <TransactionPagination
             page={page}
@@ -208,8 +210,8 @@ export function TransactionsMobileView({
                     onValueChange={(v) => { if (v) handleRecategorize(v); }}
                     disabled={saving || sheetJustOpened}
                     categories={categories}
-                    placeholder="Select a category…"
-                    ariaLabel="Recategorize transaction"
+                    placeholder={t("transactions.selectCategory")}
+                    ariaLabel={t("transactions.recategorize")}
                     className="flex-1 h-11"
                   />
                   <Button
@@ -219,7 +221,7 @@ export function TransactionsMobileView({
                     className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
                     disabled={saving}
-                    title="Create rule for this transaction"
+                    title={t("transactions.createRule")}
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                   </Button>
@@ -230,7 +232,7 @@ export function TransactionsMobileView({
                     className="h-11 w-11 shrink-0"
                     onClick={() => router.push(`/recurring?fromTx=${activeTx.id}`)}
                     disabled={saving}
-                    title="Make recurring"
+                    title={t("transactions.makeRecurring")}
                   >
                     <Repeat className="h-4 w-4" />
                   </Button>

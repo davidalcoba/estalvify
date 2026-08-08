@@ -20,8 +20,12 @@ import { MonthShell, BudgetBodySkeleton } from "@/components/budget/month-shell"
 import { PlanCard } from "@/components/budget/plan-card";
 import { MonthProgressCard } from "@/components/budget/month-progress-card";
 import { ObjectivesCard } from "@/components/budget/objectives-card";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Budget" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.budget") };
+}
 
 interface PageProps {
   searchParams: Promise<{ y?: string; m?: string }>;

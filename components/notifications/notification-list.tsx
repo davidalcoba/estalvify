@@ -13,6 +13,7 @@ import {
 } from "@/app/(app)/notifications/actions";
 import { severityIcon, severityColor } from "./severity";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface NotificationListProps {
   notifications: NotificationDTO[];
@@ -30,6 +31,7 @@ export function NotificationList({
   hasMore,
 }: NotificationListProps) {
   const router = useRouter();
+  const t = useT();
   const [pending, startTransition] = useTransition();
   const canWrite = useCanWrite();
 
@@ -62,14 +64,15 @@ export function NotificationList({
           size="sm"
           onClick={() => go({ unread: false, page: 1 })}
         >
-          All
+          {t("notifications.filter.all")}
         </Button>
         <Button
           variant={unreadOnly ? "secondary" : "outline"}
           size="sm"
           onClick={() => go({ unread: true, page: 1 })}
         >
-          Unread{unreadCount > 0 ? ` (${unreadCount})` : ""}
+          {t("notifications.filter.unread")}
+          {unreadCount > 0 ? ` (${unreadCount})` : ""}
         </Button>
 
         <div className="ml-auto flex items-center gap-2">
@@ -82,7 +85,7 @@ export function NotificationList({
             className="gap-1.5"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
-            Check now
+            {t("notifications.checkNow")}
           </Button>
           )}
           {unreadCount > 0 && (
@@ -94,7 +97,7 @@ export function NotificationList({
               className="gap-1.5"
             >
               <CheckCheck className="h-3.5 w-3.5" />
-              Mark all read
+              {t("notifications.markAllRead")}
             </Button>
           )}
         </div>
@@ -103,11 +106,15 @@ export function NotificationList({
       {notifications.length === 0 ? (
         <EmptyState
           icon={Bell}
-          title={unreadOnly ? "Nothing unread" : "No notifications yet"}
+          title={
+            unreadOnly
+              ? t("notifications.empty.unread.title")
+              : t("notifications.empty.title")
+          }
           description={
             unreadOnly
-              ? "Everything here has been read."
-              : "Budget, recurring and sync alerts will show up here."
+              ? t("notifications.empty.unread.body")
+              : t("notifications.empty.body")
           }
         />
       ) : (
@@ -132,13 +139,13 @@ export function NotificationList({
                     {!n.read && (
                       <span
                         className="size-2 shrink-0 rounded-full bg-brand"
-                        aria-label="Unread"
+                        aria-label={t("notifications.unread")}
                       />
                     )}
                   </span>
                   <span className="mt-1 block text-sm text-muted-foreground">{n.body}</span>
                   <span className="mt-1.5 block text-xs text-muted-foreground/70">
-                    {relativeTime(n.createdAt)}
+                    {relativeTime(n.createdAt, t)}
                   </span>
                 </span>
               </button>
@@ -155,16 +162,18 @@ export function NotificationList({
             disabled={page <= 1}
             onClick={() => go({ page: page - 1 })}
           >
-            Previous
+            {t("common.previous")}
           </Button>
-          <span className="text-sm text-muted-foreground">Page {page}</span>
+          <span className="text-sm text-muted-foreground">
+            {t("common.page", { page })}
+          </span>
           <Button
             variant="outline"
             size="sm"
             disabled={hasMore <= 0}
             onClick={() => go({ page: page + 1 })}
           >
-            Next
+            {t("common.next")}
           </Button>
         </div>
       )}

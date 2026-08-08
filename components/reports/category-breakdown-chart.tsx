@@ -5,6 +5,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Sector } from "recharts";
 import type { PieSectorShapeProps } from "recharts";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export interface CategorySlice {
   name: string;
@@ -36,6 +37,7 @@ export function CategoryBreakdownChart({
   locale: string;
   height?: number;
 }) {
+  const t = useT();
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
   // Hover previews, a click pins. Kept apart so moving the mouse away restores
@@ -116,7 +118,9 @@ export function CategoryBreakdownChart({
           <span className="line-clamp-2 text-[11px] leading-tight text-muted-foreground">
             {/* Share first: a long category name would otherwise push the
                 percentage out of the two-line clamp. */}
-            {active ? `${percent(active.value)}% · ${active.name}` : "Total"}
+            {active
+              ? `${percent(active.value)}% · ${active.name}`
+              : t("reports.chart.total")}
           </span>
         </div>
       </div>

@@ -12,6 +12,7 @@ import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
 import { categorizeTransaction } from "@/app/(app)/categorize/actions";
 import { useCanWrite } from "@/components/layout/role-provider";
 import { type TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface TransactionDetailDialogProps {
   transaction: TransactionListItemDTO | null;
@@ -31,6 +32,7 @@ export function TransactionDetailDialog({
   onClose,
 }: TransactionDetailDialogProps) {
   const router = useRouter();
+  const t = useT();
   const [saving, setSaving] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
   const canWrite = useCanWrite();
@@ -65,7 +67,7 @@ export function TransactionDetailDialog({
           className="max-h-[85vh] gap-0 overflow-hidden pt-8 sm:w-[min(96vw,640px)] sm:max-w-[min(96vw,640px)]"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <DialogTitle className="sr-only">Transaction details</DialogTitle>
+          <DialogTitle className="sr-only">{t("transactions.details")}</DialogTitle>
 
           {transaction && (
             <div className="space-y-4 overflow-y-auto pr-2">
@@ -79,7 +81,7 @@ export function TransactionDetailDialog({
                   onValueChange={(v) => { if (v) handleRecategorize(v); }}
                   disabled={saving}
                   categories={categories}
-                  ariaLabel="Recategorize transaction"
+                  ariaLabel={t("transactions.recategorize")}
                   className="flex-1 h-10"
                 />
                 <Button
@@ -89,7 +91,7 @@ export function TransactionDetailDialog({
                   className="h-10 w-10 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                   onClick={() => setRuleOpen(true)}
                   disabled={saving}
-                  title="Create rule for this transaction"
+                  title={t("transactions.createRule")}
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                 </Button>
@@ -103,7 +105,7 @@ export function TransactionDetailDialog({
                     router.push(`/recurring?fromTx=${transaction.id}`);
                   }}
                   disabled={saving}
-                  title="Make recurring — opens the series form prefilled from this transaction"
+                  title={t("transactions.makeRecurringLong")}
                 >
                   <Repeat className="h-4 w-4" />
                 </Button>

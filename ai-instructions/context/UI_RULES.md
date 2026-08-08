@@ -233,6 +233,32 @@ Two more rules came out of the same pass:
   not a sentence explaining the obvious. Prefer "For dates." over "The language used to
   render dates throughout the app." Trust the UI; don't narrate it.
 
+## Every visible string comes from the dictionaries
+
+The interface is translated into **English, Castellano and Català**
+(`lib/i18n/`, see ARCHITECTURE.md → "Internationalization"). So a literal is a
+bug, not a shortcut:
+
+- No hardcoded user-facing text. That includes button labels, headings, empty
+  states, placeholders, `aria-label`, `title`, chart series names and
+  `sr-only` text — anything a person or a screen reader reads.
+- Server components and actions: `const t = await getT()`.
+  Client components: `const t = useT()`.
+- A page's `<title>` moves from `export const metadata` to
+  `export async function generateMetadata()`.
+- **Keep whole sentences in the dictionary.** A sentence spliced out of JSX
+  (`"You agree to our " + <Link/> + " and " + <Link/>`) cannot be translated:
+  word order moves. Put the markers in the message and render it with
+  `<RichText template={t("…")} slots={{ terms: <Link/> }} />`.
+- Counts use `t.plural("base", n)`, which reads `base.one` / `base.other` and
+  supplies `{count}`.
+- Module-level tables (nav items, status badges, field labels) hold **message
+  keys** typed as `MessageKey`, not labels — the array is constant, the
+  language is not.
+
+Adding a string means adding it to **all three** dictionaries in the same
+change; `Record<MessageKey, string>` makes a missing one a typecheck failure.
+
 ## Use the Shared Controls (no one-off form controls)
 
 - Selects: use `components/ui/simple-select` (flat options) or

@@ -7,6 +7,12 @@ import {
   unseenSpecs,
   type NotificationSpec,
 } from "./generators";
+import { createTranslator } from "@/lib/i18n/translate";
+import { en } from "@/lib/i18n/dictionaries/en";
+
+// The generators take the household owner's translator; these assertions read
+// the English copy, which is the source dictionary.
+const t = createTranslator("en", en);
 
 describe("upcomingRecurringNotifications", () => {
   const series = [
@@ -20,7 +26,7 @@ describe("upcomingRecurringNotifications", () => {
   ];
 
   it("alerts when a charge is within the horizon", () => {
-    const specs = upcomingRecurringNotifications(series, "2026-08-02", "EUR", "en-US", 5);
+    const specs = upcomingRecurringNotifications(series, "2026-08-02", "EUR", "en-US", t, 5);
     expect(specs).toHaveLength(1);
     expect(specs[0]).toMatchObject({
       type: "RECURRING_UPCOMING",
@@ -31,21 +37,21 @@ describe("upcomingRecurringNotifications", () => {
 
   it("says 'today' / 'tomorrow' at the boundaries", () => {
     expect(
-      upcomingRecurringNotifications(series, "2026-08-05", "EUR", "en-US")[0].body
+      upcomingRecurringNotifications(series, "2026-08-05", "EUR", "en-US", t)[0].body
     ).toContain("today");
     expect(
-      upcomingRecurringNotifications(series, "2026-08-04", "EUR", "en-US")[0].body
+      upcomingRecurringNotifications(series, "2026-08-04", "EUR", "en-US", t)[0].body
     ).toContain("tomorrow");
   });
 
   it("skips charges outside the horizon or already past", () => {
-    expect(upcomingRecurringNotifications(series, "2026-07-01", "EUR", "en-US", 5)).toEqual([]);
-    expect(upcomingRecurringNotifications(series, "2026-08-10", "EUR", "en-US", 5)).toEqual([]);
+    expect(upcomingRecurringNotifications(series, "2026-07-01", "EUR", "en-US", t, 5)).toEqual([]);
+    expect(upcomingRecurringNotifications(series, "2026-08-10", "EUR", "en-US", t, 5)).toEqual([]);
   });
 
   it("skips series without a next expected date", () => {
     const noDate = [{ ...series[0], nextExpectedDate: null }];
-    expect(upcomingRecurringNotifications(noDate, "2026-08-02", "EUR", "en-US")).toEqual([]);
+    expect(upcomingRecurringNotifications(noDate, "2026-08-02", "EUR", "en-US", t)).toEqual([]);
   });
 });
 
@@ -55,7 +61,8 @@ describe("consentExpiringNotifications", () => {
   ];
 
   it("warns at the 14/7/3-day steps with rising severity", () => {
-    const at = (today: string) => consentExpiringNotifications(conn, today, "en-GB")[0];
+    const at = (today: string) =>
+      consentExpiringNotifications(conn, today, "en-GB", t)[0];
 
     expect(at("2026-07-27")).toMatchObject({
       type: "CONSENT_EXPIRING",
@@ -73,23 +80,23 @@ describe("consentExpiringNotifications", () => {
   });
 
   it("stays quiet before the first step", () => {
-    expect(consentExpiringNotifications(conn, "2026-07-25", "en-GB")).toEqual([]);
+    expect(consentExpiringNotifications(conn, "2026-07-25", "en-GB", t)).toEqual([]);
   });
 
   it("fires once per step, so a whole week shares one key", () => {
     const keys = ["2026-08-03", "2026-08-04", "2026-08-05"].map(
-      (d) => consentExpiringNotifications(conn, d, "en-GB")[0].dedupeKey
+      (d) => consentExpiringNotifications(conn, d, "en-GB", t)[0].dedupeKey
     );
     expect(new Set(keys).size).toBe(1);
   });
 
   it("leaves an already-lapsed consent to the stale-transaction alert", () => {
-    expect(consentExpiringNotifications(conn, "2026-08-10", "en-GB")).toEqual([]);
+    expect(consentExpiringNotifications(conn, "2026-08-10", "en-GB", t)).toEqual([]);
   });
 
   it("skips a connection with no known expiry", () => {
     const unknown = [{ ...conn[0], consentExpiresAt: null }];
-    expect(consentExpiringNotifications(unknown, "2026-08-02", "en-GB")).toEqual([]);
+    expect(consentExpiringNotifications(unknown, "2026-08-02", "en-GB", t)).toEqual([]);
   });
 });
 
@@ -99,7 +106,7 @@ describe("staleTransactionNotifications", () => {
   ];
 
   it("alerts once the newest transaction is past the threshold", () => {
-    const specs = staleTransactionNotifications(account("2026-07-30"), "2026-08-02");
+    const specs = staleTransactionNotifications(account("2026-07-30"), "2026-08-02", t);
     expect(specs).toHaveLength(1);
     expect(specs[0]).toMatchObject({ type: "NO_TRANSACTIONS", severity: "WARNING" });
     // Assert the fact, not the phrasing — the copy is tuned for a lock screen
@@ -108,24 +115,24 @@ describe("staleTransactionNotifications", () => {
   });
 
   it("stays quiet one day short of the threshold", () => {
-    expect(staleTransactionNotifications(account("2026-07-31"), "2026-08-02")).toEqual([]);
+    expect(staleTransactionNotifications(account("2026-07-31"), "2026-08-02", t)).toEqual([]);
   });
 
   it("escalates to ALERT once well past the threshold", () => {
     // The outage this was written for: 8 weeks with nothing.
-    const specs = staleTransactionNotifications(account("2026-06-08"), "2026-08-02");
+    const specs = staleTransactionNotifications(account("2026-06-08"), "2026-08-02", t);
     expect(specs[0].severity).toBe("ALERT");
     expect(specs[0].body).toMatch(/\b55 days\b/);
   });
 
   it("skips an account that has never had a transaction", () => {
-    expect(staleTransactionNotifications(account(null), "2026-08-02")).toEqual([]);
+    expect(staleTransactionNotifications(account(null), "2026-08-02", t)).toEqual([]);
   });
 
   it("re-alerts weekly, not daily", () => {
     // A daily key would have produced 56 notifications during that outage.
     const keyOn = (today: string) =>
-      staleTransactionNotifications(account("2026-06-08"), today)[0].dedupeKey;
+      staleTransactionNotifications(account("2026-06-08"), today, t)[0].dedupeKey;
 
     expect(keyOn("2026-08-03")).toBe(keyOn("2026-08-07"));
     expect(keyOn("2026-08-03")).not.toBe(keyOn("2026-08-11"));

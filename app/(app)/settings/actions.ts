@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import type { CategoryKind, NotificationType } from "@/app/generated/prisma";
 import { sendPushToSelf } from "@/lib/notifications/push";
 import { deleteUserAccount } from "@/lib/account/delete-user";
+import { getT } from "@/lib/i18n/server";
+import { describeError } from "@/lib/errors";
 import {
   createHouseholdInvite,
   revokeHouseholdInvite,
@@ -83,8 +85,10 @@ export async function sendTestPush(): Promise<{ ok: boolean; message: string }> 
   const devices = await prisma.pushSubscription.count({
     where: { userId: actorUserId },
   });
+  const t = await getT();
+
   if (devices === 0) {
-    return { ok: false, message: "No device is subscribed yet." };
+    return { ok: false, message: t("settings.push.test.noDevice") };
   }
 
   const result = await sendPushToSelf(actorUserId, {
@@ -93,8 +97,8 @@ export async function sendTestPush(): Promise<{ ok: boolean; message: string }> 
     // Never put the app name in the title: iOS already prints "from Estalvify"
     // under it, so a branded title shows the word twice and wastes the one
     // line that carries meaning. Titles say what happened.
-    title: "Test notification",
-    body: "Push is working on this device.",
+    title: t("settings.push.test.title"),
+    body: t("settings.push.test.body"),
     dedupeKey: `test:${actorUserId}`,
   });
 
@@ -102,12 +106,12 @@ export async function sendTestPush(): Promise<{ ok: boolean; message: string }> 
     return { ok: false, message: result.errors.join(" · ") };
   }
   if (result.sent === 0) {
-    return { ok: false, message: "Nothing was sent — no reachable device." };
+    return { ok: false, message: t("settings.push.test.nothingSent") };
   }
   revalidatePath("/settings");
   return {
     ok: true,
-    message: `Sent to ${result.sent} device${result.sent === 1 ? "" : "s"}.`,
+    message: t.plural("settings.push.test.sent", result.sent),
   };
 }
 
@@ -214,8 +218,10 @@ export async function updatePlanningSettings(input: PlanningSettingsInput) {
 // server-action messages (same convention as /recurring).
 export type MemberActionResult = { ok: true } | { ok: false; error: string };
 
-function memberFailure(err: unknown): { ok: false; error: string } {
-  return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+// Domain modules throw an AppError naming the condition; the sentence the
+// member reads is rendered here, in their language (lib/errors.ts).
+async function memberFailure(err: unknown): Promise<{ ok: false; error: string }> {
+  return { ok: false, error: describeError(err, await getT()) };
 }
 
 // Creates (or renews) an invitation and returns the raw token exactly once —
@@ -235,7 +241,7 @@ export async function inviteMember(
     revalidatePath("/settings");
     return { ok: true, token, expiresAt: expiresAt.toISOString() };
   } catch (err) {
-    return memberFailure(err);
+    return await memberFailure(err);
   }
 }
 
@@ -246,7 +252,7 @@ export async function revokeMemberInvite(inviteId: string): Promise<MemberAction
     revalidatePath("/settings");
     return { ok: true };
   } catch (err) {
-    return memberFailure(err);
+    return await memberFailure(err);
   }
 }
 
@@ -260,7 +266,7 @@ export async function updateMemberRole(
     revalidatePath("/settings");
     return { ok: true };
   } catch (err) {
-    return memberFailure(err);
+    return await memberFailure(err);
   }
 }
 
@@ -271,7 +277,7 @@ export async function removeMember(memberId: string): Promise<MemberActionResult
     revalidatePath("/settings");
     return { ok: true };
   } catch (err) {
-    return memberFailure(err);
+    return await memberFailure(err);
   }
 }
 
@@ -283,7 +289,7 @@ export async function updateHouseholdName(name: string): Promise<MemberActionRes
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {
-    return memberFailure(err);
+    return await memberFailure(err);
   }
 }
 

@@ -17,8 +17,9 @@ import { formatCurrency } from "@/lib/formatters";
 import type { MonthStatus } from "@/lib/budget/month-status";
 import { SavingsTargetInput } from "@/components/budget/savings-target-input";
 import { InlineNotice, RaiseSavingsAction } from "@/components/budget/inline-notice";
+import { getT } from "@/lib/i18n/server";
 
-export function PlanCard({
+export async function PlanCard({
   status,
   currency,
   locale,
@@ -28,6 +29,7 @@ export function PlanCard({
   locale: string;
 }) {
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  const t = await getT();
   const { cascade } = status;
   // Positive gap = the category lines add up to MORE than the month can
   // afford; negative = there is money nobody has claimed yet.
@@ -36,12 +38,12 @@ export function PlanCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Your plan</CardTitle>
+        <CardTitle className="text-base">{t("plan.card.title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <dl className="space-y-1.5 text-sm">
           <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Money coming in</dt>
+            <dt className="text-muted-foreground">{t("plan.card.income")}</dt>
             <dd className="tabular-nums text-success">+{fmt(cascade.expectedIncome)}</dd>
           </div>
           {/* A line at zero is not information, and "−0,00 €" is worse than
@@ -50,18 +52,18 @@ export function PlanCard({
               zero. */}
           {cascade.expectedCharges > 0 && (
             <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Fixed costs</dt>
+              <dt className="text-muted-foreground">{t("plan.card.fixed")}</dt>
               <dd className="tabular-nums">−{fmt(cascade.expectedCharges)}</dd>
             </div>
           )}
           {cascade.rolloverQuotas > 0 && (
             <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Set aside for later</dt>
+              <dt className="text-muted-foreground">{t("plan.card.setAside")}</dt>
               <dd className="tabular-nums">−{fmt(cascade.rolloverQuotas)}</dd>
             </div>
           )}
           <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Savings target</dt>
+            <dt className="text-muted-foreground">{t("plan.card.savingsTarget")}</dt>
             <dd>
               <SavingsTargetInput
                 year={status.year}
@@ -74,7 +76,7 @@ export function PlanCard({
           </div>
           {/* The conclusion of the whole screen, sized like one. */}
           <div className="flex items-baseline justify-between border-t pt-2.5">
-            <dt className="font-medium">To spend this month</dt>
+            <dt className="font-medium">{t("plan.card.toSpend")}</dt>
             <dd className="text-2xl font-semibold tabular-nums">
               {fmt(cascade.variableBudget)}
             </dd>
@@ -88,13 +90,13 @@ export function PlanCard({
           <InlineNotice
             figure={
               gap < 0
-                ? `${fmt(Math.abs(gap))} unassigned`
-                : `${fmt(gap)} over-assigned`
+                ? t("plan.card.unassigned", { amount: fmt(Math.abs(gap)) })
+                : t("plan.card.overAssigned", { amount: fmt(gap) })
             }
             detail={
               gap < 0
-                ? "Your categories claim less than the month can afford. Hand the rest to a category, or raise your savings target so it is saved instead of drifting."
-                : "Your categories claim more than the month can afford. Spend all of it and you will miss the savings target."
+                ? t("plan.card.unassigned.detail")
+                : t("plan.card.overAssigned.detail")
             }
             action={<RaiseSavingsAction />}
           />

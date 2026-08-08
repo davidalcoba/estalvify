@@ -6,6 +6,7 @@ import { RulesDesktopView } from "@/components/rules/views/rules-desktop-view";
 import { RulesMobileView } from "@/components/rules/views/rules-mobile-view";
 import type { Category } from "@/components/categorize/category-options";
 import type { CategoryRuleDTO } from "@/lib/rules/rule-dto";
+import { getT } from "@/lib/i18n/server";
 
 interface RulesViewProps {
   categories: Category[];
@@ -13,13 +14,15 @@ interface RulesViewProps {
   locale: string;
 }
 
-export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
+export async function RulesView({ categories, savedRules, locale }: RulesViewProps) {
+  const t = await getT();
+
   return (
     <div className="space-y-8">
       {/* ── Rule builder ── */}
       <section>
         <div className="mb-4">
-          <h3 className="text-base font-semibold">New rule</h3>
+          <h3 className="text-base font-semibold">{t("rules.new")}</h3>
         </div>
         <RuleBuilderForm categories={categories} locale={locale} />
       </section>
@@ -30,7 +33,7 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
       <section>
         <div className="mb-4 space-y-1">
           <h3 className="text-base font-semibold">
-            Saved rules
+            {t("rules.saved")}
             {savedRules.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 ({savedRules.length})
@@ -38,10 +41,7 @@ export function RulesView({ categories, savedRules, locale }: RulesViewProps) {
             )}
           </h3>
           {savedRules.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Rules run top to bottom and the first match wins. Drag a rule to
-              move it.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("rules.order.help")}</p>
           )}
         </div>
 

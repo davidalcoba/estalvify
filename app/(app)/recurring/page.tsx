@@ -16,8 +16,12 @@ import {
   type SeriesVM,
   type SeriesPrefill,
 } from "@/components/recurring/series-manager";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Recurring" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.recurring") };
+}
 
 const DETECTION_LOOKBACK_DAYS = 210; // 7 months: 3 quarterly hits fit
 
@@ -26,6 +30,7 @@ interface PageProps {
 }
 
 export default async function RecurringPage({ searchParams }: PageProps) {
+  const t = await getT();
   const { dataUserId: userId, actorUserId } = await requireScope("read");
   const [prefs, params] = await Promise.all([getUserPrefs(userId, actorUserId), searchParams]);
 
@@ -132,7 +137,7 @@ export default async function RecurringPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Recurring" />
+      <PageHeader title={t("nav.recurring")} />
       <SeriesManager
         series={vms}
         suggestions={suggestions}

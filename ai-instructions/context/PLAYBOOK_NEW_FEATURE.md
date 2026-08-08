@@ -42,12 +42,20 @@ Deliver feature changes that are safe for financial workflows, consistent with a
 - Use queue-based processing for long-running operations.
 - Surface progress/status clearly in UI.
 
-9. Update the docs (same change)
+9. Translate every string you add (same change)
+- No literal user-facing text: `await getT()` on the server, `useT()` on the
+  client, and the key added to `lib/i18n/dictionaries/{en,es,ca}.ts`.
+- `npm run typecheck` fails when a locale is missing a key, and the tests in
+  `lib/i18n/locales.test.ts` catch blank values, dropped `{placeholders}` and
+  half a plural pair.
+- See UI_RULES.md → "Every visible string comes from the dictionaries".
+
+10. Update the docs (same change)
 - If the change touches architecture, stack, UI conventions, or feature status,
   update the relevant file in `ai-instructions/context/` in the same PR.
 - Add/adjust env vars in `.env.example` when introducing new configuration.
 
-10. Validate and ship
+11. Validate and ship
 - Run `npm run typecheck && npm run lint && npm run test`
 - Add Vitest tests for any new pure logic
 - Validate key flows manually

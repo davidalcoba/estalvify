@@ -12,6 +12,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
+import { RichText } from "@/components/i18n/rich-text";
 import {
   ChevronRight,
   Loader2,
@@ -89,6 +91,7 @@ export function ObjectivesCard({
   locale,
 }: ObjectivesCardProps) {
   const router = useRouter();
+  const t = useT();
   const canWrite = useCanWrite();
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -101,12 +104,12 @@ export function ObjectivesCard({
 
   function save() {
     if (!draft?.categoryId) {
-      setError("Pick a category");
+      setError(t("objectives.pickCategory"));
       return;
     }
     const assigned = Number(draft.assigned);
     if (!Number.isFinite(assigned) || assigned < 0) {
-      setError("Invalid amount");
+      setError(t("objectives.invalidAmount"));
       return;
     }
     setError(null);
@@ -116,7 +119,7 @@ export function ObjectivesCard({
         setDraft(null);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+        setError(err instanceof Error ? err.message : t("settings.saveFailed"));
       }
     });
   }
@@ -149,11 +152,13 @@ export function ObjectivesCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">
-          Objectives
+          {t("objectives.title")}
           {/* "23% elapsed" was read as "23% of the objectives". Days say the
               same thing and cannot be mistaken for progress against a goal. */}
           <span className="ml-2 align-middle text-xs font-normal text-muted-foreground">
-            {daysElapsed > 0 ? `Day ${daysElapsed} of ${daysInMonth}` : "Not started"}
+            {daysElapsed > 0
+              ? t("objectives.day", { day: daysElapsed, total: daysInMonth })
+              : t("objectives.notStarted")}
           </span>
         </CardTitle>
         {canWrite && (
@@ -167,14 +172,16 @@ export function ObjectivesCard({
           disabled={isPending}
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
-          Add
+          {t("objectives.add")}
         </Button>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
         {incomeObjectives.length > 0 && (
           <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">Income</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {t("objectives.income")}
+            </p>
             <ul className="space-y-1.5">
               {incomeObjectives.map((o) => {
                 // Same bar-as-row as Charges, inverted polarity: the fill is
@@ -246,13 +253,13 @@ export function ObjectivesCard({
                         <dl className="grid grid-cols-3 gap-2">
                           <div>
                             <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              Received
+                              {t("objectives.received")}
                             </dt>
                             <dd className="font-semibold tabular-nums">{fmt0(o.received)}</dd>
                           </div>
                           <div>
                             <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              Expected
+                              {t("objectives.expected")}
                             </dt>
                             <dd className="font-semibold tabular-nums text-muted-foreground">
                               {fmt0(o.expected)}
@@ -260,7 +267,7 @@ export function ObjectivesCard({
                           </div>
                           <div>
                             <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              Pace
+                              {t("objectives.pace")}
                             </dt>
                             <dd className="font-semibold tabular-nums text-muted-foreground">
                               {elapsedPct}%
@@ -295,13 +302,15 @@ export function ObjectivesCard({
         {objectives.length === 0 ? (
           <div className="flex items-start gap-3 text-sm text-muted-foreground">
             <Target className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>Assign a monthly budget per category.</p>
+            <p>{t("objectives.empty")}</p>
           </div>
         ) : (
           <>
             {control.length > 0 && (
               <div className={incomeObjectives.length > 0 ? "space-y-3 border-t pt-3" : "space-y-3"}>
-              <p className="text-xs font-medium text-muted-foreground">Charges</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                {t("objectives.charges")}
+              </p>
               <ul className="space-y-1.5">
                 {control.map((c) => {
                   const o = detailById.get(c.categoryId) ?? {
@@ -426,13 +435,13 @@ export function ObjectivesCard({
                           <dl className="grid grid-cols-4 gap-2 text-right">
                             <div>
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Spent
+                                {t("objectives.spent")}
                               </dt>
                               <dd className="font-semibold tabular-nums">{fmt0(c.consumed)}</dd>
                             </div>
                             <div>
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Budget
+                                {t("objectives.budget")}
                               </dt>
                               <dd className="font-semibold tabular-nums text-muted-foreground">
                                 {fmt0(c.assigned)}
@@ -440,7 +449,7 @@ export function ObjectivesCard({
                             </div>
                             <div>
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Projected
+                                {t("objectives.projected")}
                               </dt>
                               <dd
                                 className={`font-semibold tabular-nums ${
@@ -455,7 +464,9 @@ export function ObjectivesCard({
                                   rate; on a committed budget it explains
                                   nothing, so that slot shows the commitment. */}
                               <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                {c.fixedTotal > 0 ? "Fixed" : "Pace"}
+                                {c.fixedTotal > 0
+                                  ? t("objectives.fixed")
+                                  : t("objectives.pace")}
                               </dt>
                               <dd className="font-semibold tabular-nums text-muted-foreground">
                                 {c.fixedTotal > 0 ? fmt0(c.fixedTotal) : `${elapsedPct}%`}
@@ -481,7 +492,9 @@ export function ObjectivesCard({
                               ))}
                               {o.extra > 0 && (
                                 <li className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">Manual</span>
+                                  <span className="text-muted-foreground">
+                                    {t("objectives.manual")}
+                                  </span>
                                   <span className="shrink-0 tabular-nums">
                                     {fmt(o.extra)}
                                   </span>
@@ -527,7 +540,7 @@ export function ObjectivesCard({
                                 disabled={isPending}
                               >
                                 <Trash2 />
-                                Remove
+                                {t("common.remove")}
                               </Button>
                             )}
                             <Button
@@ -544,7 +557,9 @@ export function ObjectivesCard({
                               disabled={isPending}
                             >
                               <Pencil />
-                              {o.extra > 0 ? "Edit manual" : "Add manual"}
+                              {o.extra > 0
+                                ? t("objectives.editManual")
+                                : t("objectives.addManual")}
                             </Button>
                           </div>
                           )}
@@ -560,7 +575,7 @@ export function ObjectivesCard({
             {funds.length > 0 && (
               <div className="space-y-3 border-t pt-3">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Rollover funds
+                  {t("objectives.funds")}
                 </p>
                 <ul className="space-y-2">
                   {funds.map((o) => (
@@ -588,7 +603,7 @@ export function ObjectivesCard({
                         </span>
                         )}
                         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {fmt0(o.assigned)}/mo
+                          {t("objectives.perMonth", { amount: fmt0(o.assigned) })}
                         </span>
                         <span
                           className={`w-16 shrink-0 text-right text-xs font-medium tabular-nums ${
@@ -606,7 +621,7 @@ export function ObjectivesCard({
                             setConfirm({ categoryId: o.categoryId, name: o.categoryName })
                           }
                           disabled={isPending}
-                          title="Remove fund (this month onward)"
+                          title={t("objectives.removeFund")}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -628,22 +643,28 @@ export function ObjectivesCard({
         }}
       >
         <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
-          <DialogTitle>{draft?.rollover ? "Rollover fund" : "Category objective"}</DialogTitle>
+          <DialogTitle>
+            {draft?.rollover
+              ? t("objectives.dialog.fund")
+              : t("objectives.dialog.objective")}
+          </DialogTitle>
           {draft && (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>{t("objectives.dialog.category")}</Label>
               <CategorySelect
                 defaultValue={draft.categoryId ?? undefined}
                 onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
                 categories={categories}
-                ariaLabel="Objective category"
+                ariaLabel={t("objectives.dialog.categoryAria")}
                 className="w-full"
                 disabled={draft.existing}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="objective-amount">Manual amount ({currency})</Label>
+              <Label htmlFor="objective-amount">
+                {t("objectives.dialog.amount", { currency })}
+              </Label>
               <Input
                 id="objective-amount"
                 type="number"
@@ -653,15 +674,16 @@ export function ObjectivesCard({
                 onChange={(e) => setDraft({ ...draft, assigned: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                On top of the category&apos;s recurring charges; copied forward
-                each month.
+                {t("objectives.dialog.amountHelp")}
               </p>
             </div>
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
-                <Label htmlFor="objective-rollover">Rollover</Label>
+                <Label htmlFor="objective-rollover">
+                  {t("objectives.dialog.rollover")}
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  The unspent remainder accumulates month over month.
+                  {t("objectives.dialog.rolloverHelp")}
                 </p>
               </div>
               <Switch
@@ -673,11 +695,11 @@ export function ObjectivesCard({
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setDraft(null)} disabled={isPending}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button onClick={save} disabled={isPending}>
                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save
+                {t("common.save")}
               </Button>
             </div>
           </div>
@@ -692,14 +714,18 @@ export function ObjectivesCard({
         }}
       >
         <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
-          <DialogTitle>Remove manual amount?</DialogTitle>
+          <DialogTitle>{t("objectives.remove.title")}</DialogTitle>
           {confirm && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              The manual amount of{" "}
-              <span className="font-medium text-foreground">{confirm.name}</span>{" "}
-              stops counting from this month on. Its recurring charges stay,
-              and past months keep everything.
+              <RichText
+                template={t("objectives.remove.body")}
+                slots={{
+                  name: (
+                    <span className="font-medium text-foreground">{confirm.name}</span>
+                  ),
+                }}
+              />
             </p>
             <div className="flex items-center justify-end gap-2">
               <Button
@@ -707,11 +733,11 @@ export function ObjectivesCard({
                 onClick={() => setConfirm(null)}
                 disabled={isPending}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button variant="destructive" onClick={confirmedRemove} disabled={isPending}>
                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Remove
+                {t("common.remove")}
               </Button>
             </div>
           </div>

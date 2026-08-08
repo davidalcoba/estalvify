@@ -16,8 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   type CategoryRuleDTO,
-  FIELD_LABELS,
-  OPERATOR_LABELS,
+  FIELD_LABEL_KEYS,
+  OPERATOR_LABEL_KEYS,
   formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
@@ -25,6 +25,7 @@ import { useRuleOrder, type RuleOrderHandleProps } from "@/components/rules/use-
 import { RuleConfirmDialog } from "@/components/rules/rule-confirm-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface RulesMobileViewProps {
   rules: CategoryRuleDTO[];
@@ -32,15 +33,14 @@ interface RulesMobileViewProps {
 }
 
 export function RulesMobileView({ rules, categories }: RulesMobileViewProps) {
+  const t = useT();
   const { orderedRules, containerRef, handleProps, moveBy, draggingId, error } =
     useRuleOrder(rules);
 
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          No saved rules yet. Create your first rule above.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("rules.empty")}</p>
       </div>
     );
   }
@@ -97,6 +97,7 @@ function RulesMobileCard({
     handleDelete,
     handleToggleActive,
   } = useRuleRowActions(rule);
+  const t = useT();
   const [editing, setEditing] = useState(false);
 
   return (
@@ -106,33 +107,25 @@ function RulesMobileCard({
     )}
     <RuleConfirmDialog
       open={confirmingRevert}
-      title={<>Revert &ldquo;{rule.name}&rdquo;?</>}
-      description={
-        <p>
-          Every transaction this rule categorized goes back to its previous
-          category, or becomes uncategorized. The rule itself is kept.
-        </p>
-      }
-      confirmLabel="Revert rule"
-      pendingLabel="Reverting…"
+      title={t("rules.revert.title", { name: rule.name })}
+      description={<p>{t("rules.revert.body")}</p>}
+      confirmLabel={t("rules.revert")}
+      pendingLabel={t("rules.reverting")}
       isPending={isPending}
       onCancel={cancelRevert}
       onConfirm={handleRevert}
     />
     <RuleConfirmDialog
       open={confirmingDelete}
-      title={<>Delete &ldquo;{rule.name}&rdquo;?</>}
+      title={t("rules.delete.title", { name: rule.name })}
       description={
         <>
-          <p>
-            Transactions it categorized keep their category, but lose the link to
-            this rule — so they can no longer be reverted.
-          </p>
-          <p>To stop the rule without losing it, switch it off instead.</p>
+          <p>{t("rules.delete.body1")}</p>
+          <p>{t("rules.delete.body2")}</p>
         </>
       }
-      confirmLabel="Delete rule"
-      pendingLabel="Deleting…"
+      confirmLabel={t("rules.delete")}
+      pendingLabel={t("common.deleting")}
       isPending={isPending}
       onCancel={cancelDelete}
       onConfirm={handleDelete}
@@ -153,8 +146,8 @@ function RulesMobileCard({
               onClick={onMoveUp ?? undefined}
               disabled={!onMoveUp || isPending}
               className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground disabled:opacity-30"
-              aria-label="Move rule up"
-              title="Move up — earlier rules win"
+              aria-label={t("rules.moveUp")}
+              title={t("rules.moveUp.help")}
             >
               <ChevronUp className="h-5 w-5" />
             </button>
@@ -169,8 +162,8 @@ function RulesMobileCard({
               onClick={onMoveDown ?? undefined}
               disabled={!onMoveDown || isPending}
               className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground disabled:opacity-30"
-              aria-label="Move rule down"
-              title="Move down"
+              aria-label={t("rules.moveDown")}
+              title={t("rules.moveDown.help")}
             >
               <ChevronDown className="h-5 w-5" />
             </button>
@@ -181,22 +174,25 @@ function RulesMobileCard({
               <span className="font-medium text-sm">{rule.name}</span>
               {rule.neverMatched && (
                 <Badge variant="outline" className="text-xs text-warning border-warning">
-                  Never matched
+                  {t("rules.neverMatched")}
                 </Badge>
               )}
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">
-                {rule.match === "OR" ? "Any" : "All"}
+                {rule.match === "OR" ? t("rules.match.any") : t("rules.match.all")}
               </span>
               {rule.conditions.slice(0, 2).map((c, i) => (
                 <span
                   key={i}
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded px-2 py-0.5"
                 >
-                  <span className="font-medium">{FIELD_LABELS[c.field]}</span>
-                  <span>{c.negate ? "not " : ""}{OPERATOR_LABELS[c.operator]}</span>
+                  <span className="font-medium">{t(FIELD_LABEL_KEYS[c.field])}</span>
+                  <span>
+                    {c.negate ? t("rules.negatePrefix") : ""}
+                    {t(OPERATOR_LABEL_KEYS[c.operator])}
+                  </span>
                   <span className="font-medium truncate max-w-[80px]">
                     &quot;{formatConditionValue(c)}&quot;
                   </span>
@@ -204,7 +200,7 @@ function RulesMobileCard({
               ))}
               {rule.conditions.length > 2 && (
                 <span className="text-xs text-muted-foreground">
-                  +{rule.conditions.length - 2} more
+                  {t("rules.more", { count: rule.conditions.length - 2 })}
                 </span>
               )}
             </div>
@@ -212,12 +208,15 @@ function RulesMobileCard({
             <div className="text-xs text-muted-foreground">
               {rule.sourceCategoryName && (
                 <span>
-                  From: <span style={{ color: rule.sourceCategoryColor ?? undefined }}>{rule.sourceCategoryName}</span>
+                  {t("rules.from")}{" "}
+                  <span style={{ color: rule.sourceCategoryColor ?? undefined }}>
+                    {rule.sourceCategoryName}
+                  </span>
                   {" → "}
                 </span>
               )}
               <span>
-                To:{" "}
+                {t("rules.to")}{" "}
                 <span className="font-medium" style={{ color: rule.categoryColor }}>
                   {rule.categoryName}
                 </span>
@@ -241,7 +240,7 @@ function RulesMobileCard({
                 htmlFor={`rule-active-${rule.id}`}
                 className="text-xs text-muted-foreground"
               >
-                {rule.isActive ? "Active" : "Disabled"}
+                {rule.isActive ? t("rules.table.active") : t("rules.disabled")}
               </label>
             </div>
           </div>
@@ -254,8 +253,8 @@ function RulesMobileCard({
               onClick={() => setEditing(true)}
               disabled={isPending}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="Edit"
-              title="Edit rule"
+              aria-label={t("common.edit")}
+              title={t("rules.edit")}
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -266,8 +265,8 @@ function RulesMobileCard({
               onClick={handleExecute}
               disabled={isPending || !rule.isActive}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="Run rule now"
-              title={rule.isActive ? "Run rule now" : "Disabled — turn it on to run it"}
+              aria-label={t("rules.run")}
+              title={rule.isActive ? t("rules.run") : t("rules.run.disabled")}
             >
               <Play className="h-4 w-4" />
             </Button>
@@ -278,8 +277,8 @@ function RulesMobileCard({
               onClick={requestRevert}
               disabled={isPending}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="Revert rule"
-              title="Revert rule"
+              aria-label={t("rules.revert")}
+              title={t("rules.revert")}
             >
               <Undo2 className="h-4 w-4" />
             </Button>
@@ -290,8 +289,8 @@ function RulesMobileCard({
               onClick={requestDelete}
               disabled={isPending}
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              aria-label="Delete"
-              title="Delete rule"
+              aria-label={t("common.delete")}
+              title={t("rules.delete")}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

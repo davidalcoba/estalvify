@@ -37,8 +37,12 @@ import { IncomeExpensesChart } from "@/components/reports/income-expenses-chart"
 import { CategoryBreakdownChart } from "@/components/reports/category-breakdown-chart";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { BarChart3 } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Reports" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.reports") };
+}
 
 const TOP_MERCHANTS = 6;
 
@@ -71,6 +75,7 @@ interface ReportsBodyProps {
 }
 
 async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBodyProps) {
+  const t = await getT();
   // getScope is request-cached, so re-resolving here is free; the personal
   // half of the prefs belongs to the acting member, not the data scope.
   const { actorUserId } = await requireScope("read");
@@ -123,8 +128,8 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
     return (
       <EmptyState
         icon={BarChart3}
-        title="No data for these filters"
-        description="Try another month, a wider trend window, or all accounts."
+        title={t("reports.noMatch.title")}
+        description={t("reports.noMatch.body")}
       />
     );
   }
@@ -159,7 +164,8 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
   const merchantTotals = new Map<string, number>();
   for (const tx of monthDebits) {
     const name =
-      merchantDisplayName(tx.description, tx.remittanceInfo) || "Unknown";
+      merchantDisplayName(tx.description, tx.remittanceInfo) ||
+      t("reports.unknownMerchant");
     merchantTotals.set(
       name,
       (merchantTotals.get(name) ?? 0) + Math.abs(Number(tx.amount.toString())),
@@ -197,7 +203,7 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Income vs expenses · last {trendMonths} months
+            {t("reports.incomeVsExpenses", { months: trendMonths })}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -213,9 +219,8 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Spending by category ·{" "}
-              <span className="capitalize">{selectedMonthLabel}</span>
+            <CardTitle className="text-base capitalize">
+              {t("reports.byCategory", { month: selectedMonthLabel })}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -227,7 +232,7 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
               />
             ) : (
               <p className="text-sm text-muted-foreground">
-                No categorized spending in this month yet.
+                {t("reports.byCategory.empty")}
               </p>
             )}
           </CardContent>
@@ -235,9 +240,8 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Top merchants ·{" "}
-              <span className="capitalize">{selectedMonthLabel}</span>
+            <CardTitle className="text-base capitalize">
+              {t("reports.topMerchants", { month: selectedMonthLabel })}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -257,7 +261,7 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No spending in this month yet.
+                {t("reports.topMerchants.empty")}
               </p>
             )}
           </CardContent>
@@ -266,8 +270,8 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">
-            Untracked spending · {selectedMonthLabel}
+          <CardTitle className="text-base capitalize">
+            {t("reports.untracked", { month: selectedMonthLabel })}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -280,35 +284,36 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
               {(traceability.untrackedRatio * 100).toFixed(1)}%
             </span>
             <span className="text-sm text-muted-foreground">
-              {formatCurrency(traceability.untracked, currency, locale)} of{" "}
-              {formatCurrency(traceability.totalSpend, currency, locale)} spent
-              with no trace of what it bought
+              {t("reports.untracked.summary", {
+                untracked: formatCurrency(traceability.untracked, currency, locale),
+                total: formatCurrency(traceability.totalSpend, currency, locale),
+              })}
             </span>
           </div>
           <dl className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-3">
             <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-start">
-              <dt className="text-muted-foreground">ATM cash</dt>
+              <dt className="text-muted-foreground">{t("reports.untracked.atm")}</dt>
               <dd className="tabular-nums">
                 {formatCurrency(traceability.cashWithdrawn, currency, locale)}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-start">
-              <dt className="text-muted-foreground">Card settlements</dt>
+              <dt className="text-muted-foreground">{t("reports.untracked.card")}</dt>
               <dd className="tabular-nums">
                 {formatCurrency(traceability.cardSettled, currency, locale)}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-2 sm:flex-col sm:items-start">
-              <dt className="text-muted-foreground">Explained by splits</dt>
+              <dt className="text-muted-foreground">
+                {t("reports.untracked.explained")}
+              </dt>
               <dd className="tabular-nums text-success">
                 {formatCurrency(traceability.explained, currency, locale)}
               </dd>
             </div>
           </dl>
           <p className="text-xs text-muted-foreground">
-            While this share is dark, every budget can look met while
-            overspending. The goal is to reduce the cash itself, not to
-            catalogue it — pay by card where possible.
+            {t("reports.untracked.note")}
           </p>
         </CardContent>
       </Card>
@@ -317,6 +322,7 @@ async function ReportsBody({ userId, month, trendMonths, accountId }: ReportsBod
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
+  const t = await getT();
   const { dataUserId: userId, actorUserId } = await requireScope("read");
   const params = await searchParams;
   const { language, timezone } = await getUserPrefs(userId, actorUserId);
@@ -360,13 +366,13 @@ export default async function ReportsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Reports" />
+      <PageHeader title={t("nav.reports")} />
 
       {!anyTransaction ? (
         <EmptyState
           icon={BarChart3}
-          title="No data yet"
-          description="Sync and categorize transactions to see reports."
+          title={t("reports.empty.title")}
+          description={t("reports.empty.body")}
         />
       ) : (
         <>

@@ -16,6 +16,8 @@ import {
 import { disconnectBankGroup } from "@/app/(app)/accounts/actions";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
+import { RichText } from "@/components/i18n/rich-text";
 
 interface DisconnectBankButtonProps {
   connectionIds: string[];
@@ -28,6 +30,7 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
   const [confirmed, setConfirmed] = useState(false);
   const [isPending, startTransition] = useTransition();
   const canWrite = useCanWrite();
+  const t = useT();
 
   if (!canWrite) return null;
 
@@ -60,11 +63,8 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Disconnect {bankName}?</DialogTitle>
-          <DialogDescription>
-            This will permanently remove the bank connection, all linked accounts, and{" "}
-            <strong>all their transactions</strong> from Estalvify. This action cannot be undone.
-          </DialogDescription>
+          <DialogTitle>{t("accounts.disconnect.title", { name: bankName })}</DialogTitle>
+          <DialogDescription>{t("accounts.disconnect.body")}</DialogDescription>
         </DialogHeader>
         <div className="flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3">
           <Checkbox
@@ -74,15 +74,20 @@ export function DisconnectBankButton({ connectionIds, bankName }: DisconnectBank
             className="mt-0.5"
           />
           <label htmlFor="disconnect-confirm" className="text-sm leading-snug cursor-pointer select-none">
-            I understand that all accounts and transactions for <strong>{bankName}</strong> will be permanently deleted.
+            <RichText
+              template={t("accounts.disconnect.confirm")}
+              slots={{ name: <strong>{bankName}</strong> }}
+            />
           </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="destructive" onClick={handleDisconnect} disabled={isPending || !confirmed}>
-            {isPending ? "Disconnecting…" : "Disconnect"}
+            {isPending
+              ? t("accounts.disconnect.pending")
+              : t("accounts.disconnect.action")}
           </Button>
         </DialogFooter>
       </DialogContent>

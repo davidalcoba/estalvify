@@ -4,6 +4,7 @@ import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface SyncNowButtonProps {
   connectionIds: string[];
@@ -14,6 +15,7 @@ export function SyncNowButton({ connectionIds, disabled = false }: SyncNowButton
   const [syncing, setSyncing] = useState(false);
   const router = useRouter();
   const canWrite = useCanWrite();
+  const t = useT();
 
   if (!canWrite) return null;
 
@@ -42,7 +44,7 @@ export function SyncNowButton({ connectionIds, disabled = false }: SyncNowButton
     <button
       onClick={handleSync}
       disabled={isDisabled}
-      title={disabled ? "Sync in progress" : "Sync now"}
+      title={disabled ? t("accounts.sync.inProgress") : t("accounts.sync.now")}
       className="text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
     >
       <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />

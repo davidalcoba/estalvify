@@ -24,6 +24,7 @@ import {
 } from "@/app/(app)/categorize/actions";
 import { useCategorizeSearch } from "@/components/categorize/search-context";
 import { matchesTransactionSearch } from "@/lib/categorize";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface Props {
   transactions: TransactionListItemDTO[];
@@ -62,6 +63,7 @@ function FocusModal({
   onCategorized,
   onReverted,
 }: FocusModalProps) {
+  const t = useT();
   const [queue, setQueue] = useState<TransactionListItemDTO[]>(snapshot);
   const [index, setIndex] = useState(Math.min(startIndex, Math.max(0, snapshot.length - 1)));
   const [savingCount, setSavingCount] = useState(0);
@@ -118,7 +120,7 @@ function FocusModal({
     )}
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-hidden pt-8 sm:w-[min(96vw,640px)] sm:max-w-[min(96vw,640px)]">
-        <DialogTitle className="sr-only">Categorize transaction queue</DialogTitle>
+        <DialogTitle className="sr-only">{t("categorize.queueTitle")}</DialogTitle>
 
         <div className="space-y-4 overflow-y-auto pr-2">
           {done ? (
@@ -127,12 +129,12 @@ function FocusModal({
                 <CheckCircle className="h-6 w-6 text-success" />
               </div>
               <div>
-                <p className="font-semibold">Page done!</p>
+                <p className="font-semibold">{t("categorize.pageDone")}</p>
                 <p className="text-sm text-muted-foreground">
-                  {categorizedCount} transaction{categorizedCount !== 1 ? "s" : ""} categorized.
+                  {t.plural("categorize.pageDone.count", categorizedCount)}
                 </p>
               </div>
-              <Button onClick={onClose}>Close</Button>
+              <Button onClick={onClose}>{t("common.close")}</Button>
             </div>
           ) : current ? (
             <>
@@ -144,7 +146,7 @@ function FocusModal({
                   value=""
                   onValueChange={handleCategorySelect}
                   categories={categories}
-                  ariaLabel="Pick a category"
+                  ariaLabel={t("categorize.pickCategoryAria")}
                   className="flex-1 h-10"
                 />
                 <Button
@@ -153,7 +155,7 @@ function FocusModal({
                   size="icon"
                   className="h-10 w-10 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                   onClick={() => setRuleOpen(true)}
-                  title="Create rule for this transaction"
+                  title={t("transactions.createRule")}
                 >
                   <Zap className="h-4 w-4" />
                 </Button>
@@ -166,7 +168,7 @@ function FocusModal({
                   onClick={() => setIndex((i) => i - 1)}
                   disabled={index === 0}
                 >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                  <ChevronLeft className="h-4 w-4 mr-1" /> {t("categorize.prev")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -174,7 +176,7 @@ function FocusModal({
                   onClick={() => setIndex((i) => Math.min(i + 1, queue.length - 1))}
                   disabled={index >= queue.length - 1}
                 >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
+                  {t("common.next")} <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
             </>

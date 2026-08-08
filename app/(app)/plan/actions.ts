@@ -4,6 +4,8 @@ import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { upsertBudgetItemForUser, deleteBudgetItemForUser } from "@/lib/mcp/manage";
+import { getT } from "@/lib/i18n/server";
+import { describeError } from "@/lib/errors";
 
 async function requireUserId(): Promise<string> {
   const { dataUserId } = await requireScope("write");
@@ -36,7 +38,7 @@ export async function setSavingsTarget(
     revalidate();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+    return { ok: false, error: describeError(err, await getT()) };
   }
 }
 

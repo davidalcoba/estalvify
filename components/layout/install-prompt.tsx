@@ -12,6 +12,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Download, Share, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useT } from "@/components/i18n/i18n-provider";
+import { RichText } from "@/components/i18n/rich-text";
 
 const DISMISSED_KEY = "estalvify:install-prompt-dismissed";
 
@@ -49,6 +51,7 @@ export function InstallPrompt() {
   const [deferred, setDeferred] = useState<InstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const isClient = useIsClient();
+  const t = useT();
 
   useEffect(() => {
     function onBeforeInstallPrompt(event: Event) {
@@ -89,26 +92,34 @@ export function InstallPrompt() {
         <CardContent className="flex items-center gap-3 py-3">
           <div className="flex-1 text-sm">
             {iosHint ? (
+              // The share glyph is part of the sentence, so it travels as a
+              // {share} placeholder — it does not sit in the same place in
+              // every language.
               <span className="flex flex-wrap items-center gap-1">
-                Install Estalvify: tap
-                <Share className="inline size-4" aria-label="Share" />
-                then &ldquo;Add to Home Screen&rdquo;.
+                <RichText
+                  template={t("install.ios")}
+                  slots={{
+                    share: (
+                      <Share className="inline size-4" aria-label={t("install.share")} />
+                    ),
+                  }}
+                />
               </span>
             ) : (
-              "Install Estalvify for a full-screen app."
+              t("install.other")
             )}
           </div>
           {!iosHint && (
             <Button size="sm" onClick={install}>
               <Download />
-              Install
+              {t("install.action")}
             </Button>
           )}
           <Button
             size="icon-sm"
             variant="ghost"
             onClick={dismiss}
-            aria-label="Dismiss"
+            aria-label={t("common.dismiss")}
           >
             <X />
           </Button>

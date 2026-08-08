@@ -15,8 +15,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyRound } from "@/lib/formatters";
 import type { ControlRow } from "@/lib/budget/control";
 import { ListChecks } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export function ControlMini({
+export async function ControlMini({
   control,
   currency,
   locale,
@@ -27,13 +28,14 @@ export function ControlMini({
 }) {
   if (control.length === 0) return null;
   const fmt0 = (n: number) => formatCurrencyRound(n, currency, locale);
+  const t = await getT();
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           <Link href="/plan" className="hover:underline">
-            Categories
+            {t("control.title")}
           </Link>
         </CardTitle>
         <ListChecks className="h-4 w-4 text-muted-foreground" />
@@ -43,10 +45,10 @@ export function ControlMini({
           <span aria-hidden />
           <span aria-hidden />
           <span className="text-right text-[10px] uppercase tracking-wide text-muted-foreground/70">
-            Week
+            {t("control.week")}
           </span>
           <span className="text-right text-[10px] uppercase tracking-wide text-muted-foreground/70">
-            Month
+            {t("control.month")}
           </span>
           {control.map((c) => {
             const tone =

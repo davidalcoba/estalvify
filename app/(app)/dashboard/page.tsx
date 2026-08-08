@@ -27,8 +27,12 @@ import {
 import { WeeklyCard } from "@/components/budget/weekly-card";
 import { ControlMini } from "@/components/budget/control-mini";
 import { Wallet } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Dashboard" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.dashboard") };
+}
 
 /**
  * Everything that needs the database. The body used to be pinned to a
@@ -44,6 +48,7 @@ async function DashboardBody({
   actorUserId: string;
 }) {
   const { locale, timezone, currency } = await getUserPrefs(userId, actorUserId);
+  const t = await getT();
 
   const [hasAccounts, status] = await Promise.all([
     prisma.bankAccount
@@ -61,11 +66,11 @@ async function DashboardBody({
     return (
       <EmptyState
         icon={Wallet}
-        title="Connect your first bank account"
-        description="Link a bank to start tracking. Syncs daily."
+        title={t("dashboard.noAccounts.title")}
+        description={t("dashboard.noAccounts.body")}
       >
         <Button asChild variant="outline">
-          <Link href="/accounts">Go to Accounts →</Link>
+          <Link href="/accounts">{t("dashboard.noAccounts.action")}</Link>
         </Button>
       </EmptyState>
     );
@@ -77,16 +82,16 @@ async function DashboardBody({
       <ControlMini control={status.control} currency={currency} locale={locale} />
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm lg:col-span-2">
         <Link href="/plan" className="text-muted-foreground underline-offset-4 hover:underline">
-          Budget
+          {t("nav.budget")}
         </Link>
         <Link href="/forecast" className="text-muted-foreground underline-offset-4 hover:underline">
-          Forecast
+          {t("nav.forecast")}
         </Link>
         <Link href="/recurring" className="text-muted-foreground underline-offset-4 hover:underline">
-          Recurring
+          {t("nav.recurring")}
         </Link>
         <Link href="/transactions" className="text-muted-foreground underline-offset-4 hover:underline">
-          Transactions
+          {t("nav.transactions")}
         </Link>
       </div>
     </div>
@@ -95,11 +100,13 @@ async function DashboardBody({
 
 export default async function DashboardPage() {
   const scope = await requireScope("read");
-  const firstName = scope.actor.name?.split(" ")[0] ?? "there";
+  const t = await getT();
+  const firstName =
+    scope.actor.name?.split(" ")[0] ?? t("dashboard.greetingFallback");
 
   return (
     <div className="space-y-6">
-      <PageHeader title={`Good morning, ${firstName} 👋`} />
+      <PageHeader title={t("dashboard.greeting", { name: firstName })} />
       <Suspense fallback={<DashboardBodySkeleton />}>
         <DashboardBody userId={scope.dataUserId} actorUserId={scope.actorUserId} />
       </Suspense>

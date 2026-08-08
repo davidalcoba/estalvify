@@ -5,6 +5,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { I18nProvider } from "@/components/i18n/i18n-provider";
+import { getT, getUiLocale, messagesFor } from "@/lib/i18n/server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,18 +19,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
+// Dynamic because the title and description follow the member's language.
+// Everything else here is static; only the two strings at the top change.
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+
+  return {
   title: {
-    template: "%s | Estalvify",
-    default: "Estalvify — Personal Finance",
+    template: `%s | ${t("app.name")}`,
+    default: `${t("app.name")} — ${t("app.tagline")}`,
   },
-  description:
-    "Take control of your money. Track, categorize, and budget your expenses across all your bank accounts.",
+  description: t("app.description"),
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Estalvify",
+    title: t("app.name"),
     // iOS does not build a launch screen from the manifest the way Android
     // does: without these an installed app shows a blank white screen while
     // the first page loads. One exact-resolution image per device, portrait
@@ -62,7 +68,8 @@ export const metadata: Metadata = {
     // correct to ship; only this one makes the splash work.
     "apple-mobile-web-app-capable": "yes",
   },
-};
+  };
+}
 
 export const viewport: Viewport = {
   // Two entries so the browser/OS chrome follows the app's own theme. A single
@@ -83,23 +90,30 @@ export const viewport: Viewport = {
   // regression and buys nothing in standalone mode.
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Mounted at the ROOT rather than per route group, so the app shell, the
+  // auth screens and the legal pages all share one provider — and one copy of
+  // the messages in the payload. Only the active locale's strings are sent.
+  const locale = await getUiLocale();
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <ServiceWorkerRegistration />
-          {children}
-        </ThemeProvider>
+        <I18nProvider locale={locale} messages={messagesFor(locale)}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ServiceWorkerRegistration />
+            {children}
+          </ThemeProvider>
+        </I18nProvider>
       </body>
     </html>
   );

@@ -27,8 +27,9 @@ import { InlineNotice } from "@/components/budget/inline-notice";
 import { discrepancyIsMaterial } from "@/lib/budget/cascade";
 import type { MonthStatus } from "@/lib/budget/month-status";
 import { ProvisionalBadge } from "@/components/budget/provisional-badge";
+import { getT } from "@/lib/i18n/server";
 
-export function MonthProgressCard({
+export async function MonthProgressCard({
   status,
   currency,
   locale,
@@ -38,6 +39,7 @@ export function MonthProgressCard({
   locale: string;
 }) {
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  const t = await getT();
   const signed = (n: number) => `${n >= 0 ? "+" : "−"}${fmt(Math.abs(n))}`;
   const tone = (n: number) => (n >= 0 ? "text-success" : "text-destructive");
   const { reconciliation: r } = status;
@@ -49,7 +51,7 @@ export function MonthProgressCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          How the month is going
+          {t("progress.title")}
           {status.provisional && (
             <span className="ml-2">
               <ProvisionalBadge />
@@ -66,14 +68,14 @@ export function MonthProgressCard({
               leading with them says "disaster" every month until it is too
               late to change anything. */}
           <div className="flex items-baseline justify-between">
-            <dt className="font-medium">Heading for</dt>
+            <dt className="font-medium">{t("progress.headingFor")}</dt>
             <dd className="text-lg font-semibold tabular-nums">
               {signed(r.projectedResult)}
             </dd>
           </div>
           {/* The one judgement on the card. Everything else is a fact. */}
           <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Against plan so far</dt>
+            <dt className="text-muted-foreground">{t("progress.againstPlan")}</dt>
             <dd className={`tabular-nums ${tone(r.performance)}`}>
               {signed(r.performance)}
             </dd>
@@ -82,7 +84,7 @@ export function MonthProgressCard({
               31 by construction, which is the habit that makes people stop
               reading red. */}
           <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">This month&apos;s balance</dt>
+            <dt className="text-muted-foreground">{t("progress.balance")}</dt>
             <dd className="tabular-nums text-muted-foreground">
               {signed(r.actualResult)}
             </dd>
@@ -100,19 +102,19 @@ export function MonthProgressCard({
               eight weeks earlier. */}
           {r.openingBalanceUnknown && (
             <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Actual savings</dt>
+              <dt className="text-muted-foreground">{t("progress.actualSavings")}</dt>
               <dd className="text-xs text-muted-foreground">
-                No balance reading yet
+                {t("progress.noReading")}
               </dd>
             </div>
           )}
           {r.consolidatedDelta != null && (
             <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Actual savings</dt>
+              <dt className="text-muted-foreground">{t("progress.actualSavings")}</dt>
               <dd className="flex items-center gap-1.5 tabular-nums text-muted-foreground">
                 {showGap && (
                   <span className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide">
-                    unreliable
+                    {t("progress.unreliable")}
                   </span>
                 )}
                 {signed(r.consolidatedDelta)}
@@ -125,14 +127,16 @@ export function MonthProgressCard({
             when it is material — see discrepancyIsMaterial. */}
         {showGap && r.discrepancy != null && (
           <InlineNotice
-            figure={`${fmt(Math.abs(r.discrepancy))} unreconciled`}
-            detail="Two balance readings from your bank do not agree with the transactions recorded between them, so some movement never reached the app. Usually an account that has not finished syncing."
+            figure={t("progress.unreconciled", {
+              amount: fmt(Math.abs(r.discrepancy)),
+            })}
+            detail={t("progress.unreconciled.detail")}
             action={
               <Link
                 href="/accounts"
                 className="shrink-0 font-medium underline underline-offset-2"
               >
-                Check accounts
+                {t("progress.checkAccounts")}
               </Link>
             }
           />

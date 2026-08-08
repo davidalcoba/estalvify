@@ -23,6 +23,8 @@ import {
 import { matchesNode, type MatchableTransaction } from "@/lib/rules/rule-matcher";
 import { parseConditions } from "@/lib/rules/rule-dto";
 import { formatCurrency } from "@/lib/formatters";
+import { getUserPrefs } from "@/lib/user-prefs";
+import { translatorForLanguage } from "@/lib/i18n/server";
 
 const GENERATION_HORIZON_MONTHS = 4;
 
@@ -121,6 +123,12 @@ export async function runPlannedMatching(
   currency: string,
   locale: string
 ): Promise<void> {
+  // The notifications written below belong to the HOUSEHOLD — one row, read by
+  // every member — so their copy follows the owner's language, not the acting
+  // member's. `userId` is already the owner's; the no-actor form of
+  // getUserPrefs returns their bundle and is request-cached.
+  const { language } = await getUserPrefs(userId);
+  const t = translatorForLanguage(language);
   const today = todayInTimezone(timezone);
   const current = currentYearMonth(today);
   const monthsSpan = [
@@ -282,8 +290,18 @@ export async function runPlannedMatching(
             userId,
             type: "RECURRING_AMOUNT_CHANGE",
             severity: rose ? "WARNING" : "INFO",
-            title: `${name} ${rose ? "went up" : "went down"} ${pct}%`,
-            body: `The charge arrived at ${formatCurrency(match.matchedAmount, currency, locale)} against an expected ${formatCurrency(Number(item.amount.toString()), currency, locale)}. If the new price is permanent, update the series so next month expects it.`,
+            title: t(
+              rose ? "notif.amountChange.up" : "notif.amountChange.down",
+              { name, pct },
+            ),
+            body: t("notif.amountChange.body", {
+              actual: formatCurrency(match.matchedAmount, currency, locale),
+              expected: formatCurrency(
+                Number(item.amount.toString()),
+                currency,
+                locale,
+              ),
+            }),
             dedupeKey: `planned-amount:${item.id}`,
             metadata: { plannedItemId: item.id },
           },
@@ -310,8 +328,17 @@ export async function runPlannedMatching(
           userId,
           type: "RECURRING_MISSED",
           severity: "WARNING",
-          title: `Missing: ${name}`,
-          body: `${row.direction === "CREDIT" ? "An expected income of" : "An expected charge of"} ${formatCurrency(Number(row.amount.toString()), currency, locale)} didn't arrive in its ${row.month}/${row.year} window. Check the bill — or the bank sync.`,
+          title: t("notif.missed.title", { name }),
+          body: t(
+            row.direction === "CREDIT"
+              ? "notif.missed.body.credit"
+              : "notif.missed.body.debit",
+            {
+              amount: formatCurrency(Number(row.amount.toString()), currency, locale),
+              month: row.month,
+              year: row.year,
+            },
+          ),
           dedupeKey: `planned-missed:${item.id}`,
           metadata: { plannedItemId: item.id },
         },

@@ -15,8 +15,12 @@ import {
   groupTransactionsByDate,
   toTransactionListItemDTO,
 } from "@/lib/transactions/transaction-dto";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Transactions" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.transactions") };
+}
 
 const PAGE_SIZE = 50;
 
@@ -99,6 +103,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
   // getScope is request-cached, so re-resolving here is free; the personal
   // half of the prefs belongs to the acting member, not the data scope.
   const { actorUserId } = await requireScope("read");
+  const t = await getT();
   const where = {
     userId,
     ...(fromDate || toDate
@@ -154,11 +159,11 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
     return (
       <EmptyState
         icon={ArrowLeftRight}
-        title="No transactions found"
+        title={t("transactions.empty.title")}
         description={
           total === 0
-            ? "Connect a bank account to import transactions."
-            : "None in this date range."
+            ? t("transactions.empty.noAccounts")
+            : t("transactions.empty.noneInRange")
         }
       />
     );
@@ -183,6 +188,7 @@ async function TransactionsBody({ page, fromStr, toStr, fromDate, toDate, accoun
 
 export default async function TransactionsPage({ searchParams }: PageProps) {
   const { dataUserId, actorUserId } = await requireScope("read");
+  const t = await getT();
   const params = await searchParams;
 
   const fromDate = params.from ? new Date(params.from + "T00:00:00") : null;
@@ -210,7 +216,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transactions" />
+      <PageHeader title={t("nav.transactions")} />
 
       {/* Filters stay visible during pagination and filter changes — only the list body skeletons */}
       <Suspense>

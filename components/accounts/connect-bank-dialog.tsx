@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
 
 // Spanish banks available via Enable Banking
 // In the future this list can be fetched from /api/banking/banks
@@ -44,6 +45,7 @@ export function ConnectBankDialog() {
   const [connectingBank, setConnectingBank] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canWrite = useCanWrite();
+  const t = useT();
 
   if (!canWrite) return null;
 
@@ -69,7 +71,7 @@ export function ConnectBankDialog() {
         const data = await response.json();
 
         if (!response.ok) {
-          setError(data.error ?? "Failed to connect bank");
+          setError(data.error ?? t("accounts.connect.failed"));
           setConnectingBank(null);
           return;
         }
@@ -77,7 +79,7 @@ export function ConnectBankDialog() {
         // Redirect user to bank authentication page
         window.location.href = data.url;
       } catch {
-        setError("Network error. Please try again.");
+        setError(t("accounts.network"));
         setConnectingBank(null);
       }
     });
@@ -87,7 +89,7 @@ export function ConnectBankDialog() {
     return (
       <Button disabled>
         <Plus className="mr-2 h-4 w-4" />
-        Connect bank
+        {t("accounts.connect")}
       </Button>
     );
   }
@@ -97,16 +99,13 @@ export function ConnectBankDialog() {
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
-          Connect bank
+          {t("accounts.connect")}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Connect a bank account</DialogTitle>
-          <DialogDescription>
-            Search for your bank and you&apos;ll be redirected to authenticate securely.
-            We only get read-only access.
-          </DialogDescription>
+          <DialogTitle>{t("accounts.connect.title")}</DialogTitle>
+          <DialogDescription>{t("accounts.connect.body")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -114,7 +113,7 @@ export function ConnectBankDialog() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search your bank..."
+              placeholder={t("accounts.connect.search")}
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -131,7 +130,7 @@ export function ConnectBankDialog() {
           <div className="space-y-1 max-h-72 overflow-y-auto">
             {filtered.length === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                No banks found for &quot;{search}&quot;
+                {t("accounts.connect.noResults", { query: search })}
               </div>
             ) : (
               filtered.map((bank) => (

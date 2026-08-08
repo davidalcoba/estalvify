@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { deleteMyAccount } from "@/app/(app)/settings/actions";
 import { Download } from "lucide-react";
+import { useT } from "@/components/i18n/i18n-provider";
 
 const CONFIRM_WORD = "DELETE";
 
@@ -32,6 +33,7 @@ export function PrivacyDataCard({ email }: { email: string }) {
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const t = useT();
 
   const confirmed = confirmation.trim() === CONFIRM_WORD;
 
@@ -47,7 +49,7 @@ export function PrivacyDataCard({ email }: { email: string }) {
         if (err instanceof Error && err.message.includes("NEXT_REDIRECT")) {
           throw err;
         }
-        setError("Could not delete the account. Please try again.");
+        setError(t("settings.privacy.delete.failed"));
       }
     });
   }
@@ -55,28 +57,28 @@ export function PrivacyDataCard({ email }: { email: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Privacy &amp; data</CardTitle>
+        <CardTitle>{t("settings.privacy.title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-1.5">
-          <p className="text-sm font-medium">Export your data</p>
+          <p className="text-sm font-medium">{t("settings.privacy.export.title")}</p>
           <p className="text-sm text-muted-foreground">
-            Download a JSON file with everything stored for {email}: accounts,
-            transactions, categories, rules, plan and notifications.
+            {t("settings.privacy.export.body", { email })}
           </p>
           <Button asChild variant="outline" className="gap-2">
             <a href="/api/export">
               <Download className="size-4" aria-hidden />
-              Download export
+              {t("settings.privacy.export.action")}
             </a>
           </Button>
         </div>
 
         <div className="space-y-1.5 border-t pt-5">
-          <p className="text-sm font-medium text-destructive">Delete account</p>
+          <p className="text-sm font-medium text-destructive">
+            {t("settings.privacy.delete.title")}
+          </p>
           <p className="text-sm text-muted-foreground">
-            Permanently deletes your account, revokes your bank consents and
-            erases all your data. This cannot be undone.
+            {t("settings.privacy.delete.body")}
           </p>
           <Dialog
             open={open}
@@ -89,20 +91,18 @@ export function PrivacyDataCard({ email }: { email: string }) {
             }}
           >
             <DialogTrigger asChild>
-              <Button variant="destructive">Delete account…</Button>
+              <Button variant="destructive">{t("settings.privacy.delete.action")}</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete your account?</DialogTitle>
+                <DialogTitle>{t("settings.privacy.delete.dialogTitle")}</DialogTitle>
                 <DialogDescription>
-                  This permanently removes {email}, revokes your bank consents
-                  at your banks, and erases every transaction, category, rule
-                  and plan. Consider downloading your data export first.
+                  {t("settings.privacy.delete.dialogBody", { email })}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-1.5">
                 <Label htmlFor="delete-confirmation">
-                  Type {CONFIRM_WORD} to confirm
+                  {t("settings.privacy.delete.confirmLabel", { word: CONFIRM_WORD })}
                 </Label>
                 <Input
                   id="delete-confirmation"
@@ -123,14 +123,14 @@ export function PrivacyDataCard({ email }: { email: string }) {
                   onClick={() => setOpen(false)}
                   disabled={isPending}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   variant="destructive"
                   onClick={handleDelete}
                   disabled={!confirmed || isPending}
                 >
-                  {isPending ? "Deleting…" : "Delete everything"}
+                  {isPending ? t("common.deleting") : t("settings.privacy.delete.confirmAction")}
                 </Button>
               </DialogFooter>
             </DialogContent>

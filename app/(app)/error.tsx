@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { TriangleAlert } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export default function AppError({
   error,
@@ -16,6 +17,8 @@ export default function AppError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
+
   useEffect(() => {
     console.error("[app] route error:", error);
   }, [error]);
@@ -24,10 +27,10 @@ export default function AppError({
     <div className="space-y-6">
       <EmptyState
         icon={TriangleAlert}
-        title="Something went wrong"
-        description="This page hit an unexpected error. You can try again."
+        title={t("error.title")}
+        description={t("error.pageBody")}
       >
-        <Button onClick={reset}>Try again</Button>
+        <Button onClick={reset}>{t("common.retry")}</Button>
       </EmptyState>
     </div>
   );

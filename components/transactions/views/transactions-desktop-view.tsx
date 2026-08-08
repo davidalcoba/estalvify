@@ -1,8 +1,11 @@
+"use client";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/formatters";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 import { TransactionPagination } from "@/components/transactions/shared/transaction-pagination";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 function fmtDate(dateIso: string, locale: string, timezone: string) {
   return new Date(dateIso).toLocaleDateString(locale, {
@@ -39,11 +42,17 @@ export function TransactionsDesktopView({
   pageQuery,
   onOpenDetail,
 }: TransactionsDesktopViewProps) {
+  const t = useT();
+
   return (
     <>
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing {rangeStart}–{rangeEnd} of {total} transactions
+          {t("transactions.showing", {
+            from: rangeStart,
+            to: rangeEnd,
+            total,
+          })}
         </p>
         <TransactionPagination page={page} totalPages={totalPages} pageQuery={pageQuery} />
       </div>
@@ -79,7 +88,11 @@ export function TransactionsDesktopView({
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <p className="text-sm text-muted-foreground">
-            Showing {rangeStart}–{rangeEnd} of {total}
+            {t("transactions.showingShort", {
+              from: rangeStart,
+              to: rangeEnd,
+              total,
+            })}
           </p>
           <TransactionPagination page={page} totalPages={totalPages} pageQuery={pageQuery} />
         </div>

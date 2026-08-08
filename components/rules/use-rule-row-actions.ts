@@ -8,10 +8,12 @@ import {
   toggleRuleActive,
 } from "@/app/(app)/rules/actions";
 import type { CategoryRuleDTO } from "@/lib/rules/rule-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 // Shared run/revert/delete/toggle logic for a saved-rule row, used by both the
 // desktop and mobile rule views (previously copy-pasted in each).
 export function useRuleRowActions(rule: CategoryRuleDTO) {
+  const t = useT();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<string | null>(null);
   // Both actions are hard to take back, so the row asks before acting.
@@ -22,7 +24,11 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
     setResult(null);
     startTransition(async () => {
       const { categorized } = await executeRule(rule.id);
-      setResult(categorized > 0 ? `${categorized} categorized` : "No matches");
+      setResult(
+        categorized > 0
+          ? t("rules.run.categorized", { count: categorized })
+          : t("rules.run.noMatches"),
+      );
     });
   }
 
@@ -38,7 +44,11 @@ export function useRuleRowActions(rule: CategoryRuleDTO) {
     setResult(null);
     startTransition(async () => {
       const { reverted } = await revertRule(rule.id);
-      setResult(reverted > 0 ? `${reverted} reverted` : "Nothing to revert");
+      setResult(
+        reverted > 0
+          ? t("rules.revert.done", { count: reverted })
+          : t("rules.revert.nothing"),
+      );
       setConfirmingRevert(false);
     });
   }

@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   type CategoryRuleDTO,
-  FIELD_LABELS,
-  OPERATOR_LABELS,
+  FIELD_LABEL_KEYS,
+  OPERATOR_LABEL_KEYS,
   formatConditionValue,
 } from "@/lib/rules/rule-dto";
 import { useRuleRowActions } from "@/components/rules/use-rule-row-actions";
@@ -16,6 +16,7 @@ import { useRuleOrder, type RuleOrderHandleProps } from "@/components/rules/use-
 import { RuleConfirmDialog } from "@/components/rules/rule-confirm-dialog";
 import type { Category } from "@/components/categorize/category-options";
 import { RuleEditDialog } from "@/components/rules/rule-edit-dialog";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface RulesDesktopViewProps {
   rules: CategoryRuleDTO[];
@@ -23,15 +24,14 @@ interface RulesDesktopViewProps {
 }
 
 export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
+  const t = useT();
   const { orderedRules, containerRef, handleProps, draggingId, error } =
     useRuleOrder(rules);
 
   if (rules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          No saved rules yet. Create your first rule above.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("rules.empty")}</p>
       </div>
     );
   }
@@ -43,13 +43,23 @@ export function RulesDesktopView({ rules, categories }: RulesDesktopViewProps) {
           <thead>
             <tr className="border-b bg-muted/30">
               <th className="px-2 py-2.5 w-8">
-                <span className="sr-only">Order</span>
+                <span className="sr-only">{t("rules.table.order")}</span>
               </th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">Active</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Conditions</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Target</th>
-              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Actions</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">
+                {t("rules.table.active")}
+              </th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                {t("rules.table.name")}
+              </th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">
+                {t("rules.table.conditions")}
+              </th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                {t("rules.table.target")}
+              </th>
+              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                {t("rules.table.actions")}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y" ref={containerRef}>
@@ -95,6 +105,7 @@ function RulesDesktopRow({
     handleDelete,
     handleToggleActive,
   } = useRuleRowActions(rule);
+  const t = useT();
   const [editing, setEditing] = useState(false);
 
   return (
@@ -104,33 +115,25 @@ function RulesDesktopRow({
     )}
     <RuleConfirmDialog
       open={confirmingRevert}
-      title={<>Revert &ldquo;{rule.name}&rdquo;?</>}
-      description={
-        <p>
-          Every transaction this rule categorized goes back to its previous
-          category, or becomes uncategorized. The rule itself is kept.
-        </p>
-      }
-      confirmLabel="Revert rule"
-      pendingLabel="Reverting…"
+      title={t("rules.revert.title", { name: rule.name })}
+      description={<p>{t("rules.revert.body")}</p>}
+      confirmLabel={t("rules.revert")}
+      pendingLabel={t("rules.reverting")}
       isPending={isPending}
       onCancel={cancelRevert}
       onConfirm={handleRevert}
     />
     <RuleConfirmDialog
       open={confirmingDelete}
-      title={<>Delete &ldquo;{rule.name}&rdquo;?</>}
+      title={t("rules.delete.title", { name: rule.name })}
       description={
         <>
-          <p>
-            Transactions it categorized keep their category, but lose the link to
-            this rule — so they can no longer be reverted.
-          </p>
-          <p>To stop the rule without losing it, switch it off instead.</p>
+          <p>{t("rules.delete.body1")}</p>
+          <p>{t("rules.delete.body2")}</p>
         </>
       }
-      confirmLabel="Delete rule"
-      pendingLabel="Deleting…"
+      confirmLabel={t("rules.delete")}
+      pendingLabel={t("common.deleting")}
       isPending={isPending}
       onCancel={cancelDelete}
       onConfirm={handleDelete}
@@ -156,11 +159,9 @@ function RulesDesktopRow({
           checked={rule.isActive}
           onCheckedChange={handleToggleActive}
           disabled={isPending}
-          aria-label={rule.isActive ? "Disable rule" : "Enable rule"}
+          aria-label={rule.isActive ? t("rules.toggle.disable") : t("rules.toggle.enable")}
           title={
-            rule.isActive
-              ? "Disable rule — it stays saved but stops running"
-              : "Enable rule"
+            rule.isActive ? t("rules.toggle.disableHelp") : t("rules.toggle.enable")
           }
         />
       </td>
@@ -170,17 +171,17 @@ function RulesDesktopRow({
         <div className="flex items-center gap-2">
           <span className="font-medium">{rule.name}</span>
           {!rule.isActive && (
-            <Badge variant="secondary" className="text-xs">Disabled</Badge>
+            <Badge variant="secondary" className="text-xs">{t("rules.disabled")}</Badge>
           )}
           {rule.neverMatched && (
             <Badge variant="outline" className="text-xs text-warning border-warning">
-              Never matched
+              {t("rules.neverMatched")}
             </Badge>
           )}
         </div>
         {rule.lastRunAt && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            {rule.matchCount} matched
+            {t("rules.matchedCount", { count: rule.matchCount })}
           </p>
         )}
         {result && (
@@ -192,15 +193,18 @@ function RulesDesktopRow({
       <td className="px-4 py-3 hidden lg:table-cell">
         <div className="flex flex-wrap items-center gap-1">
           <span className="text-xs font-medium text-muted-foreground">
-            {rule.match === "OR" ? "Any" : "All"}
+            {rule.match === "OR" ? t("rules.match.any") : t("rules.match.all")}
           </span>
           {rule.conditions.slice(0, 2).map((c, i) => (
             <span
               key={i}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded px-2 py-0.5"
             >
-              <span className="font-medium">{FIELD_LABELS[c.field]}</span>
-              <span>{c.negate ? "not " : ""}{OPERATOR_LABELS[c.operator]}</span>
+              <span className="font-medium">{t(FIELD_LABEL_KEYS[c.field])}</span>
+              <span>
+                {c.negate ? t("rules.negatePrefix") : ""}
+                {t(OPERATOR_LABEL_KEYS[c.operator])}
+              </span>
               <span className="font-medium truncate max-w-[80px]">
                 &quot;{formatConditionValue(c)}&quot;
               </span>
@@ -208,7 +212,7 @@ function RulesDesktopRow({
           ))}
           {rule.conditions.length > 2 && (
             <span className="text-xs text-muted-foreground">
-              +{rule.conditions.length - 2} more
+              {t("rules.more", { count: rule.conditions.length - 2 })}
             </span>
           )}
         </div>
@@ -219,7 +223,7 @@ function RulesDesktopRow({
         <div className="space-y-0.5">
           {rule.sourceCategoryName && (
             <p className="text-xs text-muted-foreground">
-              From:{" "}
+              {t("rules.from")}{" "}
               <span style={{ color: rule.sourceCategoryColor ?? undefined }}>
                 {rule.sourceCategoryName}
               </span>
@@ -244,8 +248,8 @@ function RulesDesktopRow({
             onClick={() => setEditing(true)}
             disabled={isPending}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="Edit rule"
-            title="Edit rule"
+            aria-label={t("rules.edit")}
+            title={t("rules.edit")}
           >
             <Pencil className="h-3.5 w-3.5" />
           </Button>
@@ -256,12 +260,8 @@ function RulesDesktopRow({
             onClick={handleExecute}
             disabled={isPending || !rule.isActive}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="Run rule now"
-            title={
-              rule.isActive
-                ? "Run rule now"
-                : "Disabled — turn it on to run it"
-            }
+            aria-label={t("rules.run")}
+            title={rule.isActive ? t("rules.run") : t("rules.run.disabled")}
           >
             <Play className="h-3.5 w-3.5" />
           </Button>
@@ -272,8 +272,8 @@ function RulesDesktopRow({
             onClick={requestRevert}
             disabled={isPending}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="Revert rule"
-            title="Revert rule"
+            aria-label={t("rules.revert")}
+            title={t("rules.revert")}
           >
             <Undo2 className="h-3.5 w-3.5" />
           </Button>
@@ -284,8 +284,8 @@ function RulesDesktopRow({
             onClick={requestDelete}
             disabled={isPending}
             className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            aria-label="Delete rule"
-            title="Delete rule"
+            aria-label={t("rules.delete")}
+            title={t("rules.delete")}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>

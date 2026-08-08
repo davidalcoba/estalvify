@@ -17,6 +17,7 @@ import {
   hasConditionValue,
 } from "@/lib/rules/rule-dto";
 import { updateRule } from "@/app/(app)/rules/actions";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface RuleEditDialogProps {
   rule: CategoryRuleDTO;
@@ -33,6 +34,7 @@ function defaultCondition(): RuleCondition {
 }
 
 export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProps) {
+  const t = useT();
   const [name, setName] = useState(rule.name);
   const [match, setMatch] = useState<ConditionGroupOp>(rule.match);
   const [conditions, setConditions] = useState<RuleCondition[]>(
@@ -62,7 +64,7 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
         });
         onClose();
       } catch {
-        setError("Failed to save rule. Please try again.");
+        setError(t("rules.editDialog.saveFailed"));
       }
     });
   }
@@ -82,12 +84,12 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
         className="max-h-[85vh] gap-0 overflow-hidden pt-8 sm:w-[min(96vw,720px)] sm:max-w-[min(96vw,720px)]"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogTitle>Edit rule</DialogTitle>
+        <DialogTitle>{t("rules.editDialog.title")}</DialogTitle>
 
         <div className="space-y-5 overflow-y-auto pr-1 mt-4">
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Rule name</label>
+            <label className="text-sm font-medium">{t("rules.name")}</label>
             <input
               type="text"
               value={name}
@@ -101,12 +103,12 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
             // Nested groups can't round-trip through the one-level editor, so
             // show them rather than silently flattening and losing the rule.
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Conditions</label>
+              <label className="text-sm font-medium">{t("rules.table.conditions")}</label>
               <pre className="max-h-48 overflow-auto rounded-md border bg-muted/40 p-3 text-xs">
                 {JSON.stringify(rule.conditionTree, null, 2)}
               </pre>
               <p className="text-sm text-muted-foreground">
-                Nested groups — edit via MCP.
+                {t("rules.editDialog.nested")}
               </p>
             </div>
           ) : (
@@ -132,20 +134,20 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
                 className="gap-1.5"
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add condition
+                {t("rules.addCondition")}
               </Button>
             </div>
           )}
 
           {/* Target category */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Categorize as</label>
+            <label className="text-sm font-medium">{t("rules.categorizeAsLabel")}</label>
             <CategorySelect
               value={categoryId}
               onValueChange={setCategoryId}
               categories={categories}
-              placeholder="— Select category —"
-              ariaLabel="Categorize as"
+              placeholder={t("rules.selectCategory")}
+              ariaLabel={t("rules.categorizeAsLabel")}
               className="w-full"
             />
           </div>
@@ -154,11 +156,11 @@ export function RuleEditDialog({ rule, categories, onClose }: RuleEditDialogProp
 
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button className="flex-1 gap-2" onClick={handleSave} disabled={!canSave}>
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </div>

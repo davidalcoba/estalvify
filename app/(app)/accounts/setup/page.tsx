@@ -6,8 +6,12 @@ import { AccountSelectionForm } from "@/components/accounts/account-selection-fo
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2 } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Select accounts" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("accounts.setup.metaTitle") };
+}
 
 type PendingAccount = {
   uid: string;
@@ -23,6 +27,7 @@ export default async function SetupPage({
   searchParams: Promise<{ connectionId?: string }>;
 }) {
   const { dataUserId } = await requireScope("read");
+  const t = await getT();
   const { connectionId } = await searchParams;
 
   if (!connectionId) redirect("/accounts");
@@ -55,7 +60,7 @@ export default async function SetupPage({
 
   return (
     <div className="max-w-lg space-y-6">
-      <PageHeader title={`Select accounts · ${connection.bankName}`} />
+      <PageHeader title={t("accounts.setup.title", { bank: connection.bankName })} />
 
       <Card>
         <CardHeader className="pb-3">
@@ -66,8 +71,9 @@ export default async function SetupPage({
             <div>
               <CardTitle className="text-base">{connection.bankName}</CardTitle>
               <CardDescription className="text-xs">
-                {accounts.length} account{accounts.length !== 1 ? "s" : ""} available
-                {importedUids.size > 0 && ` · ${importedUids.size} already imported`}
+                {t.plural("accounts.setup.available", accounts.length)}
+                {importedUids.size > 0 &&
+                  t("accounts.setup.alreadyImported", { count: importedUids.size })}
               </CardDescription>
             </div>
           </div>
