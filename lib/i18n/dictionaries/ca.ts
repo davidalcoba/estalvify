@@ -14,25 +14,13 @@ export const ca: Dictionary = {
   "common.deleting": "S’està eliminant…",
   "common.edit": "Edita",
   "common.remove": "Treu",
-  "common.confirm": "Confirma",
-  "common.back": "Torna",
   "common.retry": "Torna-ho a provar",
-  "common.loading": "S’està carregant…",
-  "common.search": "Cerca",
   "common.clear": "Neteja",
   "common.apply": "Aplica",
-  "common.applying": "S’està aplicant…",
-  "common.all": "Tot",
-  "common.none": "Cap",
-  "common.yes": "Sí",
-  "common.no": "No",
-  "common.today": "Avui",
-  "common.optional": "Opcional",
   "common.previous": "Anterior",
   "common.next": "Següent",
   "common.error": "Alguna cosa ha anat malament",
   "common.dismiss": "Descarta",
-  "common.readOnly": "Només lectura",
 
   // ─────────────────────────── shell / navigation ───────────────────────────
   "app.name": "Estalvify",
@@ -75,16 +63,10 @@ export const ca: Dictionary = {
 
   // ─────────────────────────── error / fallback pages ───────────────────────────
   "error.title": "Alguna cosa ha anat malament",
-  "error.body":
-    "S’ha produït un error inesperat. Torna-ho a provar o torna al tauler.",
-  "error.digest": "Referència: {digest}",
   "error.backToDashboard": "Torna al tauler",
   "notFound.title": "Pàgina no trobada",
   "notFound.body": "Aquesta pàgina no existeix o s’ha mogut a un altre lloc.",
   "offline.title": "Estàs sense connexió",
-  "offline.body":
-    "Estalvify necessita connexió per carregar els teus comptes. Aquesta pàgina tornarà a funcionar quan recuperis la connexió.",
-  "offline.retry": "Torna-ho a provar",
 
   // ─────────────────────────── notifications ───────────────────────────
   "notifications.title": "Notificacions",
@@ -92,13 +74,11 @@ export const ca: Dictionary = {
   "notifications.allCaughtUp": "No tens res pendent.",
   "notifications.unread": "Sense llegir",
   "notifications.checkNow": "Comprova-ho ara",
-  "notifications.checking": "S’està comprovant…",
   "notifications.empty.title": "Sense notificacions",
   "notifications.empty.body":
     "Aquí apareixen els avisos sobre càrrecs pròxims, accessos bancaris que caduquen i límits de pressupost.",
   "notifications.filter.all": "Totes",
   "notifications.filter.unread": "Sense llegir",
-  "notifications.markRead": "Marca com a llegida",
   "notifications.time.now": "ara mateix",
   "notifications.time.minutes": "fa {count} min",
   "notifications.time.hours": "fa {count} h",
@@ -774,4 +754,36 @@ export const ca: Dictionary = {
   "recurring.form.active": "Activa",
   "recurring.delete.title": "Vols eliminar la sèrie?",
   "recurring.delete.body": "S’eliminen {name} i els seus càrrecs previstos pendents.",
+
+  // ─────────────────────────── ui primitives ───────────────────────────
+  "ui.toggleSidebar": "Mostra o amaga la barra lateral",
+
+  // ─────────────────────────── generated notifications ───────────────────────────
+  "notif.when.today": "avui",
+  "notif.when.tomorrow": "demà",
+  "notif.when.inDays": "d’aquí a {count} dies",
+  "notif.recurring.debit": "Càrrec de {amount} {when}.",
+  "notif.recurring.credit": "Entrada de {amount} {when}.",
+  "notif.consent.title": "L’accés a {bank} caduca {when}",
+  "notif.consent.body": "Reconnecta abans del {date} o la sincronització s’aturarà.",
+  "notif.stale.title": "{account} sembla aturat",
+  "notif.stale.body": "Res de nou en {days} dies. Potser cal reconnectar.",
+  "notif.cashflow.title": "{account} no cobrirà els pròxims càrrecs",
+  "notif.cashflow.body": "Baixa a {balance} {when}. Afegeix-hi {topUp} per cobrir-ho.",
+  "notif.cashflow.when.tomorrow": "demà",
+  "notif.cashflow.when.inDays": "d’aquí a {count} dies ({date})",
+
+  "insights.notConfigured.body":
+    "L’anàlisi amb IA no està configurada. Defineix ANTHROPIC_API_KEY (i opcionalment AI_MODEL) per activar-la.",
+  "insights.error.body": "Ara mateix no s’ha pogut generar l’anàlisi. Torna-ho a provar.",
+
+  "notif.amountChange.up": "{name} ha pujat un {pct}%",
+  "notif.amountChange.down": "{name} ha baixat un {pct}%",
+  "notif.amountChange.body":
+    "El càrrec ha arribat per {actual} davant dels {expected} previstos. Si el preu nou és definitiu, actualitza la sèrie perquè el mes vinent l’esperi.",
+  "notif.missed.title": "Falta: {name}",
+  "notif.missed.body.debit":
+    "Un càrrec previst de {amount} no ha arribat en la seva finestra de {month}/{year}. Revisa la factura o la sincronització del banc.",
+  "notif.missed.body.credit":
+    "Un ingrés previst de {amount} no ha arribat en la seva finestra de {month}/{year}. Revisa el cobrament o la sincronització del banc.",
 };

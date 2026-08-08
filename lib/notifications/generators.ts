@@ -4,6 +4,13 @@
 
 import type { NotificationType, NotificationSeverity } from "@/app/generated/prisma";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import type { Translator } from "@/lib/i18n/translate";
+
+// Notification copy is written in the HOUSEHOLD OWNER's language, not the
+// reader's: a spec is persisted once, shared by every member and pushed to
+// their phones, so there is no per-reader render to translate at. Callers pass
+// the translator (lib/notifications/generate.ts builds it from the owner's
+// `language`); these functions stay pure.
 
 /** Whole-day difference between two ISO dates (UTC). */
 function daysBetween(a: string, b: string): number {
@@ -49,6 +56,7 @@ export function upcomingRecurringNotifications(
   today: string,
   currency: string,
   locale: string,
+  t: Translator,
   horizonDays = 5
 ): NotificationSpec[] {
   const specs: NotificationSpec[] = [];
@@ -57,15 +65,22 @@ export function upcomingRecurringNotifications(
     const days = daysBetween(today, item.nextExpectedDate);
     if (days < 0 || days > horizonDays) continue;
 
-    const when = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+    const when =
+      days === 0
+        ? t("notif.when.today")
+        : days === 1
+          ? t("notif.when.tomorrow")
+          : t("notif.when.inDays", { count: days });
     const amount = formatCurrency(item.averageAmount, currency, locale);
-    const lead = item.direction === "CREDIT" ? "Incoming" : "Charge of";
 
     specs.push({
       type: "RECURRING_UPCOMING",
       severity: "INFO",
       title: item.displayName,
-      body: `${lead} ${amount} ${when}.`,
+      body: t(
+        item.direction === "CREDIT" ? "notif.recurring.credit" : "notif.recurring.debit",
+        { amount, when },
+      ),
       dedupeKey: `recurring-due:${item.merchantKey}:${item.nextExpectedDate}`,
       metadata: { merchantKey: item.merchantKey },
     });
@@ -103,7 +118,8 @@ const CONSENT_STEP_SEVERITY: Record<number, NotificationSeverity> = {
 export function consentExpiringNotifications(
   connections: ConsentInput[],
   today: string,
-  language: string
+  language: string,
+  t: Translator
 ): NotificationSpec[] {
   const specs: NotificationSpec[] = [];
   for (const conn of connections) {
@@ -117,7 +133,11 @@ export function consentExpiringNotifications(
     if (step === undefined) continue;
 
     const when =
-      daysLeft === 0 ? "today" : daysLeft === 1 ? "tomorrow" : `in ${daysLeft} days`;
+      daysLeft === 0
+        ? t("notif.when.today")
+        : daysLeft === 1
+          ? t("notif.when.tomorrow")
+          : t("notif.when.inDays", { count: daysLeft });
     const expiryLabel = formatDate(
       new Date(`${conn.consentExpiresAt}T00:00:00Z`),
       language,
@@ -127,8 +147,8 @@ export function consentExpiringNotifications(
     specs.push({
       type: "CONSENT_EXPIRING",
       severity: CONSENT_STEP_SEVERITY[step] ?? "WARNING",
-      title: `${conn.bankName} access expires ${when}`,
-      body: `Reconnect before ${expiryLabel} or syncing stops.`,
+      title: t("notif.consent.title", { bank: conn.bankName, when }),
+      body: t("notif.consent.body", { date: expiryLabel }),
       dedupeKey: `consent-expiring:${conn.connectionId}:${step}`,
       metadata: { connectionId: conn.connectionId, daysLeft: String(daysLeft) },
     });
@@ -166,6 +186,7 @@ export function isoYearWeek(date: string): string {
 export function staleTransactionNotifications(
   accounts: StaleAccountInput[],
   today: string,
+  t: Translator,
   thresholdDays = 3
 ): NotificationSpec[] {
   const specs: NotificationSpec[] = [];
@@ -178,8 +199,8 @@ export function staleTransactionNotifications(
     specs.push({
       type: "NO_TRANSACTIONS",
       severity: days >= thresholdDays * 3 ? "ALERT" : "WARNING",
-      title: `${account.accountName} looks stalled`,
-      body: `Nothing new in ${days} days. The connection may need reconnecting.`,
+      title: t("notif.stale.title", { account: account.accountName }),
+      body: t("notif.stale.body", { days }),
       dedupeKey: `no-transactions:${account.accountId}:${isoYearWeek(today)}`,
       metadata: { accountId: account.accountId, staleDays: String(days) },
     });
@@ -208,17 +229,27 @@ export function cashflowBreachNotifications(
   threshold: number,
   today: string,
   currency: string,
-  locale: string
+  locale: string,
+  t: Translator
 ): NotificationSpec[] {
   return breaches.map((b) => {
     const topUp = Math.ceil(threshold - b.minBalance);
     const when =
-      b.daysAway === 1 ? "tomorrow" : `in ${b.daysAway} days (${b.breachDate})`;
+      b.daysAway === 1
+        ? t("notif.cashflow.when.tomorrow")
+        : t("notif.cashflow.when.inDays", {
+            count: b.daysAway,
+            date: b.breachDate,
+          });
     return {
       type: "LOW_BALANCE_PROJECTED" as NotificationType,
       severity: (b.daysAway <= 7 ? "ALERT" : "WARNING") as NotificationSeverity,
-      title: `${b.accountName} won't cover upcoming charges`,
-      body: `Down to ${formatCurrency(b.breachBalance, currency, locale)} ${when}. Add ${formatCurrency(topUp, currency, locale)} to cover it.`,
+      title: t("notif.cashflow.title", { account: b.accountName }),
+      body: t("notif.cashflow.body", {
+        balance: formatCurrency(b.breachBalance, currency, locale),
+        when,
+        topUp: formatCurrency(topUp, currency, locale),
+      }),
       dedupeKey: `cashflow-low:${b.accountId}:${isoYearWeek(today)}`,
       metadata: {
         accountId: b.accountId,

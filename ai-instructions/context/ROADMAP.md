@@ -350,6 +350,24 @@ cambio). Marca el estado aquí al terminar.
   para App Store, 99 USD/año — Apple rechaza envoltorios web puros por la
   guideline 4.2).
 
+- [x] **App multiidioma (en / es / ca)** ✅ — interfaz traducible con diccionarios
+  tipados en `lib/i18n/`, sin librería de runtime y sin locale en la URL: el
+  idioma es una preferencia por miembro. No se añadió columna nueva —
+  `User.language`, que ya elegía el idioma de las fechas, pasa a elegir también
+  el de la interfaz (`resolveUiLocale`: `es-*` → es, `ca-*` → ca, el resto →
+  inglés; el default `en-GB` deja el idioma de todo el mundo como estaba). El
+  chequeo de cobertura es `npm run typecheck`, porque `Dictionary` es
+  `Record<MessageKey, string>`; los tests cubren lo que los tipos no ven
+  (cadenas vacías, `{placeholders}` perdidos al traducir, plurales a medias).
+  Las notificaciones persistidas se escriben en el idioma del **propietario**
+  del household (una fila, todos los miembros la leen), y las páginas legales
+  viven como documento por idioma en `lib/legal/content/` — las versiones ES/CA
+  son traducciones del borrador inglés y siguen igual de pendientes de revisión
+  legal.
+  **Fuera de alcance:** traducir las categorías por defecto que se siembran en
+  la base de datos (son datos del usuario, editables desde Ajustes), y las
+  descripciones de las herramientas MCP (las lee un modelo, no una persona).
+
 **Dependencias:** F1 y F4 dependen de F0. F3 depende de F1 (para la alerta de
 presupuesto). F5 depende de F0 + F2. F6 se apoya en F0 + F1 (y mejora con F2/F5).
 

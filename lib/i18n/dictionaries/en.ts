@@ -23,25 +23,13 @@ export const en = {
   "common.deleting": "Deleting…",
   "common.edit": "Edit",
   "common.remove": "Remove",
-  "common.confirm": "Confirm",
-  "common.back": "Back",
   "common.retry": "Try again",
-  "common.loading": "Loading…",
-  "common.search": "Search",
   "common.clear": "Clear",
   "common.apply": "Apply",
-  "common.applying": "Applying…",
-  "common.all": "All",
-  "common.none": "None",
-  "common.yes": "Yes",
-  "common.no": "No",
-  "common.today": "Today",
-  "common.optional": "Optional",
   "common.previous": "Previous",
   "common.next": "Next",
   "common.error": "Something went wrong",
   "common.dismiss": "Dismiss",
-  "common.readOnly": "Read-only",
 
   // ─────────────────────────── shell / navigation ───────────────────────────
   "app.name": "Estalvify",
@@ -83,15 +71,10 @@ export const en = {
 
   // ─────────────────────────── error / fallback pages ───────────────────────────
   "error.title": "Something went wrong",
-  "error.body": "An unexpected error occurred. Try again, or go back to the dashboard.",
-  "error.digest": "Reference: {digest}",
   "error.backToDashboard": "Back to dashboard",
   "notFound.title": "Page not found",
   "notFound.body": "That page doesn’t exist, or it moved somewhere else.",
   "offline.title": "You’re offline",
-  "offline.body":
-    "Estalvify needs a connection to load your accounts. This page will work again as soon as you’re back online.",
-  "offline.retry": "Try again",
 
   // ─────────────────────────── notifications ───────────────────────────
   "notifications.title": "Notifications",
@@ -99,13 +82,11 @@ export const en = {
   "notifications.allCaughtUp": "You’re all caught up.",
   "notifications.unread": "Unread",
   "notifications.checkNow": "Check now",
-  "notifications.checking": "Checking…",
   "notifications.empty.title": "No notifications",
   "notifications.empty.body":
     "Alerts about upcoming charges, expiring bank access and budget limits show up here.",
   "notifications.filter.all": "All",
   "notifications.filter.unread": "Unread",
-  "notifications.markRead": "Mark as read",
   "notifications.time.now": "just now",
   "notifications.time.minutes": "{count}m ago",
   "notifications.time.hours": "{count}h ago",
@@ -768,6 +749,38 @@ export const en = {
   "recurring.form.active": "Active",
   "recurring.delete.title": "Delete series?",
   "recurring.delete.body": "{name} and its pending expected charges are removed.",
+
+  // ─────────────────────────── ui primitives ───────────────────────────
+  "ui.toggleSidebar": "Toggle sidebar",
+
+  // ─────────────────────────── generated notifications ───────────────────────────
+  "notif.when.today": "today",
+  "notif.when.tomorrow": "tomorrow",
+  "notif.when.inDays": "in {count} days",
+  "notif.recurring.debit": "Charge of {amount} {when}.",
+  "notif.recurring.credit": "Incoming {amount} {when}.",
+  "notif.consent.title": "{bank} access expires {when}",
+  "notif.consent.body": "Reconnect before {date} or syncing stops.",
+  "notif.stale.title": "{account} looks stalled",
+  "notif.stale.body": "Nothing new in {days} days. The connection may need reconnecting.",
+  "notif.cashflow.title": "{account} won’t cover upcoming charges",
+  "notif.cashflow.body": "Down to {balance} {when}. Add {topUp} to cover it.",
+  "notif.cashflow.when.tomorrow": "tomorrow",
+  "notif.cashflow.when.inDays": "in {count} days ({date})",
+
+  "insights.notConfigured.body":
+    "AI insights aren’t configured. Set ANTHROPIC_API_KEY (and optionally AI_MODEL) to enable them.",
+  "insights.error.body": "Couldn’t generate insights right now. Please try again.",
+
+  "notif.amountChange.up": "{name} went up {pct}%",
+  "notif.amountChange.down": "{name} went down {pct}%",
+  "notif.amountChange.body":
+    "The charge arrived at {actual} against an expected {expected}. If the new price is permanent, update the series so next month expects it.",
+  "notif.missed.title": "Missing: {name}",
+  "notif.missed.body.debit":
+    "An expected charge of {amount} didn’t arrive in its {month}/{year} window. Check the bill — or the bank sync.",
+  "notif.missed.body.credit":
+    "An expected income of {amount} didn’t arrive in its {month}/{year} window. Check the bill — or the bank sync.",
 } as const;
 
 export type MessageKey = keyof typeof en;

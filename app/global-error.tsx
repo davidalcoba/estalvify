@@ -3,6 +3,11 @@
 // Last-resort boundary for errors thrown in the root layout itself. It replaces
 // the whole document, so it renders its own <html>/<body> and avoids depending
 // on app providers or theme tokens that may not have mounted.
+//
+// Deliberately NOT translated: <I18nProvider> is mounted by the root layout,
+// which is exactly what has just failed, so `useT()` here would throw inside an
+// error boundary. English is the honest fallback for the one screen that only
+// appears when the app is already broken.
 
 import { useEffect } from "react";
 

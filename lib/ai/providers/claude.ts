@@ -3,7 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { AiProvider, AiRecommendation, FinancialSummary } from "../types";
 import { AiNotConfiguredError } from "../types";
-import { summaryToPrompt, RECOMMENDATIONS_SYSTEM_PROMPT } from "../summary";
+import { summaryToPrompt, recommendationsSystemPrompt } from "../summary";
 import { parseRecommendations } from "../parse";
 
 const DEFAULT_MODEL = "claude-opus-5";
@@ -13,7 +13,7 @@ const DEFAULT_MODEL = "claude-opus-5";
  * stays server-side. Throws AiNotConfiguredError when no key is set so callers
  * can degrade gracefully.
  */
-export function createClaudeProvider(locale: string): AiProvider {
+export function createClaudeProvider(locale: string, language: string): AiProvider {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new AiNotConfiguredError("ANTHROPIC_API_KEY is not set");
@@ -36,7 +36,7 @@ export function createClaudeProvider(locale: string): AiProvider {
       const message = await client.messages.create({
         model,
         max_tokens: 4096,
-        system: RECOMMENDATIONS_SYSTEM_PROMPT,
+        system: recommendationsSystemPrompt(language),
         messages: [{ role: "user", content: userPrompt }],
       });
 

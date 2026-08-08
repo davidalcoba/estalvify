@@ -348,6 +348,66 @@ individually: `PendingBadge` takes a `Promise<number>` and resolves it with
 `NotificationBellData` inside `<Suspense>`. Keep it that way — adding an `await`
 for domain data to this layout re-blocks every page in the app.
 
+## Internationalization
+
+The interface exists in **English, Castellano and Català**, chosen from
+Settings → Language.
+
+**There is no separate "app language" column.** `User.language` already existed
+as a personal preference driving date rendering (`lib/user-prefs.ts`), so it is
+now THE language setting: `lib/i18n/locales.ts` maps its BCP-47 tag onto a
+translated locale (`es-*` → `es`, `ca-*` → `ca`, everything else → `en`). The
+schema default is `en-GB`, which maps to English, so shipping this changed
+nobody's app. A tag we do not translate still changes the DATES — the Settings
+option says so rather than pretending otherwise.
+
+- `lib/i18n/dictionaries/{en,es,ca}.ts` — flat, dotted keys. `en` is the source
+  and `Dictionary = Record<MessageKey, string>`, so **a missing translation is
+  a typecheck failure**, not a runtime fallback. `lib/i18n/locales.test.ts`
+  covers what types cannot: blank values, a `{placeholder}` dropped in
+  translation, half a plural pair.
+- `lib/i18n/translate.ts` — the translator: `{name}` interpolation plus
+  `t.plural(base, n)` over `base.one` / `base.other`. It imports **no**
+  dictionary; it is handed a message map.
+- `lib/i18n/server.ts` — `await getT()` / `getUiLocale()`, resolved from the
+  SESSION (not `getScope()`), so the auth and legal routes can use it too, and
+  request-cached. `getUiLocale` never throws: it runs in the root layout, and a
+  database hiccup must not take /login and /offline down with it.
+- `components/i18n/i18n-provider.tsx` — `useT()` for client components. Mounted
+  once in `app/layout.tsx` with **only the active locale's** messages, so a
+  Catalan session does not also download English and Spanish.
+- `components/i18n/rich-text.tsx` — `<RichText>` renders a message whose
+  `{placeholders}` are React nodes (a link, an icon), so a sentence with a link
+  in the middle stays one translatable string.
+- `lib/errors.ts` — `AppError("<message.key>")` lets a pure/domain module name
+  a failure and leave the wording to the request boundary
+  (`describeError(err, await getT())`).
+
+Two rules decide WHOSE language a string is in:
+
+- **Rendered** copy follows the ACTING member — same personal-preference rule
+  as dates and number formats.
+- **Persisted** copy follows the household OWNER. A notification is one row
+  read by every member and pushed to their phones; there is no per-reader
+  render to translate at, so `lib/notifications/generate.ts` and
+  `lib/planned/engine.ts` build a translator from the owner's `language`. The
+  pure generators take it as a parameter and stay pure.
+
+`app/global-error.tsx` is deliberately untranslated: it replaces the root
+layout — the very thing that mounts the provider — so it can only be reached
+when translation is unavailable.
+
+AI insights are prose, so the model is told to answer in the member's language
+(`recommendationsSystemPrompt(languageTag)`), including tags the interface
+itself is not translated into.
+
+The legal pages do not use the dictionaries. A privacy policy is continuous
+prose that has to be READ end to end by whoever signs it off, so each locale
+gets a document (`lib/legal/content/{en,es,ca}.ts`, typed by
+`lib/legal/types.ts`) behind one renderer. The ES/CA versions are translations
+of the English draft and carry the same "pending legal review" status — a
+change to one is a change to all three.
+
 ## Notifications
 
 Two delivery channels over one domain layer. `lib/notifications/generators.ts`
@@ -499,7 +559,9 @@ Three constraints worth knowing before touching this:
     `locale` (number format — decimal/thousands separators) is passed to
     `formatCurrency`; `language` (date language, default `en-GB`) is passed to
     `formatDate`. Never reuse `locale` for dates — pass `language` (threaded to
-    client components as a `dateLocale`/`userLanguage` prop). Both are editable in
+    client components as a `dateLocale`/`userLanguage` prop). `language` also
+    picks the INTERFACE language — see "Internationalization" below; `locale`
+    never does. Both are editable in
     Settings ("Number format" and "Language"). Since multi-user phase 5,
     `getUserPrefs(dataUserId, actorUserId)` is THE module that splits personal
     from household prefs: `locale`/`language`/`timezone` come from the ACTING

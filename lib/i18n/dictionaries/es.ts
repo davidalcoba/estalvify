@@ -14,25 +14,13 @@ export const es: Dictionary = {
   "common.deleting": "Eliminando…",
   "common.edit": "Editar",
   "common.remove": "Quitar",
-  "common.confirm": "Confirmar",
-  "common.back": "Volver",
   "common.retry": "Reintentar",
-  "common.loading": "Cargando…",
-  "common.search": "Buscar",
   "common.clear": "Limpiar",
   "common.apply": "Aplicar",
-  "common.applying": "Aplicando…",
-  "common.all": "Todo",
-  "common.none": "Ninguno",
-  "common.yes": "Sí",
-  "common.no": "No",
-  "common.today": "Hoy",
-  "common.optional": "Opcional",
   "common.previous": "Anterior",
   "common.next": "Siguiente",
   "common.error": "Algo ha ido mal",
   "common.dismiss": "Descartar",
-  "common.readOnly": "Solo lectura",
 
   // ─────────────────────────── shell / navigation ───────────────────────────
   "app.name": "Estalvify",
@@ -75,16 +63,10 @@ export const es: Dictionary = {
 
   // ─────────────────────────── error / fallback pages ───────────────────────────
   "error.title": "Algo ha ido mal",
-  "error.body":
-    "Se ha producido un error inesperado. Vuelve a intentarlo o regresa al panel.",
-  "error.digest": "Referencia: {digest}",
   "error.backToDashboard": "Volver al panel",
   "notFound.title": "Página no encontrada",
   "notFound.body": "Esta página no existe o se ha movido a otro sitio.",
   "offline.title": "Estás sin conexión",
-  "offline.body":
-    "Estalvify necesita conexión para cargar tus cuentas. Esta página volverá a funcionar en cuanto recuperes la conexión.",
-  "offline.retry": "Reintentar",
 
   // ─────────────────────────── notifications ───────────────────────────
   "notifications.title": "Notificaciones",
@@ -92,13 +74,11 @@ export const es: Dictionary = {
   "notifications.allCaughtUp": "No tienes nada pendiente.",
   "notifications.unread": "Sin leer",
   "notifications.checkNow": "Comprobar ahora",
-  "notifications.checking": "Comprobando…",
   "notifications.empty.title": "Sin notificaciones",
   "notifications.empty.body":
     "Aquí aparecen los avisos sobre cargos próximos, accesos bancarios que caducan y límites de presupuesto.",
   "notifications.filter.all": "Todas",
   "notifications.filter.unread": "Sin leer",
-  "notifications.markRead": "Marcar como leída",
   "notifications.time.now": "ahora mismo",
   "notifications.time.minutes": "hace {count} min",
   "notifications.time.hours": "hace {count} h",
@@ -776,4 +756,37 @@ export const es: Dictionary = {
   "recurring.form.active": "Activa",
   "recurring.delete.title": "¿Eliminar la serie?",
   "recurring.delete.body": "Se eliminan {name} y sus cargos previstos pendientes.",
+
+  // ─────────────────────────── ui primitives ───────────────────────────
+  "ui.toggleSidebar": "Mostrar u ocultar la barra lateral",
+
+  // ─────────────────────────── generated notifications ───────────────────────────
+  "notif.when.today": "hoy",
+  "notif.when.tomorrow": "mañana",
+  "notif.when.inDays": "dentro de {count} días",
+  "notif.recurring.debit": "Cargo de {amount} {when}.",
+  "notif.recurring.credit": "Entrada de {amount} {when}.",
+  "notif.consent.title": "El acceso a {bank} caduca {when}",
+  "notif.consent.body": "Reconecta antes del {date} o la sincronización se detendrá.",
+  "notif.stale.title": "{account} parece parada",
+  "notif.stale.body": "Nada nuevo en {days} días. Puede que haya que reconectar.",
+  "notif.cashflow.title": "{account} no cubrirá los próximos cargos",
+  "notif.cashflow.body": "Baja a {balance} {when}. Añade {topUp} para cubrirlo.",
+  "notif.cashflow.when.tomorrow": "mañana",
+  "notif.cashflow.when.inDays": "dentro de {count} días ({date})",
+
+  "insights.notConfigured.body":
+    "El análisis con IA no está configurado. Define ANTHROPIC_API_KEY (y opcionalmente AI_MODEL) para activarlo.",
+  "insights.error.body":
+    "Ahora mismo no se ha podido generar el análisis. Inténtalo de nuevo.",
+
+  "notif.amountChange.up": "{name} ha subido un {pct}%",
+  "notif.amountChange.down": "{name} ha bajado un {pct}%",
+  "notif.amountChange.body":
+    "El cargo ha llegado por {actual} frente a los {expected} previstos. Si el precio nuevo es definitivo, actualiza la serie para que el mes que viene lo espere.",
+  "notif.missed.title": "Falta: {name}",
+  "notif.missed.body.debit":
+    "Un cargo previsto de {amount} no ha llegado en su ventana de {month}/{year}. Revisa la factura o la sincronización del banco.",
+  "notif.missed.body.credit":
+    "Un ingreso previsto de {amount} no ha llegado en su ventana de {month}/{year}. Revisa el cobro o la sincronización del banco.",
 };
