@@ -1,0 +1,134 @@
+name: Prune merged branch
+
+# A feature branch is throwaway, but nothing throws it away: it leaves a git ref
+# behind on GitHub and a `preview/<git-branch>` Neon branch behind on the free
+# plan's 10-branch cap. Once the cap is reached the Neon–Vercel integration
+# cannot provision and *every* new preview fails with `Resource provisioning
+# failed` before the build runs — measured 2026-08-08, with six orphans from
+# already-merged pull requests holding the slots.
+#
+# Release path is feature branch → `preview` → `main`, so a branch has done its
+# job the moment it lands on `preview`. That is when both copies go.
+#
+# Two jobs, because they answer to different things:
+#
+#   • The Neon branch is a quota. It is reclaimed whenever a pull request closes,
+#     merged or abandoned — an abandoned branch holds a slot just as hard, and
+#     the integration recreates the branch from `main` on the next deployment of
+#     that git branch, so the only thing lost is throwaway preview data.
+#   • The git branch is history. It is deleted only on a real merge into
+#     `preview`, never on an abandoned pull request, where the ref is the only
+#     thing still holding the commits.
+#
+# Neither job ever touches `main`, `preview` or a fork's branch. In particular
+# the `preview` → `main` release pull request must fall through both: deleting
+# `preview` would take the release candidate, its fixed URL and its Neon branch
+# with it. That is also why GitHub's own "Automatically delete head branches"
+# repository setting is the wrong tool here — it has no idea `preview` is
+# special, and would delete it on every release.
+#
+# Note the resolution rule for `pull_request: closed`: the workflow is read from
+# the **base** branch, so this file has to exist on `preview` (and on `main`, for
+# the release pull request) to run at all. See ARCHITECTURE.md → "Databases
+# (Neon)" → branch cap.
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  prune-neon:
+    name: Delete preview/<head-ref>
+    runs-on: ubuntu-latest
+    # A fork's head ref is not ours to reason about, and the long-lived branches
+    # own their Neon branches permanently.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'preview' &&
+      github.event.pull_request.head.ref != 'main'
+    steps:
+      - name: Delete the Neon branch for this PR
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: divine-firefly-20538122
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NEON_API_KEY}" ]; then
+            echo "NEON_API_KEY is not set — skipping prune."
+            exit 0
+          fi
+
+          target="preview/${HEAD_REF}"
+          # Guard: only ever delete branches under the integration's own
+          # `preview/` namespace. `main`, `preview` and `development` are
+          # long-lived and must survive a stray head ref.
+          case "${target}" in
+            preview/*) ;;
+            *) echo "Refusing to delete '${target}' — not under preview/."; exit 1 ;;
+          esac
+
+          api="https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}"
+          branch_id=$(curl -sSf -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "${api}/branches" \
+            | jq -r --arg n "${target}" '.branches[] | select(.name == $n) | .id')
+
+          if [ -z "${branch_id}" ]; then
+            echo "No Neon branch named '${target}' — nothing to prune."
+          else
+            echo "Deleting Neon branch '${target}' (${branch_id})…"
+            curl -sSf -X DELETE -H "Authorization: Bearer ${NEON_API_KEY}" \
+              "${api}/branches/${branch_id}" > /dev/null
+            echo "Deleted."
+          fi
+
+          # The cap is the whole point of this job, so always report where it
+          # stands — an orphan that survives is visible in the next run's log.
+          echo "Neon branches now in use:"
+          curl -sSf -H "Authorization: Bearer ${NEON_API_KEY}" "${api}/branches" \
+            | jq -r '.branches[].name'
+
+  delete-branch:
+    name: Delete the merged git branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Only a branch that actually landed on `preview`. An abandoned pull request
+    # keeps its ref: closing one is not a decision to throw the commits away.
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'preview' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'preview' &&
+      github.event.pull_request.head.ref != 'main'
+    steps:
+      - name: Delete the head branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          # Belt and braces: the `if` above already excludes these, but this
+          # step deletes a ref and the guard costs nothing.
+          case "${HEAD_REF}" in
+            main|preview|development)
+              echo "::error::Refusing to delete the long-lived branch '${HEAD_REF}'."
+              exit 1
+              ;;
+          esac
+
+          echo "Deleting git branch '${HEAD_REF}'…"
+          if gh api -X DELETE "repos/${REPO}/git/refs/heads/${HEAD_REF}" --silent; then
+            echo "Deleted. The commits live on in '${{ github.event.pull_request.base.ref }}'."
+          else
+            # Someone ticking "Delete branch" in the merge UI wins the race, and
+            # that is a success, not a failure.
+            if gh api "repos/${REPO}/git/ref/heads/${HEAD_REF}" >/dev/null 2>&1; then
+              echo "::error::'${HEAD_REF}' still exists and could not be deleted."
+              exit 1
+            fi
+            echo "'${HEAD_REF}' was already gone — nothing to do."
+          fi
