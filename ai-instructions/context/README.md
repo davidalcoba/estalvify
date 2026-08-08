@@ -2,6 +2,18 @@
 
 This folder is the source of truth for AI coding assistants working in this repository.
 
+**This file is the canonical index of the context docs.** `CLAUDE.md` and
+`.github/copilot-instructions.md` are thin entry points that defer to it rather
+than re-listing these files, so a new doc is registered here and nowhere else.
+Add it to the list below in the same change that creates it.
+
+The split with `.claude/`: everything vendor-neutral — the docs in this folder,
+read by Claude, Codex and Copilot alike — lives here. `.claude/` holds only what
+is specific to Claude Code and has to sit at a path the tool itself looks up:
+`settings.json`, `hooks/`, and `skills/` (Claude Code auto-discovers skills at
+`.claude/skills/<name>/SKILL.md` and nowhere else, which is why
+`frontend-design` lives there and not under this tree).
+
 Read these files in order:
 
 1. `PROJECT_OVERVIEW.md`: Product scope, business goals, platform stack, and multi-user model.
