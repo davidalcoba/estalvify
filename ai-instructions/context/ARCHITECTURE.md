@@ -273,20 +273,30 @@ URL and its Neon branch with it. It is also why GitHub's own **"Automatically
 delete head branches" repository setting is the wrong tool here** — it has no
 idea `preview` is special and would delete it on every release. Leave it off.
 
-**A `pull_request: closed` workflow is resolved from the PR's base branch**, so it
-prunes nothing unless the file exists on the branch being merged *into*. That is
-measured, not assumed: PR #55 had head `main` at `c711175`, a commit that does not
-contain the workflow, and base `preview`, which did — and the run fired
-anyway. Conversely PR #53 merged with base `main` while the file lived only on
-`preview`, and left `preview/claude/mcp-delete-category-filter-elc9vw` orphaned
-(deleted by hand afterwards).
+**A `pull_request: closed` workflow is resolved from the PR's merge ref** — head
+merged into base — not from the base branch alone. This entry used to claim base
+only; PR #157 disproved it. That PR renamed the workflow and added the git-branch
+job on its *head* while `preview` still carried the old single-job
+`prune-neon-branch.yml`, and the run that fired was the **new** one, which then
+deleted the PR's own branch. Base-only resolution could not have produced that.
 
-The practical consequence is that the file has to be on **`main`** as well as on
-`preview`, or it silently covers only the PRs targeting the integration branch and
-the cap creeps up regardless. It now is, promoted by the `preview` → `main` release.
-Keep it that way: a future workflow reshuffle that drops it from `main` would
-reintroduce the gap without any signal, since a missing workflow produces no failed
-run — just no run at all.
+The older measurements fit the merge-ref rule too, which is why they read as
+base-only at the time: PR #55 had head `main` at `c711175`, a commit that does not
+contain the workflow, and base `preview`, which did — the merge ref had it, so the
+run fired. Conversely PR #53 merged with base `main` while the file lived only on
+`preview`, its merge ref had no workflow, and it left
+`preview/claude/mcp-delete-category-filter-elc9vw` orphaned (deleted by hand
+afterwards).
+
+The practical consequence is unchanged: the file has to be on **`main`** as well as
+on `preview`, or it silently covers only the PRs targeting the integration branch
+and the cap creeps up regardless. It now is, promoted by the `preview` → `main`
+release. Keep it that way — a future workflow reshuffle that drops it from `main`
+would reintroduce the gap without any signal, since a missing workflow produces no
+failed run, just no run at all. What the merge-ref rule adds is that a change to
+the workflow takes effect on **its own** pull request, before it has landed
+anywhere: convenient (PR #157 pruned itself) and a trap in equal measure, since a
+broken edit fails on the pull request that introduces it.
 
 The workflow exists because of *which* integration this is. Neon ships two, and
 they clean up differently. The **Neon-Managed** integration does it
