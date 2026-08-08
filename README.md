@@ -11,6 +11,10 @@ For AI coding assistants (Codex, Claude, Copilot), use the context docs in:
 These files define architecture, UI constraints, multi-user rules, and desktop/mobile expectations.
 They also define a Vercel-first implementation policy: deploy on Vercel and prefer Vercel built-in features when feasible.
 
+`ai-instructions/` is shared by every assistant. `.claude/` holds only what is
+specific to Claude Code and must sit where the tool looks for it: `settings.json`,
+`hooks/`, and the `skills/` it auto-discovers.
+
 ## Environment variables
 
 `.env.example` documents every variable the app reads (database, Auth.js/Google,
