@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/simple-select";
+import { useT } from "@/components/i18n/i18n-provider";
 
 // Radix Select forbids an empty option value, so "All accounts" uses a sentinel.
 const ALL_ACCOUNTS = "__all__";
@@ -26,6 +27,7 @@ interface TransactionFiltersProps {
 
 export function TransactionFilters({ from, to, accountId, query, accounts }: TransactionFiltersProps) {
   const router = useRouter();
+  const t = useT();
   const searchParams = useSearchParams();
   const [localQuery, setLocalQuery] = useState(query);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,10 +70,10 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
         <SimpleSelect
           value={accountId || ALL_ACCOUNTS}
           onValueChange={(v) => navigate({ accountId: v === ALL_ACCOUNTS ? "" : v })}
-          ariaLabel="Filter by account"
+          ariaLabel={t("transactions.filters.account")}
           className="w-full sm:w-[280px]"
           options={[
-            { value: ALL_ACCOUNTS, label: "All accounts" },
+            { value: ALL_ACCOUNTS, label: t("transactions.filters.allAccounts") },
             ...accounts.map((a) => ({
               value: a.id,
               label: `${a.name}${a.iban ? ` (${a.iban.slice(-4)})` : ""}`,
@@ -84,7 +86,7 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
         <Input type="date" name="from" defaultValue={from} className="h-9 w-full sm:w-[150px] text-sm" />
         <Input type="date" name="to" defaultValue={to} className="h-9 w-full sm:w-[150px] text-sm" />
         <Button type="submit" size="sm" className="h-9 px-4 text-sm shrink-0">
-          Apply
+          {t("common.apply")}
         </Button>
       </form>
 
@@ -95,7 +97,7 @@ export function TransactionFilters({ from, to, accountId, query, accounts }: Tra
           name="q"
           value={localQuery}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Filter by description, merchant, reference…"
+          placeholder={t("transactions.filters.searchPlaceholder")}
           className="h-9 w-full pl-9 pr-3 text-sm"
         />
       </form>

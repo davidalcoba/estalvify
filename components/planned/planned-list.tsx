@@ -18,6 +18,9 @@ import { Badge } from "@/components/ui/badge";
 import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { useT } from "@/components/i18n/i18n-provider";
+import { RichText } from "@/components/i18n/rich-text";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 import {
   createPlannedOneOff,
   deletePlannedOneOff,
@@ -46,10 +49,13 @@ interface PlannedListProps {
   defaultMonth: number;
 }
 
-const STATUS_BADGE: Record<PlannedRowVM["status"], { label: string; variant: "success-soft" | "warning-soft" | "secondary" }> = {
-  MATCHED: { label: "Matched", variant: "success-soft" },
-  MISSED: { label: "Missed", variant: "warning-soft" },
-  PENDING: { label: "Pending", variant: "secondary" },
+const STATUS_BADGE: Record<
+  PlannedRowVM["status"],
+  { label: MessageKey; variant: "success-soft" | "warning-soft" | "secondary" }
+> = {
+  MATCHED: { label: "planned.status.MATCHED", variant: "success-soft" },
+  MISSED: { label: "planned.status.MISSED", variant: "warning-soft" },
+  PENDING: { label: "planned.status.PENDING", variant: "secondary" },
 };
 
 export function PlannedList({
@@ -63,6 +69,7 @@ export function PlannedList({
 }: PlannedListProps) {
   const router = useRouter();
   const canWrite = useCanWrite();
+  const t = useT();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +84,7 @@ export function PlannedList({
 
   function save() {
     if (!draft.categoryId) {
-      setError("Pick a category — the charge lands on that Budget objective");
+      setError(t("planned.pickCategory"));
       return;
     }
     setError(null);
@@ -94,7 +101,7 @@ export function PlannedList({
         setOpen(false);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+        setError(err instanceof Error ? err.message : t("settings.saveFailed"));
       }
     });
   }
@@ -113,23 +120,30 @@ export function PlannedList({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Upcoming charges</CardTitle>
+        <CardTitle className="text-base">{t("planned.title")}</CardTitle>
         {canWrite && (
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)} disabled={isPending}>
           <Plus className="mr-1 h-3.5 w-3.5" />
-          One-off
+          {t("planned.oneOff")}
         </Button>
         )}
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nothing planned ahead. Recurring series generate entries here
-            automatically — maintain them in{" "}
-            <Link href="/recurring" className="text-brand underline-offset-2 hover:underline">
-              Recurring
-            </Link>
-            ; add one-offs (this year&apos;s IBI) with the button above.
+            <RichText
+              template={t("planned.empty")}
+              slots={{
+                link: (
+                  <Link
+                    href="/recurring"
+                    className="text-brand underline-offset-2 hover:underline"
+                  >
+                    {t("nav.recurring")}
+                  </Link>
+                ),
+              }}
+            />
           </p>
         ) : (
           <ul className="divide-y">
@@ -144,7 +158,10 @@ export function PlannedList({
                   <div className="flex items-center gap-3">
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {row.fromSeries && (
-                        <Repeat className="mr-1.5 inline size-3.5 text-muted-foreground" aria-label="From a recurring series" />
+                        <Repeat
+                          className="mr-1.5 inline size-3.5 text-muted-foreground"
+                          aria-label={t("planned.fromSeries")}
+                        />
                       )}
                       {row.description}
                       {row.accountName && (
@@ -154,7 +171,7 @@ export function PlannedList({
                       )}
                     </span>
                     <Badge variant={badge.variant} className="hidden shrink-0 text-xs sm:inline-flex">
-                      {badge.label}
+                      {t(badge.label)}
                     </Badge>
                     <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
                       {when}
@@ -174,7 +191,7 @@ export function PlannedList({
                         className="hidden h-7 w-7 shrink-0 text-muted-foreground sm:inline-flex"
                         onClick={() => remove(row.id)}
                         disabled={isPending}
-                        title="Delete one-off"
+                        title={t("planned.deleteOneOff")}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -184,7 +201,7 @@ export function PlannedList({
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-xs sm:hidden">
                     <Badge variant={badge.variant} className="shrink-0 text-xs">
-                      {badge.label}
+                      {t(badge.label)}
                     </Badge>
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">
                       {when}
@@ -197,7 +214,7 @@ export function PlannedList({
                         className="h-7 w-7 shrink-0 text-muted-foreground"
                         onClick={() => remove(row.id)}
                         disabled={isPending}
-                        title="Delete one-off"
+                        title={t("planned.deleteOneOff")}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -212,30 +229,30 @@ export function PlannedList({
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="pt-8 sm:w-[min(96vw,440px)] sm:max-w-[min(96vw,440px)]">
-          <DialogTitle>One-off planned charge</DialogTitle>
+          <DialogTitle>{t("planned.dialog.title")}</DialogTitle>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="po-desc">Description</Label>
+              <Label htmlFor="po-desc">{t("planned.dialog.description")}</Label>
               <Input
                 id="po-desc"
-                placeholder="IBI Palafrugell 2026"
+                placeholder={t("planned.dialog.descriptionPlaceholder")}
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>{t("planned.dialog.category")}</Label>
               <CategorySelect
                 defaultValue={draft.categoryId ?? undefined}
                 onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
                 categories={categories}
-                ariaLabel="One-off category"
+                ariaLabel={t("planned.dialog.categoryAria")}
                 className="w-full"
               />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="po-amount">Amount</Label>
+                <Label htmlFor="po-amount">{t("planned.dialog.amount")}</Label>
                 <Input
                   id="po-amount"
                   type="number"
@@ -246,7 +263,7 @@ export function PlannedList({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="po-month">Month</Label>
+                <Label htmlFor="po-month">{t("planned.dialog.month")}</Label>
                 <Input
                   id="po-month"
                   type="number"
@@ -257,7 +274,7 @@ export function PlannedList({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="po-year">Year</Label>
+                <Label htmlFor="po-year">{t("planned.dialog.year")}</Label>
                 <Input
                   id="po-year"
                   type="number"
@@ -267,13 +284,13 @@ export function PlannedList({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="po-day">Day (optional)</Label>
+              <Label htmlFor="po-day">{t("planned.dialog.day")}</Label>
               <Input
                 id="po-day"
                 type="number"
                 min="1"
                 max="31"
-                placeholder="Any day of the month"
+                placeholder={t("planned.dialog.dayPlaceholder")}
                 value={draft.dueDay}
                 onChange={(e) => setDraft({ ...draft, dueDay: e.target.value })}
               />
@@ -281,11 +298,11 @@ export function PlannedList({
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button onClick={save} disabled={isPending}>
                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save
+                {t("common.save")}
               </Button>
             </div>
           </div>

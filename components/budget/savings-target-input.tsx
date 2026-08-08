@@ -12,6 +12,7 @@ import { setSavingsTarget } from "@/app/(app)/plan/actions";
 import { useCanWrite } from "@/components/layout/role-provider";
 import { formatCurrency } from "@/lib/formatters";
 import { Pencil } from "lucide-react";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export function SavingsTargetInput({
   year,
@@ -32,6 +33,7 @@ export function SavingsTargetInput({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canWrite = useCanWrite();
+  const t = useT();
 
   if (!canWrite) {
     return (
@@ -54,7 +56,7 @@ export function SavingsTargetInput({
         setEditing(false);
         router.refresh();
       } catch {
-        setError("App updated — reload the page and retry.");
+        setError(t("plan.savingsTarget.staleApp"));
       }
     });
   }
@@ -71,7 +73,7 @@ export function SavingsTargetInput({
           setDraft(String(value));
           setEditing(true);
         }}
-        aria-label="Edit savings target"
+        aria-label={t("plan.savingsTarget.edit")}
       >
         −{formatCurrency(value, currency, locale)}
         <Pencil className="h-3 w-3 text-muted-foreground" />
