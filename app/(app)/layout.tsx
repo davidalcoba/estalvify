@@ -9,6 +9,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { RoleProvider } from "@/components/layout/role-provider";
+import { InstallPrompt } from "@/components/layout/install-prompt";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -77,9 +78,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
       <SidebarInset>
         <AppHeader notifications={notifications} unreadCount={unreadCount} />
-        <main className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
+        {/* pb-safe-4 keeps the last row clear of the iOS home indicator once
+            installed; it resolves to the normal p-4 in a browser tab. */}
+        <main className="flex flex-1 flex-col gap-4 p-4 pb-safe-4 lg:p-6">
           {children}
         </main>
+        <InstallPrompt />
       </SidebarInset>
     </SidebarProvider>
     </RoleProvider>

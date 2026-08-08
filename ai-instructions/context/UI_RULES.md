@@ -344,6 +344,24 @@ For related transaction workflows (for example `transactions` and `categorize`):
 - Keep top-level structure aligned: title, filter area, summary/pagination
 - Diverge only where behavior is intentionally different (read-only vs classify actions)
 
+## Installed App (standalone mode)
+
+The app is an installable PWA, so on a phone it also runs with no browser chrome
+at all. Two rules follow:
+
+- **Respect the safe areas.** The root layout sets `viewport-fit=cover`, so the
+  page paints under the status bar, the notch and the home indicator. Anything
+  anchored to a screen edge uses the utilities in `app/globals.css` — `pt-safe`
+  and `h-header-safe` for top-anchored chrome (the header is `sticky top-0`, so
+  this is required, not cosmetic), `pb-safe-4` for bottom-anchored content. They
+  are additive where the element already has padding, and collapse to normal
+  spacing in a browser tab.
+- **Never assume a browser UI.** In standalone there is no address bar, no back
+  button and no reload. Every screen needs its own in-app way back.
+
+Do not re-pin `maximumScale` in the viewport: it disables pinch-zoom and is an
+accessibility regression.
+
 ## Future Native Readiness
 
 Even though native app work is not in scope now, UI decisions should keep migration simple:

@@ -144,3 +144,28 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Safe-area utilities — for the app running installed (standalone).
+ *
+ * The root layout sets viewport-fit=cover, so the app paints edge to edge and
+ * content would otherwise sit under the status bar, the notch and the home
+ * indicator. These read the insets the OS reports; in a browser tab, or on a
+ * device with no cutouts, they resolve to 0 and cost nothing.
+ *
+ * `h-header-safe` grows the sticky header by the top inset so its row still
+ * gets its full 3.5rem *below* the status bar, rather than being squashed by
+ * padding inside a fixed height. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Additive on purpose: the elements that need this already carry their own
+ * spacing (p-4), and a bare `padding-bottom: env(...)` would *replace* it,
+ * collapsing to 0 in a browser tab where the inset is 0. */
+@utility pb-safe-4 {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+@utility h-header-safe {
+  height: calc(3.5rem + env(safe-area-inset-top));
+}

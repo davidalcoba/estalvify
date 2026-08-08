@@ -296,6 +296,63 @@ commit or print it). Direct Postgres connections (port 5432) are blocked by the
 network policy; to query a branch, use Neon's SQL-over-HTTP endpoint
 (`POST https://<host>/sql` with a `Neon-Connection-String` header).
 
+## PWA (installable app)
+
+The app installs on Android and iOS from the browser itself — Chrome's "Install
+app", Safari's "Add to Home Screen". One codebase serves the web and the mobile
+app; there is no native shell and no store distribution, so a deploy reaches
+installed users on their next launch with no reinstall and no review.
+
+- **Manifest**: `public/manifest.json`, referenced from `app/layout.tsx`. `id` is
+  pinned so a later `start_url` change updates the installed app rather than
+  registering a second one. `any` and `maskable` icons are separate files —
+  one image serving both gets cropped by Android's adaptive-icon mask.
+- **Icons**: everything derives from one geometry definition in
+  `scripts/generate-icons.mjs` (`npm exec node scripts/generate-icons.mjs`),
+  which writes `app/icon.svg`, `app/apple-icon.png`, `app/favicon.ico`,
+  `public/logo*.svg` and `public/icons/*`. `components/brand/logo.tsx` is the
+  in-app copy of the same rects — change one, change both.
+- **Service worker**: `public/sw.js`, registered by
+  `components/layout/service-worker-registration.tsx` **in production only**, so
+  none of this is exercised by `npm run dev`. Navigations are network-first with
+  `/offline` (`app/offline/page.tsx`) as the fallback; everything else is left to
+  the browser's HTTP cache. Bump `CACHE_NAME` whenever the file changes.
+- **The precache must stay failure-tolerant.** `cache.add("/offline")` is wrapped
+  in `.catch()` because `Cache.put` rejects on a redirected response, a rejected
+  `install` means the worker never activates, and without an active worker Chrome
+  never offers to install the app. That is not hypothetical: it was the live bug
+  — `/offline` did not exist, the request redirected to `/login`, and the app was
+  silently uninstallable. Keep `/offline` in the `proxy.ts` public paths.
+- **Standalone UX**: the root layout sets `viewport-fit=cover`, so anything at a
+  screen edge must use the safe-area utilities in `app/globals.css`
+  (`pt-safe`, `pb-safe-4`, `h-header-safe`). See `UI_RULES.md`.
+
+## Notifications
+
+Two delivery channels over one domain layer. `lib/notifications/generators.ts`
+holds the pure spec builders; `generateNotificationsForUser()`
+(`lib/notifications/generate.ts`) persists them, called from the daily cron
+(`app/api/cron/sync/route.ts`) and from the "Check now" action on
+`/notifications`.
+
+- **In-app bell** — the source of truth, always written.
+- **Web Push** — best-effort, via `lib/notifications/push.ts` and the `push` /
+  `notificationclick` handlers in `public/sw.js`. Needs the VAPID env vars; with
+  them unset, sending is skipped and the bell is unaffected.
+
+Three constraints worth knowing before touching this:
+
+- Generation is idempotent and re-runs daily, so **push is limited to specs that
+  did not already exist** (`unseenSpecs()`, read *before* the upsert). Pushing
+  the whole spec list re-notifies the same alert on every cron run.
+- Notifications are anchored at the household's `dataUserId`, but every member
+  sees them, so **push fans out to all household members**, not just the anchor.
+  Subscriptions are stored per member (`actorUserId`) because they belong to a
+  device — which is also why the settings toggle is available to a `VIEWER`.
+- **iOS only delivers push to installed PWAs.** In a Safari tab `PushManager`
+  does not exist, so `components/settings/push-toggle.tsx` explains the install
+  step instead of offering a control that cannot work.
+
 ## Route Groups
 
 - `app/(auth)/`: authentication routes and auth layout
