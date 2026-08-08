@@ -447,8 +447,15 @@ function UserMenuMobile({
         </SidebarMenuItem>
       </SidebarMenu>
 
+      {/* The footer is pinned, so the nav above it gives up the space these
+          rows need. Only a household list long enough to fill half the panel
+          reaches the cap, and then this scrolls rather than pushing the
+          sign-out row off the bottom. */}
       {expanded && (
-        <div id="user-menu-actions" className="flex flex-col gap-2">
+        <div
+          id="user-menu-actions"
+          className="flex max-h-[50svh] shrink-0 flex-col gap-2 overflow-y-auto"
+        >
           {/* Household switcher — only when there is a choice to make. */}
           {households.length > 1 && (
             <>
