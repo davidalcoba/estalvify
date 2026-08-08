@@ -14,30 +14,20 @@ Run `npm run typecheck && npm run lint && npm run test` before finishing any cha
 
 ## Deployment & preview URLs (Vercel)
 
-This project deploys on **Vercel** — project `estalvify`
-(`projectId: prj_MwnNS5SFs4qNiRu6G6DFfrzYbYjI`), production at
-`https://estalvify.vercel.app`. Every push to a branch produces a preview
-deployment; merges to `main` deploy to production.
+Project `estalvify` (`projectId: prj_MwnNS5SFs4qNiRu6G6DFfrzYbYjI`), production at
+`https://estalvify.vercel.app`, `preview` at the fixed
+`https://estalvify-preview.vercel.app`.
 
-**Release path: feature branch → `preview` → `main`.** `main` is production and is
-reached only through `preview`, which has a fixed URL —
-`https://estalvify-preview.vercel.app` (a project domain pinned to the `preview`
-git branch, so it always serves that branch's newest deployment) — and its own
-Neon branch. Two workflows hold the path together: `release-gate.yml` fails a pull
-request into `main` whose head is not `preview`, and `sync-preview.yml`
-fast-forwards `preview` to `main` after each release so it cannot drift behind
-(the merge commit on `main` would otherwise leave it permanently one commit
-back), after checking that what landed on `main` actually came through `preview`
-(it fails the release otherwise, since a direct push fast-forwards `preview`
-cleanly and would otherwise pass unnoticed).
+The release path itself — **feature branch → `preview` → `main`**, the two
+workflows that hold it together (`release-gate.yml`, `sync-preview.yml`), the
+GitHub ruleset "main: solo desde preview" that makes a direct push to `main`
+rejected rather than merely reported, and the job-name trap that can leave `main`
+unmergeable — is specified in `ai-instructions/context/ARCHITECTURE.md` →
+"Deployment Context". Read the rationale there; what follows is the runbook for
+acting on it.
 
-Neither workflow can *prevent* a direct push to `main` — Actions run after the
-push. **That part is a GitHub ruleset, and it is applied**: "main: solo desde
-preview" (id `20327850`, `enforcement: active`) targets the default branch and
-requires a pull request (0 approvals) plus both checks —
-`A PR into main must come from preview` and `Typecheck · Lint · Test` — with
-force pushes and deletion blocked. So a direct push to `main` is now rejected by
-GitHub, not merely reported after the fact. Confirm it any time with
+**Never open or merge a pull request into `main` from a feature branch: merge
+into `preview` first.** Confirm the lock is still in force any time with
 
 ```bash
 curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -51,13 +41,6 @@ administration API paths are refused at the sandbox proxy (`POST
 permitted through this proxy") and the session token reports `admin: false` — so
 changes go through the GitHub UI (Settings → Rules) or a personal token, using
 the payload kept at `.github/rulesets/main-release-path.json`.
-
-The two required contexts are the workflows' **job names**. Renaming a job
-without updating the ruleset leaves `main` unmergeable, waiting for a check that
-never reports.
-
-So: never open or merge a pull request into `main` from a feature branch, and
-merge into `preview` first.
 
 ### When the release is blocked by a cancelled check
 
@@ -241,15 +224,13 @@ in the same change**, and a new route ships one from the start. Build them from
 "Navigation Feedback".
 
 ## Context
-- `./ai-instructions/context/README.md`
-- `./ai-instructions/context/PROJECT_OVERVIEW.md`
-- `./ai-instructions/context/ARCHITECTURE.md`
-- `./ai-instructions/context/UI_RULES.md`
-- `./ai-instructions/context/CODING_RULES.md`
-- `./ai-instructions/context/PLAYBOOK_NEW_FEATURE.md`
-- `./ai-instructions/context/GLOSSARY.md`
-- `./ai-instructions/context/ROADMAP.md`
-- `./ai-instructions/context/AUDIT.md`
+
+Start at **`./ai-instructions/context/README.md`**. It is the canonical index of
+the context docs: it lists every one of them, in reading order, with what each
+covers. This file deliberately does not repeat that list — a second copy is a
+second thing to forget when a doc is added, and it has already drifted once.
 
 ## Skills
-- `./ai-instructions/skills/frontend-design/SKILL.md`
+
+Claude Code skills live in `./.claude/skills/` (only that path is
+auto-discovered) — currently `frontend-design`, for any work on the visual layer.

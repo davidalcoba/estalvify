@@ -68,7 +68,9 @@ App única (no monorepo), alias `@/*` → raíz:
   `formatters.ts`.
 - `prisma/` — `schema.prisma` (434 líneas) + 8 migraciones.
 - `ai-instructions/` — contexto para asistentes AI (ARCHITECTURE, CODING_RULES,
-  UI_RULES, PLAYBOOK, GLOSSARY + skill `frontend-design`).
+  UI_RULES, PLAYBOOK, GLOSSARY), común a Claude/Codex/Copilot.
+- `.claude/` — solo lo específico de Claude Code: `settings.json`, `hooks/` y
+  `skills/` (el skill `frontend-design`).
 
 Puntos de entrada: `app/layout.tsx` + `app/page.tsx`, `proxy.ts` (protección de rutas,
 el "middleware" renombrado de Next 16), `auth.ts` (Auth.js).
@@ -212,9 +214,18 @@ existen tal cual. Los arreglos son concretos y de bajo esfuerzo:
   `LICENSE.txt` que no está en el directorio del skill. Recomendado: reescribir el
   skill adaptándolo al proyecto (o acotarlo explícitamente a páginas de
   marketing/landing) y arreglar la referencia de licencia.
-- **AI3 · `CLAUDE.md` sin comandos ejecutables.** Es un índice puro; no incluye
-  `npm run dev` / `build` / `lint` ni menciona que **no hay tests**. Añadir una sección
-  breve de comandos y estado de testing ayuda a cualquier asistente.
+- **AI3 · `CLAUDE.md` sin comandos ejecutables.** ✅ Resuelto: tiene sección
+  `## Commands` con `dev` / `build` / `lint` / `typecheck` / `test`, y el gate
+  (`typecheck && lint && test`) es explícito. Los tests ya existen (Vitest).
+- **AI6 · El skill estaba en una ruta que Claude Code no lee.** ✅ Resuelto:
+  `frontend-design` vivía en `ai-instructions/skills/`, pero Claude Code solo
+  autodescubre skills en `.claude/skills/<nombre>/SKILL.md`, así que nunca se
+  activaba — solo se leía si alguien seguía el enlace del índice a mano. Movido a
+  `.claude/skills/frontend-design/`.
+- **AI7 · Tres índices con listas distintas.** ✅ Resuelto: `CLAUDE.md` omitía
+  `PLAN_MULTIUSER.md` y `copilot-instructions.md` omitía además `ROADMAP.md` y
+  `AUDIT.md` (Copilot trabajaba con 7 de 10 docs). Ahora la enumeración vive solo
+  en `ai-instructions/context/README.md` y los otros dos la referencian.
 - **AI4 · Detalles sub-especificados en OVERVIEW/GLOSSARY.** Conviene nombrar
   explícitamente: proveedor de AI = **OpenAI** (`@ai-sdk/openai`), banca = **Enable
   Banking**, Tailwind = **v4**, primitivas sobre el paquete **unificado `radix-ui`**.
@@ -236,7 +247,9 @@ existen tal cual. Los arreglos son concretos y de bajo esfuerzo:
 | — | Completar u ocultar los stubs (dashboard/budget/reports) | **P1** | Medio | Producto |
 | D1 | ✅ **Hecho** — `next-themes` + toggle Light/Dark/System en el header; el tema `.dark` OKLCH ya es activable | **P1** | Bajo | Diseño |
 | AI2 | ✅ **Hecho** — skill `frontend-design` reescrito (consistencia-first, alineado con UI_RULES) y referencia colgante a `LICENSE.txt` eliminada | **P1** | Bajo | Instrucciones AI |
-| AI3 | Añadir comandos y estado de tests a `CLAUDE.md` | **P1** | Trivial | Instrucciones AI |
+| AI3 | ✅ **Hecho** — `CLAUDE.md` tiene sección `## Commands` y el gate explícito | **P1** | Trivial | Instrucciones AI |
+| AI6 | ✅ **Hecho** — skill `frontend-design` movido a `.claude/skills/`, la única ruta que Claude Code autodescubre | **P1** | Trivial | Instrucciones AI |
+| AI7 | ✅ **Hecho** — los 3 índices cuadrados: la lista de docs vive solo en `ai-instructions/context/README.md` | **P1** | Trivial | Instrucciones AI |
 | C3 | Extraer la lógica de categorización duplicada | **P2** | Bajo | Calidad |
 | D2 | Migrar colores hardcodeados a tokens semánticos | **P2** | Medio | Diseño |
 | D3 | Reemplazar el `<select>` nativo por `components/ui/select` | **P2** | Trivial | Diseño |

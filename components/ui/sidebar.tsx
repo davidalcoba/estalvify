@@ -183,18 +183,24 @@ function Sidebar({
   if (isMobile) {
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+        {/* Capped, not scrolling: `overflow-y-auto` on the panel would make it
+            one scrolling column, so anything the footer reveals (the account
+            menu) opens below the fold and has to be scrolled to. The cap plus a
+            flex column lets SidebarContent take the leftover space and scroll on
+            its own, which keeps the header and the footer in view at every
+            height. */}
         <SheetContent
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="bg-sidebar text-sidebar-foreground w-full max-h-[85svh] overflow-y-auto rounded-b-2xl p-0 [&>button]:hidden"
+          className="bg-sidebar text-sidebar-foreground w-full max-h-[85svh] rounded-b-2xl p-0 [&>button]:hidden"
           side="top"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex min-h-0 w-full flex-1 flex-col">{children}</div>
         </SheetContent>
       </Sheet>
     )
