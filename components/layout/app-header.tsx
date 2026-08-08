@@ -42,7 +42,10 @@ export function AppHeader({
       .find(([path]) => pathname.startsWith(path))?.[1] ?? "Estalvify";
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
+    // The header is sticky at top-0, so with viewport-fit=cover it sits under
+    // the status bar once installed. h-header-safe + pt-safe push the row clear
+    // of it; both collapse to the plain h-14 in a browser tab.
+    <header className="sticky top-0 z-40 flex h-header-safe pt-safe shrink-0 items-center gap-2 border-b bg-background px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <h1 className="text-sm font-medium text-foreground">{title}</h1>

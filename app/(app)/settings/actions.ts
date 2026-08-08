@@ -36,6 +36,50 @@ export async function updatePersonalPreferences(data: {
   revalidateForPrefs();
 }
 
+// Push subscriptions belong to the ACTING member's device, not to the
+// household — so level "read", which every role including VIEWER passes. A
+// viewer sees the bell, so a viewer may be notified on their own phone.
+
+/**
+ * Store (or refresh) the Web Push subscription for the current device.
+ *
+ * Keyed on the endpoint rather than the user: one member can be subscribed from
+ * several devices, and a browser reissuing the same endpoint must update its row
+ * instead of adding another. The upsert also re-points an endpoint at the
+ * current member if a device changed hands.
+ */
+export async function savePushSubscription(subscription: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string;
+}) {
+  const { actorUserId } = await requireScope("read");
+
+  const { endpoint, p256dh, auth: authKey, userAgent } = subscription;
+  if (!endpoint || !p256dh || !authKey) throw new Error("Invalid subscription");
+
+  await prisma.pushSubscription.upsert({
+    where: { endpoint },
+    create: { userId: actorUserId, endpoint, p256dh, auth: authKey, userAgent },
+    update: { userId: actorUserId, p256dh, auth: authKey, userAgent },
+  });
+
+  revalidatePath("/settings");
+}
+
+/** Forget this device's subscription after the member turns push off. */
+export async function deletePushSubscription(endpoint: string) {
+  const { actorUserId } = await requireScope("read");
+
+  // Scoped by userId so one member cannot unsubscribe another's device.
+  await prisma.pushSubscription.deleteMany({
+    where: { endpoint, userId: actorUserId },
+  });
+
+  revalidatePath("/settings");
+}
+
 export async function updatePreferences(data: {
   timezone: string;
   currency: string;

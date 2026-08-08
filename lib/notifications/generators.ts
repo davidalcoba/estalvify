@@ -19,6 +19,22 @@ export interface NotificationSpec {
   metadata?: Record<string, string>;
 }
 
+/**
+ * The specs that do not exist yet, given the dedupeKeys already stored.
+ *
+ * Generation is idempotent and re-runs daily, so on any given run most specs
+ * describe an alert the user has already seen. Push delivery must be limited to
+ * genuinely new ones — pushing the whole list would re-notify the same budget
+ * warning every single cron run.
+ */
+export function unseenSpecs(
+  specs: NotificationSpec[],
+  knownDedupeKeys: Iterable<string>,
+): NotificationSpec[] {
+  const known = new Set(knownDedupeKeys);
+  return specs.filter((spec) => !known.has(spec.dedupeKey));
+}
+
 export interface UpcomingRecurringInput {
   merchantKey: string;
   displayName: string;

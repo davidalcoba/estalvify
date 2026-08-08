@@ -4,6 +4,8 @@ import {
   consentExpiringNotifications,
   staleTransactionNotifications,
   isoYearWeek,
+  unseenSpecs,
+  type NotificationSpec,
 } from "./generators";
 
 describe("upcomingRecurringNotifications", () => {
@@ -136,5 +138,34 @@ describe("isoYearWeek", () => {
 
   it("keeps a year-end week in one bucket across the year boundary", () => {
     expect(isoYearWeek("2025-12-29")).toBe(isoYearWeek("2026-01-04"));
+  });
+});
+
+describe("unseenSpecs", () => {
+  function spec(dedupeKey: string): NotificationSpec {
+    return {
+      type: "RECURRING_UPCOMING",
+      severity: "INFO",
+      title: "Charge due",
+      body: "Netflix in 3 days.",
+      dedupeKey,
+    };
+  }
+
+  it("keeps only specs not already stored", () => {
+    const specs = [spec("a"), spec("b"), spec("c")];
+    expect(unseenSpecs(specs, ["b"]).map((s) => s.dedupeKey)).toEqual(["a", "c"]);
+  });
+
+  it("returns nothing when every alert already exists", () => {
+    // The steady state: generation re-runs daily and almost always produces the
+    // same specs. Pushing here would re-notify the user on every cron run.
+    const specs = [spec("a"), spec("b")];
+    expect(unseenSpecs(specs, ["a", "b"])).toEqual([]);
+  });
+
+  it("returns everything on a first run", () => {
+    const specs = [spec("a"), spec("b")];
+    expect(unseenSpecs(specs, [])).toEqual(specs);
   });
 });

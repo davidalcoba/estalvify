@@ -54,6 +54,7 @@ model User {
   ownedHousehold        Household?                     @relation("OwnedHousehold")
   householdMemberships  HouseholdMember[]
   notificationReads     NotificationRead[]
+  pushSubscriptions     PushSubscription[]
 
   @@map("users")
 }
@@ -753,6 +754,35 @@ model Notification {
 // phase 5): one row = this member has read this notification. Notifications
 // hang off the household's dataUserId, so without this table one member's
 // "mark read" blanked the other's bell.
+// Web Push endpoints, one row per browser/device a member opted in from.
+//
+// Delivery target for the same notifications shown in the bell. Attached to the
+// MEMBER (actorUserId), not to the household's anchor user: a subscription is a
+// property of a device, and every member of a household should be able to get
+// the household's alerts on their own phone (see lib/notifications/push.ts).
+//
+// On iOS these only exist for *installed* PWAs — Safari does not expose
+// PushManager in a normal browser tab.
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+
+  // Push service URL identifying this device. Unique globally: the browser
+  // reissues the same endpoint, so re-subscribing must update, not duplicate.
+  endpoint String @unique
+  // Keys from the browser's PushSubscription, needed to encrypt payloads.
+  p256dh   String
+  auth     String
+
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
 model NotificationRead {
   id             String   @id @default(cuid())
   notificationId String

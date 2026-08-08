@@ -59,7 +59,12 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/apple-icon") ||
     pathname.startsWith("/logo") ||
     pathname.startsWith("/manifest") ||
-    pathname.startsWith("/sw.js");
+    pathname.startsWith("/sw.js") ||
+    // The service worker precaches /offline at install time, with no session.
+    // Redirecting it to /login makes Cache.put throw on the redirect, which
+    // rejects the install — and a worker that never activates means the browser
+    // never offers to install the app at all.
+    pathname.startsWith("/offline");
 
   if (!session?.user && !isPublicPath) {
     const login = new URL("/login", request.url);

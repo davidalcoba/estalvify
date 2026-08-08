@@ -1,9 +1,14 @@
 {
+  "id": "/",
   "name": "Estalvify",
   "short_name": "Estalvify",
   "description": "Personal finance app — track, categorize, and budget your money",
   "start_url": "/dashboard",
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
+  "display_override": ["standalone"],
   "background_color": "#ffffff",
   "theme_color": "#6366f1",
   "orientation": "portrait-primary",
@@ -28,5 +33,22 @@
     }
   ],
   "screenshots": [],
-  "categories": ["finance", "productivity"]
+  "categories": ["finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Transactions",
+      "url": "/transactions",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Categorize",
+      "url": "/categorize",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Budget",
+      "url": "/plan",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

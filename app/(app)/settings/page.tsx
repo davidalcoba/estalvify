@@ -9,6 +9,7 @@ import { PlanningForm } from "@/components/settings/planning-form";
 import { CategoryManager } from "@/components/settings/category-manager";
 import { PrivacyDataCard } from "@/components/settings/privacy-data-card";
 import { MembersCard } from "@/components/settings/members-card";
+import { PushToggle } from "@/components/settings/push-toggle";
 import { listHouseholdPeople, type HouseholdPeople } from "@/lib/household/manage";
 import { seedDefaultCategories } from "./actions";
 
@@ -25,7 +26,7 @@ export default async function SettingsPage() {
 
   // Merged prefs: personal fields (timezone/language/number format) come from
   // the ACTING member's row, the currency from the household owner's.
-  const [prefs, user, categories] = await Promise.all([
+  const [prefs, user, categories, pushSubscriptions] = await Promise.all([
     getUserPrefs(userId, scope.actorUserId),
     prisma.user.findUnique({
       where: { id: userId },
@@ -45,6 +46,9 @@ export default async function SettingsPage() {
       },
       orderBy: { sortOrder: "asc" },
     }),
+    // Initial state only — PushToggle reconciles against the browser on mount,
+    // since the row can outlive the real subscription.
+    prisma.pushSubscription.count({ where: { userId: scope.actorUserId } }),
   ]);
 
   // Seed default categories for new users
@@ -68,6 +72,7 @@ export default async function SettingsPage() {
         people={people}
         actorUserId={scope.actorUserId}
         role={scope.role}
+        pushSubscribed={pushSubscriptions > 0}
       />
     );
   }
@@ -80,6 +85,7 @@ export default async function SettingsPage() {
       people={people}
       actorUserId={scope.actorUserId}
       role={scope.role}
+      pushSubscribed={pushSubscriptions > 0}
     />
   );
 }
@@ -91,11 +97,13 @@ function SettingsLayout({
   people,
   actorUserId,
   role,
+  pushSubscribed,
 }: {
   prefs: UserPrefs;
   people: HouseholdPeople | null;
   actorUserId: string;
   role: "OWNER" | "EDITOR" | "VIEWER";
+  pushSubscribed: boolean;
   user: {
     email?: string | null;
     lowBalanceThreshold?: { toString(): string } | null;
@@ -124,6 +132,11 @@ function SettingsLayout({
             language={prefs.language}
             personalOnly
           />
+
+          {/* Personal to this device, so it is not a household setting: a
+              viewer sees the bell, so a viewer may be notified. */}
+          <PushToggle subscribed={pushSubscribed} />
+
           <Card>
             <CardHeader>
               <CardTitle>Read-only access</CardTitle>
@@ -155,6 +168,8 @@ function SettingsLayout({
           lowBalanceThreshold={Number(user?.lowBalanceThreshold?.toString() ?? "0")}
           currency={prefs.currency}
         />
+
+        <PushToggle subscribed={pushSubscribed} />
 
         <CategoryManager initialCategories={categories} />
 
