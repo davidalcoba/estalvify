@@ -9,6 +9,10 @@
 - `lib/`: business and integration logic
 - `prisma/`: schema and migrations
 - `scripts/`: operational scripts
+- `ai-instructions/`: the context docs, shared by every AI assistant
+- `.claude/`: Claude Code's own config — `settings.json`, `hooks/`, and the
+  `skills/` it auto-discovers (`.claude/skills/<name>/SKILL.md` is the only path
+  it reads, so a skill placed anywhere else is silently never loaded)
 - Tests live next to code as `lib/**/*.test.ts` (Vitest, config in `vitest.config.ts`);
   CI is `.github/workflows/ci.yml`. The other workflow,
   `.github/workflows/prune-merged-branch.yml`, is infrastructure housekeeping —
