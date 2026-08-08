@@ -33,10 +33,22 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#6366f1",
+  // Two entries so the browser/OS chrome follows the app's own theme. A single
+  // light theme color leaves a bright bar above a dark UI, which is very
+  // visible once the app is installed and running full-screen. #020817 is
+  // `--background` in dark (app/globals.css).
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#020817" },
+  ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Lets the page paint under the notch and home indicator, which is what
+  // makes env(safe-area-inset-*) report real values. See the safe-area
+  // utilities in app/globals.css.
+  viewportFit: "cover",
+  // No maximumScale: pinning it disables pinch-zoom, which is an accessibility
+  // regression and buys nothing in standalone mode.
 };
 
 export default function RootLayout({

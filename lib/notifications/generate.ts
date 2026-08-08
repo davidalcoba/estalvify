@@ -11,8 +11,10 @@ import {
   cashflowBreachNotifications,
   consentExpiringNotifications,
   staleTransactionNotifications,
+  unseenSpecs,
   type NotificationSpec,
 } from "./generators";
+import { sendPushBatch } from "./push";
 
 /**
  * Generate this user's notifications, upserting by (userId, dedupeKey) so
@@ -110,6 +112,18 @@ export async function generateNotificationsForUser(
 
   if (specs.length === 0) return 0;
 
+  // Which of these has the household already been told about? Read before the
+  // upsert, because afterwards every spec exists and "new" is unknowable.
+  // Without this, each cron run would re-push alerts already seen.
+  const alreadyStored = await prisma.notification.findMany({
+    where: { userId, dedupeKey: { in: specs.map((spec) => spec.dedupeKey) } },
+    select: { dedupeKey: true },
+  });
+  const fresh = unseenSpecs(
+    specs,
+    alreadyStored.map((row) => row.dedupeKey),
+  );
+
   await prisma.$transaction(
     specs.map((spec) =>
       prisma.notification.upsert({
@@ -130,6 +144,10 @@ export async function generateNotificationsForUser(
       }),
     ),
   );
+
+  // Best-effort: a push failure must not fail generation. The bell already has
+  // the notification whether or not the device push went through.
+  await sendPushBatch(userId, fresh);
 
   return specs.length;
 }

@@ -315,7 +315,8 @@ cambio). Marca el estado aquí al terminar.
 - [x] **Fase 3 — Centro de notificaciones in-app** ✅ — modelo `Notification`, campana en
   el header con badge de no leídas, generadores puros (presupuesto excedido/cercano y
   cargo recurrente próximo) idempotentes por `(userId, dedupeKey)`, ejecutados en el cron
-  diario y por un botón "Check now". Falta (fases futuras): push (PWA) y email.
+  diario y por un botón "Check now". Push (PWA) añadido después — ver "PWA
+  instalable". Falta (fases futuras): email.
 - [x] **Fase 4 — Reports + Dashboard con datos reales** ✅ — `recharts` instalado;
   `lib/analytics/trends.ts` (meses, ingresos vs gastos, top categorías) con tests;
   charts theme-aware en `components/reports/` (barras ingresos/gastos, donut por
@@ -330,6 +331,24 @@ cambio). Marca el estado aquí al terminar.
   **anonimizado** puro (con tests) + parser zod, y página `/insights` con generación bajo
   demanda y estado "no configurado" si falta la API key. Envs: `AI_PROVIDER`,
   `ANTHROPIC_API_KEY`, `AI_MODEL`.
+- [x] **PWA instalable + push** ✅ — la webapp se instala en Android e iOS desde el
+  propio navegador, sin cuenta de developer ni stores. El bloqueante real era el
+  service worker: precacheaba `/offline`, una ruta que no existía, así que el
+  request redirigía a `/login`, `Cache.put` lanzaba y el `install` se rechazaba —
+  sin worker activo Chrome nunca ofrece instalar. Añadidos `app/offline/page.tsx`,
+  `/offline` a la allowlist del proxy y un `.catch()` en el precache; más
+  `viewport-fit=cover` con utilidades de safe area, `themeColor` claro/oscuro,
+  quitado `maximumScale` (bloqueaba pinch-zoom), `id`/`scope`/`shortcuts` en el
+  manifest y un prompt de instalación por plataforma.
+  Web Push encima del dominio de notificaciones existente
+  (`lib/notifications/push.ts`), empujando **solo** las specs nuevas para no
+  re-notificar en cada pasada del cron, y con fan-out a todos los miembros del
+  household. Envs: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT` — sin ellas el envío se salta y la campana sigue igual.
+  **Fuera de alcance:** App Store / Play Store. La base queda lista (TWA vía
+  Bubblewrap para Play, ~25 USD pago único; Capacitor con integración nativa real
+  para App Store, 99 USD/año — Apple rechaza envoltorios web puros por la
+  guideline 4.2).
 
 **Dependencias:** F1 y F4 dependen de F0. F3 depende de F1 (para la alerta de
 presupuesto). F5 depende de F0 + F2. F6 se apoya en F0 + F1 (y mejora con F2/F5).
