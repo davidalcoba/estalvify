@@ -15,13 +15,18 @@ import { PageHeader } from "@/components/layout/page-header";
 import { BalanceForecastChart } from "@/components/reports/balance-forecast-chart";
 import { PlannedList, type PlannedRowVM } from "@/components/planned/planned-list";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Upcoming" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.upcoming") };
+}
 
 const CASHFLOW_HORIZON_DAYS = 60;
 const LIST_MONTHS_AHEAD = 2;
 
 export default async function ForecastPage() {
+  const t = await getT();
   const { dataUserId: userId, actorUserId } = await requireScope("read");
   const { locale, language, timezone, currency } = await getUserPrefs(userId, actorUserId);
 
@@ -108,12 +113,12 @@ export default async function ForecastPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Upcoming" />
+      <PageHeader title={t("nav.upcoming")} />
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Projected balance · {CASHFLOW_HORIZON_DAYS} days
+            {t("forecast.projectedBalance", { days: CASHFLOW_HORIZON_DAYS })}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -143,18 +148,22 @@ export default async function ForecastPage() {
               </div>
               {account.breach ? (
                 <p className="text-xs text-destructive">
-                  {formatCurrency(account.breach.balance, currency, locale)} on{" "}
-                  {dayLabel(account.breach.date)} · transfer{" "}
-                  {formatCurrency(
-                    Math.ceil(cashflow.threshold - account.minBalance),
-                    currency,
-                    locale,
-                  )}
+                  {t("forecast.breach", {
+                    amount: formatCurrency(account.breach.balance, currency, locale),
+                    date: dayLabel(account.breach.date),
+                    topUp: formatCurrency(
+                      Math.ceil(cashflow.threshold - account.minBalance),
+                      currency,
+                      locale,
+                    ),
+                  })}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Lowest {formatCurrency(account.minBalance, currency, locale)} ·{" "}
-                  {dayLabel(account.minDate)}
+                  {t("forecast.lowest", {
+                    amount: formatCurrency(account.minBalance, currency, locale),
+                    date: dayLabel(account.minDate),
+                  })}
                 </p>
               )}
             </CardContent>

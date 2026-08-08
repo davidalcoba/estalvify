@@ -11,8 +11,12 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { NotificationList } from "@/components/notifications/notification-list";
 import { toNotificationDTO } from "@/lib/notifications/notification-dto";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Notifications" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.notifications") };
+}
 
 const PAGE_SIZE = 25;
 
@@ -22,6 +26,7 @@ export default async function NotificationsPage({
   searchParams: Promise<{ unread?: string; page?: string }>;
 }) {
   const scope = await requireScope("read");
+  const t = await getT();
   const userId = scope.dataUserId;
 
   const params = await searchParams;
@@ -58,7 +63,7 @@ export default async function NotificationsPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Notifications" />
+      <PageHeader title={t("nav.notifications")} />
 
       <NotificationList
         notifications={rows.map(toNotificationDTO)}

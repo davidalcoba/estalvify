@@ -32,6 +32,9 @@ import {
 } from "@/app/(app)/recurring/actions";
 // A "use server" module can't export a type, so take it from the source.
 import type { SeriesFields } from "@/lib/mcp/manage";
+import { useT } from "@/components/i18n/i18n-provider";
+import { RichText } from "@/components/i18n/rich-text";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
 export interface SeriesVM {
   id: string;
@@ -70,11 +73,11 @@ interface SeriesManagerProps {
   locale: string;
 }
 
-const CADENCES = [
-  { value: "MONTHLY", label: "Monthly" },
-  { value: "BIMONTHLY", label: "Every 2 months" },
-  { value: "QUARTERLY", label: "Quarterly" },
-  { value: "YEARLY", label: "Yearly" },
+const CADENCES: { value: string; label: MessageKey }[] = [
+  { value: "MONTHLY", label: "recurring.cadence.MONTHLY" },
+  { value: "BIMONTHLY", label: "recurring.cadence.BIMONTHLY" },
+  { value: "QUARTERLY", label: "recurring.cadence.QUARTERLY" },
+  { value: "YEARLY", label: "recurring.cadence.YEARLY" },
 ];
 
 interface Draft {
@@ -122,6 +125,8 @@ export function SeriesManager({
     prefill ? { ...EMPTY, ...prefill } : null
   );
   const canWrite = useCanWrite();
+  const t = useT();
+  const cadenceOptions = CADENCES.map((c) => ({ value: c.value, label: t(c.label) }));
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<RecurringSuggestion | null>(null);
   // The matcher is internal machinery (arrival recognition); it hides under
@@ -190,7 +195,12 @@ export function SeriesManager({
         // apart a network failure, a non-RSC response and a server throw.
         setHiddenKeys((keys) => keys.filter((k) => k !== merchantKey));
         setDismissError(
-          `Request failed: ${err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)}`,
+          t("recurring.requestFailed", {
+            detail:
+              err instanceof Error
+                ? err.message.slice(0, 300)
+                : String(err).slice(0, 300),
+          }),
         );
       });
   }
@@ -198,7 +208,7 @@ export function SeriesManager({
   function save() {
     if (!draft) return;
     if (!draft.categoryId && !draft.ruleId) {
-      setError("Pick a category — the series feeds that category's objective");
+      setError(t("recurring.pickCategory"));
       return;
     }
     const fields: SeriesFields = {
@@ -266,7 +276,7 @@ export function SeriesManager({
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4 text-brand" />
-              Detected
+              {t("recurring.detected")}
               <Badge variant="brand" className="h-5 min-w-5 justify-center px-1 text-xs">
                 {visibleSuggestions.length}
               </Badge>
@@ -308,20 +318,20 @@ export function SeriesManager({
       {series.length === 0 ? (
         <EmptyState
           icon={Repeat}
-          title="Register your recurring charges and income"
-          description="Each series feeds its category in the Budget and shows up in Upcoming."
+          title={t("recurring.empty.title")}
+          description={t("recurring.empty.body")}
         >
           {canWrite && (
           <Button onClick={() => { setAdvancedOpen(false); setDraft({ ...EMPTY }); }}>
             <Plus className="mr-2 h-4 w-4" />
-            Add series
+            {t("recurring.addSeries")}
           </Button>
           )}
         </EmptyState>
       ) : (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Series</CardTitle>
+            <CardTitle className="text-base">{t("recurring.series")}</CardTitle>
             {canWrite && (
             <Button
               variant="ghost"
@@ -331,27 +341,40 @@ export function SeriesManager({
               disabled={isPending}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
-              Add
+              {t("objectives.add")}
             </Button>
             )}
           </CardHeader>
           <CardContent className="space-y-4">
             {[
-              { label: "Charges", list: rows.filter((s) => s.direction === "DEBIT") },
-              { label: "Income", list: rows.filter((s) => s.direction === "CREDIT") },
+              {
+                key: "DEBIT",
+                label: t("recurring.charges"),
+                list: rows.filter((s) => s.direction === "DEBIT"),
+              },
+              {
+                key: "CREDIT",
+                label: t("recurring.income"),
+                list: rows.filter((s) => s.direction === "CREDIT"),
+              },
             ]
               .filter((g) => g.list.length > 0)
               .map((group, gi) => (
-            <div key={group.label} className={gi > 0 ? "space-y-1 border-t pt-3" : "space-y-1"}>
+            <div key={group.key} className={gi > 0 ? "space-y-1 border-t pt-3" : "space-y-1"}>
             <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
             <ul className="divide-y">
               {group.list.map((s) => {
                 const cat = s.categoryId ? categoryById.get(s.categoryId) : null;
                 const timing = s.anchorMonthEnd
-                  ? " · month end"
-                  : s.windowFromDay != null
-                    ? ` · day ${s.windowFromDay}${s.windowToDay && s.windowToDay !== s.windowFromDay ? `–${s.windowToDay}` : ""}`
-                    : "";
+                  ? t("recurring.monthEnd")
+                  : s.windowFromDay == null
+                    ? ""
+                    : s.windowToDay && s.windowToDay !== s.windowFromDay
+                      ? t("recurring.dayRange", {
+                          from: s.windowFromDay,
+                          to: s.windowToDay,
+                        })
+                      : t("recurring.day", { day: s.windowFromDay });
                 const chip = cat && (
                   <span className="inline-flex min-w-0 shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                     <span
@@ -375,20 +398,24 @@ export function SeriesManager({
                       >
                         {s.displayName}
                         {!s.active && (
-                          <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
+                          <Badge variant="secondary" className="ml-2 text-xs">
+                            {t("recurring.paused")}
+                          </Badge>
                         )}
                       </button>
                       ) : (
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {s.displayName}
                         {!s.active && (
-                          <Badge variant="secondary" className="ml-2 text-xs">Paused</Badge>
+                          <Badge variant="secondary" className="ml-2 text-xs">
+                            {t("recurring.paused")}
+                          </Badge>
                         )}
                       </span>
                       )}
                       <span className="hidden sm:inline-flex">{chip}</span>
                       <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                        {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
+                        {cadenceOptions.find((c) => c.value === s.cadence)?.label ?? s.cadence}
                         {timing}
                       </span>
                       <span
@@ -404,7 +431,7 @@ export function SeriesManager({
                         className="h-7 w-7 shrink-0 text-muted-foreground"
                         onClick={() => setConfirmDelete({ id: s.id, name: s.displayName })}
                         disabled={isPending}
-                        title="Delete series"
+                        title={t("recurring.deleteSeries")}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -414,7 +441,7 @@ export function SeriesManager({
                       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
                         {chip}
                         <span className="truncate">
-                          {CADENCES.find((c) => c.value === s.cadence)?.label ?? s.cadence}
+                          {cadenceOptions.find((c) => c.value === s.cadence)?.label ?? s.cadence}
                           {timing}
                         </span>
                       </span>
@@ -442,7 +469,7 @@ export function SeriesManager({
             <div className="space-y-4">
               <dl className="space-y-1.5 text-sm">
                 <div className="flex items-center justify-between">
-                  <dt className="text-muted-foreground">Amount (approx.)</dt>
+                  <dt className="text-muted-foreground">{t("recurring.detail.amount")}</dt>
                   <dd
                     className={`tabular-nums ${
                       detail.direction === "CREDIT" ? "text-success" : ""
@@ -452,18 +479,23 @@ export function SeriesManager({
                   </dd>
                 </div>
                 <div className="flex items-center justify-between">
-                  <dt className="text-muted-foreground">Cadence</dt>
-                  <dd>{CADENCES.find((c) => c.value === detail.cadence)?.label ?? detail.cadence}</dd>
+                  <dt className="text-muted-foreground">{t("recurring.detail.cadence")}</dt>
+                  <dd>{cadenceOptions.find((c) => c.value === detail.cadence)?.label ?? detail.cadence}</dd>
                 </div>
                 <div className="flex items-center justify-between">
-                  <dt className="text-muted-foreground">Seen</dt>
+                  <dt className="text-muted-foreground">{t("recurring.detail.seen")}</dt>
                   <dd>
-                    {detail.occurrences}× · last {detail.lastDate}
+                    {t("recurring.detail.seenValue", {
+                      count: detail.occurrences,
+                      date: detail.lastDate,
+                    })}
                   </dd>
                 </div>
                 {detail.windowFromDay != null && (
                   <div className="flex items-center justify-between">
-                    <dt className="text-muted-foreground">Usual days</dt>
+                    <dt className="text-muted-foreground">
+                      {t("recurring.detail.usualDays")}
+                    </dt>
                     <dd>
                       {detail.windowFromDay}
                       {detail.windowToDay && detail.windowToDay !== detail.windowFromDay
@@ -473,7 +505,9 @@ export function SeriesManager({
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-4">
-                  <dt className="shrink-0 text-muted-foreground">Matcher</dt>
+                  <dt className="shrink-0 text-muted-foreground">
+                    {t("recurring.detail.matcher")}
+                  </dt>
                   <dd className="min-w-0 truncate text-xs text-muted-foreground">
                     {detail.merchantKey}
                   </dd>
@@ -503,7 +537,7 @@ export function SeriesManager({
                   disabled={isPending}
                 >
                   <X className="mr-1 h-3.5 w-3.5" />
-                  Dismiss
+                  {t("common.dismiss")}
                 </Button>
                 <Button
                   onClick={() => {
@@ -512,7 +546,7 @@ export function SeriesManager({
                   }}
                   disabled={isPending}
                 >
-                  Use as series
+                  {t("recurring.useAsSeries")}
                 </Button>
               </div>
             </div>
@@ -522,14 +556,16 @@ export function SeriesManager({
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <DialogContent className="pt-8 sm:w-[min(96vw,480px)] sm:max-w-[min(96vw,480px)]">
-          <DialogTitle>{draft?.id ? "Edit series" : "New series"}</DialogTitle>
+          <DialogTitle>
+            {draft?.id ? t("recurring.form.edit") : t("recurring.form.new")}
+          </DialogTitle>
           {draft && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="sr-name">Name</Label>
+                <Label htmlFor="sr-name">{t("recurring.form.name")}</Label>
                 <Input
                   id="sr-name"
-                  placeholder="Alquiler Barcelona"
+                  placeholder={t("recurring.form.namePlaceholder")}
                   value={draft.displayName}
                   onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
                 />
@@ -537,20 +573,22 @@ export function SeriesManager({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Direction</Label>
+                  <Label>{t("recurring.form.direction")}</Label>
                   <SimpleSelect
                     value={draft.direction}
                     onValueChange={(v) => setDraft({ ...draft, direction: v as "DEBIT" | "CREDIT" })}
                     options={[
-                      { value: "DEBIT", label: "Charge" },
-                      { value: "CREDIT", label: "Income" },
+                      { value: "DEBIT", label: t("recurring.form.charge") },
+                      { value: "CREDIT", label: t("recurring.income") },
                     ]}
-                    ariaLabel="Direction"
+                    ariaLabel={t("recurring.form.direction")}
                     className="w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sr-amount">Amount ({currency}, approx.)</Label>
+                  <Label htmlFor="sr-amount">
+                    {t("recurring.form.amount", { currency })}
+                  </Label>
                   <Input
                     id="sr-amount"
                     type="number"
@@ -564,22 +602,26 @@ export function SeriesManager({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Cadence</Label>
+                  <Label>{t("recurring.detail.cadence")}</Label>
                   <SimpleSelect
                     value={draft.cadence}
                     onValueChange={(v) => setDraft({ ...draft, cadence: v as Draft["cadence"] })}
-                    options={CADENCES}
-                    ariaLabel="Cadence"
+                    options={cadenceOptions}
+                    ariaLabel={t("recurring.detail.cadence")}
                     className="w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Category{draft.ruleId ? " (from rule)" : ""}</Label>
+                  <Label>
+                    {draft.ruleId
+                      ? t("recurring.form.categoryFromRule")
+                      : t("recurring.form.category")}
+                  </Label>
                   <CategorySelect
                     defaultValue={draft.categoryId ?? undefined}
                     onValueChange={(v) => setDraft({ ...draft, categoryId: v || null })}
                     categories={categories}
-                    ariaLabel="Series category"
+                    ariaLabel={t("recurring.form.categoryAria")}
                     className="w-full"
                     disabled={draft.ruleId !== null}
                   />
@@ -588,7 +630,7 @@ export function SeriesManager({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="sr-from">Window from day</Label>
+                  <Label htmlFor="sr-from">{t("recurring.form.fromDay")}</Label>
                   <Input
                     id="sr-from"
                     type="number"
@@ -601,7 +643,7 @@ export function SeriesManager({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sr-to">to day</Label>
+                  <Label htmlFor="sr-to">{t("recurring.form.toDay")}</Label>
                   <Input
                     id="sr-to"
                     type="number"
@@ -619,7 +661,7 @@ export function SeriesManager({
                   checked={draft.anchorMonthEnd}
                   onCheckedChange={(c) => setDraft({ ...draft, anchorMonthEnd: c === true })}
                 />
-                Charges on the LAST day of the month
+                {t("recurring.form.monthEnd")}
               </label>
 
               <div>
@@ -632,42 +674,39 @@ export function SeriesManager({
                   <ChevronRight
                     className={`h-3 w-3 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
                   />
-                  Advanced
+                  {t("recurring.form.advanced")}
                 </button>
                 {advancedOpen && (
                   <div className="mt-2 space-y-4">
                     <div className="space-y-1.5">
-                      <Label>Rule</Label>
+                      <Label>{t("recurring.form.rule")}</Label>
                       <SimpleSelect
                         value={draft.ruleId ?? "none"}
                         onValueChange={(v) =>
                           setDraft({ ...draft, ruleId: v === "none" ? null : v })
                         }
                         options={[
-                          { value: "none", label: "No rule — use the matcher text" },
+                          { value: "none", label: t("recurring.form.noRule") },
                           ...rules.map((r) => ({ value: r.id, label: r.name })),
                         ]}
-                        ariaLabel="Recognition rule"
+                        ariaLabel={t("recurring.form.ruleAria")}
                         className="w-full"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Reuses the rule&apos;s conditions to recognize arrivals;
-                        the category comes from the rule.
+                        {t("recurring.form.ruleHelp")}
                       </p>
                     </div>
                     {!draft.ruleId && (
                       <div className="space-y-1.5">
-                        <Label htmlFor="sr-matcher">Matcher text</Label>
+                        <Label htmlFor="sr-matcher">{t("recurring.form.matcher")}</Label>
                         <Input
                           id="sr-matcher"
-                          placeholder="Defaults to the name"
+                          placeholder={t("recurring.form.matcherPlaceholder")}
                           value={draft.matcher}
                           onChange={(e) => setDraft({ ...draft, matcher: e.target.value })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Looked for inside the bank&apos;s descriptor. Set it
-                          when the bank writes the charge differently from the
-                          name.
+                          {t("recurring.form.matcherHelp")}
                         </p>
                       </div>
                     )}
@@ -680,18 +719,18 @@ export function SeriesManager({
                     checked={draft.active}
                     onCheckedChange={(c) => setDraft({ ...draft, active: c === true })}
                   />
-                  Active
+                  {t("recurring.form.active")}
                 </label>
               )}
 
               {error && <p className="text-sm text-destructive">{error}</p>}
               <div className="flex items-center justify-end gap-2">
                 <Button variant="outline" onClick={() => setDraft(null)} disabled={isPending}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button onClick={save} disabled={isPending}>
                   {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Save
+                  {t("common.save")}
                 </Button>
               </div>
             </div>
@@ -706,12 +745,20 @@ export function SeriesManager({
         }}
       >
         <DialogContent className="pt-8 sm:w-[min(96vw,420px)] sm:max-w-[min(96vw,420px)]">
-          <DialogTitle>Delete series?</DialogTitle>
+          <DialogTitle>{t("recurring.delete.title")}</DialogTitle>
           {confirmDelete && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{confirmDelete.name}</span>{" "}
-                and its pending expected charges are removed.
+                <RichText
+                  template={t("recurring.delete.body")}
+                  slots={{
+                    name: (
+                      <span className="font-medium text-foreground">
+                        {confirmDelete.name}
+                      </span>
+                    ),
+                  }}
+                />
               </p>
               <div className="flex items-center justify-end gap-2">
                 <Button
@@ -719,11 +766,11 @@ export function SeriesManager({
                   onClick={() => setConfirmDelete(null)}
                   disabled={isPending}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button variant="destructive" onClick={confirmedRemove} disabled={isPending}>
                   {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Delete
+                  {t("common.delete")}
                 </Button>
               </div>
             </div>

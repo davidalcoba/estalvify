@@ -13,6 +13,7 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { axisTickStyle, chartGridStroke } from "./shared/chart-style";
 import { renderCurrencyTooltip } from "./shared/currency-tooltip";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export interface IncomeExpensesDatum {
   label: string;
@@ -32,6 +33,7 @@ export function IncomeExpensesChart({
   locale: string;
   height?: number;
 }) {
+  const t = useT();
   const compact = (value: number) =>
     formatCurrency(value, currency, locale).replace(/[.,]00(?=\D*$)/, "");
 
@@ -53,8 +55,18 @@ export function IncomeExpensesChart({
             content={renderCurrencyTooltip(currency, locale)}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="income" name="Income" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="expenses" name="Expenses" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+          <Bar
+            dataKey="income"
+            name={t("reports.chart.income")}
+            fill="var(--chart-2)"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="expenses"
+            name={t("reports.chart.expenses")}
+            fill="var(--chart-1)"
+            radius={[4, 4, 0, 0]}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>
