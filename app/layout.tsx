@@ -46,11 +46,21 @@ export const metadata: Metadata = {
     { url: "/splash/launch-828x1792.png", media: "(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     { url: "/splash/launch-1242x2208.png", media: "(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
     { url: "/splash/launch-750x1334.png", media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
+    { url: "/splash/launch-1080x2340.png", media: "(device-width: 360px) and (device-height: 780px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
+    { url: "/splash/launch-640x1136.png", media: "(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     { url: "/splash/launch-2048x2732.png", media: "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     { url: "/splash/launch-1668x2388.png", media: "(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     { url: "/splash/launch-1668x2224.png", media: "(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     { url: "/splash/launch-1536x2048.png", media: "(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     ],
+  },
+  other: {
+    // Next emits only the standardised `mobile-web-app-capable` for
+    // `appleWebApp.capable`, but iOS reads the apple-prefixed name — and
+    // without it Safari ignores every apple-touch-startup-image above, which
+    // is why the launch screen stayed blank on a real iPhone. Both are
+    // correct to ship; only this one makes the splash work.
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 
