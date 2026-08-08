@@ -4,6 +4,7 @@ import { useState, useRef, useTransition } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import { renameAccount } from "@/app/(app)/accounts/actions";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface AccountNameEditorProps {
   accountId: string;
@@ -17,6 +18,7 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const canWrite = useCanWrite();
+  const t = useT();
 
   if (!canWrite) {
     return <span className="text-sm font-medium">{saved}</span>;
@@ -77,7 +79,7 @@ export function AccountNameEditor({ accountId, initialName }: AccountNameEditorP
       <button
         onClick={startEditing}
         className="text-muted-foreground/50 hover:text-foreground transition-colors"
-        title="Rename"
+        title={t("accounts.rename")}
       >
         <Pencil className="h-3 w-3" />
       </button>

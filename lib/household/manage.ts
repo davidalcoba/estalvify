@@ -4,6 +4,7 @@
 
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { AppError } from "@/lib/errors";
 import { generateOpaqueToken, hashToken } from "@/lib/mcp/oauth";
 import { revokeUserAccess } from "@/lib/auth/revoke";
 import type { HouseholdRole } from "@/app/generated/prisma";
@@ -68,7 +69,7 @@ export async function listHouseholdPeople(
       },
     },
   });
-  if (!household) throw new Error("Household not found");
+  if (!household) throw new AppError("household.error.notFound");
 
   const now = Date.now();
   return {
@@ -108,8 +109,8 @@ export async function createHouseholdInvite(
   role: string
 ): Promise<{ token: string; expiresAt: Date }> {
   const email = normalizeEmail(rawEmail);
-  if (!email || !email.includes("@")) throw new Error("Enter a valid email");
-  if (!isInvitableRole(role)) throw new Error("Invalid role");
+  if (!email || !email.includes("@")) throw new AppError("household.error.invalidEmail");
+  if (!isInvitableRole(role)) throw new AppError("household.error.invalidRole");
 
   const existingMember = await prisma.householdMember.findFirst({
     where: {
@@ -118,7 +119,7 @@ export async function createHouseholdInvite(
     },
     select: { id: true },
   });
-  if (existingMember) throw new Error("Already a member of this household");
+  if (existingMember) throw new AppError("household.error.alreadyMember");
 
   const token = generateOpaqueToken();
   const expiresAt = inviteExpiryFrom(new Date());
@@ -169,14 +170,14 @@ export async function changeHouseholdMemberRole(
 ): Promise<void> {
   // Only EDITOR/VIEWER are assignable: the OWNER role is the data anchor and
   // never changes hands here (transfer is phase 6 of the plan).
-  if (!isInvitableRole(role)) throw new Error("Invalid role");
+  if (!isInvitableRole(role)) throw new AppError("household.error.invalidRole");
 
   const member = await prisma.householdMember.findFirst({
     where: { id: memberId, householdId },
     select: { role: true },
   });
-  if (!member) throw new Error("Member not found");
-  if (member.role === "OWNER") throw new Error("The owner's role cannot change");
+  if (!member) throw new AppError("household.error.memberNotFound");
+  if (member.role === "OWNER") throw new AppError("household.error.ownerRoleFixed");
 
   await prisma.householdMember.update({
     where: { id: memberId },
@@ -198,8 +199,8 @@ export async function removeHouseholdMember(
     where: { id: memberId, householdId },
     select: { role: true, userId: true },
   });
-  if (!member) throw new Error("Member not found");
-  if (member.role === "OWNER") throw new Error("The owner cannot be removed");
+  if (!member) throw new AppError("household.error.memberNotFound");
+  if (member.role === "OWNER") throw new AppError("household.error.ownerCannotBeRemoved");
 
   await prisma.householdMember.delete({ where: { id: memberId } });
   await revokeUserAccess(member.userId);
@@ -337,7 +338,7 @@ export async function createOwnHousehold(
       where: { ownerUserId: userId },
       select: { id: true },
     });
-    if (!existing) throw new Error("Failed to create household");
+    if (!existing) throw new AppError("household.error.createFailed");
     return existing;
   }
 }
@@ -347,7 +348,7 @@ export async function renameHousehold(
   rawName: string
 ): Promise<void> {
   const name = rawName.trim().slice(0, 60);
-  if (!name) throw new Error("Name is required");
+  if (!name) throw new AppError("household.error.nameRequired");
   await prisma.household.update({ where: { id: householdId }, data: { name } });
 }
 

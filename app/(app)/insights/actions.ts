@@ -24,6 +24,7 @@ import {
   AiNotConfiguredError,
   type AiRecommendation,
 } from "@/lib/ai";
+import { getT } from "@/lib/i18n/server";
 
 const HISTORY_MONTHS = 6;
 const HORIZON_MONTHS = 6;
@@ -198,20 +199,21 @@ export async function generateInsights(): Promise<InsightsResult> {
   });
 
   try {
-    const provider = getAiProvider({ locale });
+    // `language`, not `locale`: the recommendations are prose, so they follow
+    // the language preference, the same one that picks the interface language.
+    const provider = getAiProvider({ locale, language });
     const recommendations = await provider.generateRecommendations(summary);
     return { status: "ok", recommendations };
   } catch (error) {
     if (error instanceof AiNotConfiguredError) {
       return {
         status: "not_configured",
-        message:
-          "AI insights aren't configured. Set ANTHROPIC_API_KEY (and optionally AI_MODEL) to enable them.",
+        message: (await getT())("insights.notConfigured.body"),
       };
     }
     return {
       status: "error",
-      message: "Couldn't generate insights right now. Please try again.",
+      message: (await getT())("insights.error.body"),
     };
   }
 }

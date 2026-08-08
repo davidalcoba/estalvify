@@ -13,8 +13,12 @@ import { buildUncategorizedWhere } from "@/lib/categorize";
 import { toTransactionListItemDTO } from "@/lib/transactions/transaction-dto";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Eye } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Categorize" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.categorize") };
+}
 
 const PAGE_SIZES = [25, 50, 100, 200] as const;
 const DEFAULT_SIZE = 100;
@@ -137,14 +141,15 @@ export default async function CategorizePage({ searchParams }: PageProps) {
   // gets an explanation instead of controls that would only error (the
   // sidebar also hides this route for them).
   const scope = await requireScope("read");
+  const t = await getT();
   if (scope.role === "VIEWER") {
     return (
       <div className="space-y-4">
-        <PageHeader title="Categorize" />
+        <PageHeader title={t("nav.categorize")} />
         <EmptyState
           icon={Eye}
-          title="Read-only access"
-          description="Your role in this household is Viewer: you can browse transactions, plans and reports, but categorizing is up to the household's editors."
+          title={t("categorize.viewer.title")}
+          description={t("categorize.viewer.body")}
         />
       </div>
     );
@@ -165,7 +170,7 @@ export default async function CategorizePage({ searchParams }: PageProps) {
     <CategorizeSearchProvider>
       <div className="space-y-4">
         {/* Title — always visible, never skeletons on page/size change */}
-        <PageHeader title="Categorize" />
+        <PageHeader title={t("nav.categorize")} />
 
         {/* Search bar — always visible, state persists across page changes */}
         <CategorizeSearchBar />

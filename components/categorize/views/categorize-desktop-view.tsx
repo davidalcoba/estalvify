@@ -13,6 +13,7 @@ import { type Category } from "@/components/categorize/category-options";
 import { CategorySelect } from "@/components/categorize/category-select";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { matchesTransactionSearch } from "@/lib/categorize";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface CategorizeDesktopViewProps {
   transactions: TransactionListItemDTO[];
@@ -77,6 +78,7 @@ export function CategorizeDesktopView({
   onOpenFocus,
   onPageSizeChange,
 }: CategorizeDesktopViewProps) {
+  const t = useT();
   const activeQuery = searchInput.trim();
   const filtered = activeQuery.length >= 3
     ? transactions.filter((tx) => matchesTransactionSearch(tx, activeQuery))
@@ -100,14 +102,14 @@ export function CategorizeDesktopView({
       {showBulkByQuery && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/20 bg-brand/10 px-4 py-3">
           <span className="text-sm font-medium text-brand shrink-0">
-            Categorize all {filtered.length} matching as:
+            {t("categorize.bulkQuery", { count: filtered.length })}
           </span>
           <CategorySelect
             value={bulkQueryCategoryId}
             onValueChange={onBulkQueryCategoryChange}
             categories={categories}
             size="sm"
-            ariaLabel="Category to apply to all matches"
+            ariaLabel={t("categorize.bulkQueryAria")}
             className="flex-1 min-w-40"
           />
           <Button
@@ -116,7 +118,11 @@ export function CategorizeDesktopView({
             disabled={!bulkQueryCategoryId || isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 shrink-0"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+            {isBulking ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              t("categorize.applyToAll")
+            )}
           </Button>
         </div>
       )}
@@ -124,14 +130,14 @@ export function CategorizeDesktopView({
       {checkedVisible.length > 0 && categories.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/20 bg-brand/10 px-4 py-3">
           <span className="text-sm font-medium text-brand shrink-0">
-            {checkedVisible.length} selected — categorize as:
+            {t("categorize.selectedAs", { count: checkedVisible.length })}
           </span>
           <CategorySelect
             value={bulkCategoryId}
             onValueChange={onBulkCategoryChange}
             categories={categories}
             size="sm"
-            ariaLabel="Category for selected transactions"
+            ariaLabel={t("categorize.selectedAria")}
             className="flex-1 min-w-40"
           />
           <Button
@@ -140,10 +146,10 @@ export function CategorizeDesktopView({
             disabled={!bulkCategoryId || isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 shrink-0"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.apply")}
           </Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="shrink-0 text-muted-foreground">
-            Clear
+            {t("common.clear")}
           </Button>
         </div>
       )}
@@ -155,12 +161,14 @@ export function CategorizeDesktopView({
               <CheckCircle className="h-6 w-6 text-success" />
             </div>
             <div>
-              <p className="font-semibold">All caught up!</p>
-              <p className="text-sm text-muted-foreground mt-1">No transactions pending categorization.</p>
+              <p className="font-semibold">{t("categorize.allCaughtUp")}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {t("categorize.nonePending")}
+              </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Tag className="h-3.5 w-3.5" />
-              <span>Transactions sync daily</span>
+              <span>{t("categorize.syncDaily")}</span>
             </div>
           </div>
         </Card>
@@ -173,12 +181,14 @@ export function CategorizeDesktopView({
               <Inbox className="h-6 w-6 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-semibold">No matches</p>
+              <p className="font-semibold">{t("categorize.noMatches")}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                No transactions on this page match &quot;{searchInput}&quot;.
+                {t("categorize.noMatchesFor", { query: searchInput })}
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => onSearchInputChange("")}>Clear filter</Button>
+            <Button variant="outline" size="sm" onClick={() => onSearchInputChange("")}>
+              {t("categorize.clearFilter")}
+            </Button>
           </div>
         </Card>
       )}
@@ -189,15 +199,25 @@ export function CategorizeDesktopView({
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground">
                 {activeQuery.length >= 3
-                  ? `Showing ${filtered.length} of ${transactions.length} on this page`
-                  : `Showing ${rangeStart}–${rangeEnd} of ${total} transactions`}
+                  ? t("categorize.showingFiltered", {
+                      shown: filtered.length,
+                      onPage: transactions.length,
+                    })
+                  : t("transactions.showing", {
+                      from: rangeStart,
+                      to: rangeEnd,
+                      total,
+                    })}
               </p>
               <SimpleSelect
                 value={String(pageSize)}
                 onValueChange={(v) => onPageSizeChange(Number(v))}
-                ariaLabel="Rows per page"
+                ariaLabel={t("categorize.rowsPerPage")}
                 size="sm"
-                options={pageSizeOptions.map((s) => ({ value: String(s), label: `${s} / page` }))}
+                options={pageSizeOptions.map((s) => ({
+                  value: String(s),
+                  label: t("categorize.perPage", { size: s }),
+                }))}
               />
             </div>
 
@@ -229,7 +249,9 @@ export function CategorizeDesktopView({
                     className="h-4 w-4 rounded border-input accent-brand cursor-pointer"
                   />
                   <span className="text-xs text-muted-foreground">
-                    {someChecked || allChecked ? `${checkedVisible.length} selected` : "Select all"}
+                    {someChecked || allChecked
+                      ? t("categorize.selectedCount", { count: checkedVisible.length })
+                      : t("categorize.selectAll")}
                   </span>
                 </div>
 
@@ -267,9 +289,9 @@ export function CategorizeDesktopView({
                               if (v) onCategorize(tx.id, v);
                             }}
                             categories={categories}
-                            placeholder="Category…"
+                            placeholder={t("categorize.short")}
                             size="sm"
-                            ariaLabel={`Categorize: ${merchant}`}
+                            ariaLabel={t("categorize.forMerchant", { merchant })}
                             className="max-w-40 min-w-28"
                           />
                         </div>

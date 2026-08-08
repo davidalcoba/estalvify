@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListCardSkeleton } from "@/components/layout/skeletons";
+import { useT } from "@/components/i18n/i18n-provider";
 
 function shift(
   year: number,
@@ -49,6 +50,7 @@ export function MonthShell({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const t = useT();
   const [isPending, startTransition] = useTransition();
   const prev = shift(year, month, -1);
   const next = shift(year, month, 1);
@@ -70,7 +72,7 @@ export function MonthShell({
           lg:p-6) and rows do not show through the edges. */}
       <div className="sticky top-14 z-30 -mx-4 bg-background px-4 py-2 lg:-mx-6 lg:px-6">
         <PageHeader
-          title="Budget"
+          title={t("nav.budget")}
           actions={
             <div className="flex items-center gap-1">
               <Button
@@ -82,13 +84,13 @@ export function MonthShell({
                 onClick={() => go("/plan")}
                 disabled={isPending}
               >
-                Today
+                {t("budget.monthShell.today")}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                aria-label="Previous month"
+                aria-label={t("budget.monthShell.previous")}
                 onClick={() => go(`/plan?y=${prev.y}&m=${prev.m}`)}
                 disabled={isPending}
               >
@@ -101,7 +103,7 @@ export function MonthShell({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                aria-label="Next month"
+                aria-label={t("budget.monthShell.next")}
                 onClick={() => go(`/plan?y=${next.y}&m=${next.m}`)}
                 disabled={isPending}
               >

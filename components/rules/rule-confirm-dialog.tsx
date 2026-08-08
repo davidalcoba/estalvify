@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface RuleConfirmDialogProps {
   open: boolean;
@@ -40,6 +41,8 @@ export function RuleConfirmDialog({
   onCancel,
   onConfirm,
 }: RuleConfirmDialogProps) {
+  const t = useT();
+
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
       <DialogContent>
@@ -54,7 +57,7 @@ export function RuleConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={isPending}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
             {isPending ? pendingLabel : confirmLabel}

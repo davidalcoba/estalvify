@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { finalizeSetup, cancelSetup } from "@/app/(app)/accounts/setup/actions";
 import { Building2 } from "lucide-react";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface AccountOption {
   uid: string;
@@ -25,6 +26,7 @@ export function AccountSelectionForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const t = useT();
 
   function toggle(uid: string) {
     setSelected((prev) => {
@@ -37,7 +39,7 @@ export function AccountSelectionForm({
 
   function handleImport() {
     if (selected.size === 0) {
-      setError("Select at least one account to import.");
+      setError(t("accounts.setup.selectOne"));
       return;
     }
     setError(null);
@@ -103,10 +105,12 @@ export function AccountSelectionForm({
 
       <div className="flex items-center gap-3 pt-2">
         <Button onClick={handleImport} disabled={isPending || selected.size === 0}>
-          {isPending ? "Importing…" : `Import ${selected.size} account${selected.size !== 1 ? "s" : ""}`}
+          {isPending
+            ? t("accounts.setup.importing")
+            : t.plural("accounts.setup.import", selected.size)}
         </Button>
         <Button variant="ghost" onClick={handleCancel} disabled={isPending}>
-          Cancel
+          {t("common.cancel")}
         </Button>
       </div>
     </div>

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Category } from "./category-options";
+import { useT } from "@/components/i18n/i18n-provider";
 
 // Radix-based category picker with the same parent/child hierarchy that
 // CategoryOptions rendered for native <select>. Replaces every raw category
@@ -19,7 +20,7 @@ export function CategorySelect({
   defaultValue,
   onValueChange,
   categories,
-  placeholder = "Pick a category…",
+  placeholder,
   disabled,
   size = "default",
   className,
@@ -36,6 +37,7 @@ export function CategorySelect({
   className?: string;
   ariaLabel?: string;
 }) {
+  const t = useT();
   const parents = categories.filter((c) => !c.parentId);
   const childrenMap: Record<string, Category[]> = {};
   for (const c of categories) {
@@ -50,7 +52,7 @@ export function CategorySelect({
       disabled={disabled}
     >
       <SelectTrigger size={size} className={className} aria-label={ariaLabel}>
-        <SelectValue placeholder={placeholder} />
+        <SelectValue placeholder={placeholder ?? t("categorize.pickCategory")} />
       </SelectTrigger>
       <SelectContent>
         {parents.map((parent) => {

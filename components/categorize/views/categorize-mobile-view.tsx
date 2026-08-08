@@ -23,6 +23,7 @@ import { TransactionItem } from "@/components/transactions/shared/transaction-it
 import { TransactionAmount } from "@/components/transactions/shared/transaction-amount";
 import { CategoryChip } from "@/components/transactions/shared/category-chip";
 import { QuickRuleDialog } from "@/components/rules/quick-rule-dialog";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface CategorizeMobileViewProps {
   transactions: TransactionListItemDTO[];
@@ -98,6 +99,7 @@ export function CategorizeMobileView({
   onToggleCheck,
   onToggleAll,
 }: CategorizeMobileViewProps) {
+  const t = useT();
   // Queue of transactions currently being processed in the sheet
   const [sheetQueue, setSheetQueue] = useState<TransactionListItemDTO[] | null>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
@@ -177,14 +179,14 @@ export function CategorizeMobileView({
       {showBulkByQuery && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
           <span className="text-sm font-medium text-brand w-full">
-            Categorize all {filtered.length} matching as:
+            {t("categorize.bulkQuery", { count: filtered.length })}
           </span>
           <CategorySelect
             value={bulkQueryCategoryId ?? ""}
             onValueChange={(v) => onBulkQueryCategoryChange?.(v)}
             categories={categories}
             size="sm"
-            ariaLabel="Category to apply to all matches"
+            ariaLabel={t("categorize.bulkQueryAria")}
             className="flex-1"
           />
           <Button
@@ -193,7 +195,11 @@ export function CategorizeMobileView({
             disabled={!bulkQueryCategoryId || isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply to all"}
+            {isBulking ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              t("categorize.applyToAll")
+            )}
           </Button>
         </div>
       )}
@@ -208,7 +214,7 @@ export function CategorizeMobileView({
             onValueChange={(v) => onBulkCategoryChange?.(v)}
             categories={categories}
             size="sm"
-            ariaLabel="Category for selected transactions"
+            ariaLabel={t("categorize.selectedAria")}
             className="flex-1"
           />
           <Button
@@ -217,7 +223,7 @@ export function CategorizeMobileView({
             disabled={!bulkCategoryId || isBulking}
             className="bg-brand text-brand-foreground hover:bg-brand/90 h-8"
           >
-            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+            {isBulking ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.apply")}
           </Button>
           <Button variant="ghost" size="sm" onClick={onClearSelection} className="h-8 text-muted-foreground">
             Clear
@@ -232,14 +238,14 @@ export function CategorizeMobileView({
               <CheckCircle className="h-6 w-6 text-success" />
             </div>
             <div>
-              <p className="font-semibold">All caught up!</p>
+              <p className="font-semibold">{t("categorize.allCaughtUp")}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                No transactions pending categorization.
+                {t("categorize.nonePending")}
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Tag className="h-3.5 w-3.5" />
-              <span>Transactions sync daily</span>
+              <span>{t("categorize.syncDaily")}</span>
             </div>
           </div>
         </Card>
@@ -252,13 +258,13 @@ export function CategorizeMobileView({
               <Inbox className="h-6 w-6 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-semibold">No matches</p>
+              <p className="font-semibold">{t("categorize.noMatches")}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                No transactions match your filter.
+                {t("categorize.noMatchesFilter")}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={() => onSearchInputChange("")}>
-              Clear
+              {t("common.clear")}
             </Button>
           </div>
         </Card>
@@ -269,15 +275,18 @@ export function CategorizeMobileView({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <p className="text-xs text-muted-foreground shrink-0">
-                {rangeStart}–{rangeEnd} of {total}
+                {t("transactions.rangeShort", { from: rangeStart, to: rangeEnd, total })}
               </p>
               {pageSizeOptions && onPageSizeChange && (
                 <SimpleSelect
                   value={String(pageSize)}
                   onValueChange={(v) => onPageSizeChange(Number(v))}
-                  ariaLabel="Rows per page"
+                  ariaLabel={t("categorize.rowsPerPage")}
                   size="sm"
-                  options={pageSizeOptions.map((s) => ({ value: String(s), label: `${s}/page` }))}
+                  options={pageSizeOptions.map((s) => ({
+                    value: String(s),
+                    label: t("categorize.perPageShort", { size: s }),
+                  }))}
                 />
               )}
             </div>
@@ -318,7 +327,7 @@ export function CategorizeMobileView({
                 onChange={onToggleAll}
                 className="h-4 w-4 rounded border-input accent-brand cursor-pointer"
               />
-              {allChecked ? "Deselect all" : "Select all"}
+              {allChecked ? t("categorize.deselectAll") : t("categorize.selectAll")}
             </label>
           )}
 
@@ -414,8 +423,8 @@ export function CategorizeMobileView({
                     value=""
                     onValueChange={handleCategorySelect}
                     categories={categories}
-                    placeholder="Select a category…"
-                    ariaLabel="Select a category"
+                    placeholder={t("categorize.pickCategory")}
+                    ariaLabel={t("categorize.pickCategoryAria")}
                     className="flex-1 h-11"
                   />
                   <Button
@@ -424,7 +433,7 @@ export function CategorizeMobileView({
                     size="icon"
                     className="h-11 w-11 shrink-0 text-warning border-warning/30 hover:bg-warning/10"
                     onClick={() => setRuleOpen(true)}
-                    title="Create rule for this transaction"
+                    title={t("transactions.createRule")}
                   >
                     <Zap className="h-4 w-4" />
                   </Button>

@@ -24,6 +24,7 @@ import {
 } from "@/app/(app)/notifications/actions";
 import { severityIcon, severityColor } from "./severity";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export function NotificationBell({
   notifications,
@@ -33,6 +34,7 @@ export function NotificationBell({
   unreadCount: number;
 }) {
   const router = useRouter();
+  const t = useT();
   const isMobile = useIsMobile();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -50,7 +52,7 @@ export function NotificationBell({
   }
 
   const trigger = (
-    <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+    <Button variant="ghost" size="icon" className="relative" aria-label={t("notifications.title")}>
       <Bell className="h-5 w-5" />
       {unreadCount > 0 && (
         <Badge
@@ -66,7 +68,7 @@ export function NotificationBell({
   const panel = (
     <>
       <div className="flex items-center justify-between px-3 py-2">
-        <span className="text-sm font-medium">Notifications</span>
+        <span className="text-sm font-medium">{t("notifications.title")}</span>
         {unreadCount > 0 && (
           <button
             onClick={() => run(markAllNotificationsRead)}
@@ -74,7 +76,7 @@ export function NotificationBell({
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <CheckCheck className="h-3.5 w-3.5" />
-            Mark all read
+            {t("notifications.markAllRead")}
           </button>
         )}
       </div>
@@ -82,7 +84,7 @@ export function NotificationBell({
       <div className="max-h-80 overflow-y-auto border-t">
         {notifications.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            You&apos;re all caught up.
+            {t("notifications.allCaughtUp")}
           </p>
         ) : (
           notifications.map((n) => {
@@ -103,13 +105,13 @@ export function NotificationBell({
                     {!n.read && (
                       <span
                         className="ml-auto size-2 shrink-0 rounded-full bg-brand"
-                        aria-label="Unread"
+                        aria-label={t("notifications.unread")}
                       />
                     )}
                   </span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">{n.body}</span>
                   <span className="mt-1 block text-[11px] text-muted-foreground/70">
-                    {relativeTime(n.createdAt)}
+                    {relativeTime(n.createdAt, t)}
                   </span>
                 </span>
               </button>
@@ -126,7 +128,7 @@ export function NotificationBell({
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
-            Check now
+            {t("notifications.checkNow")}
           </button>
         </div>
       )}
@@ -138,7 +140,7 @@ export function NotificationBell({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent side="top" className="gap-0 rounded-b-xl" showCloseButton={false}>
-          <SheetTitle className="sr-only">Notifications</SheetTitle>
+          <SheetTitle className="sr-only">{t("notifications.title")}</SheetTitle>
           {panel}
         </SheetContent>
       </Sheet>

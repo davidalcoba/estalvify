@@ -1,4 +1,5 @@
 // Types and DTOs for transaction categorization rules
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
 // ─────────────────────────────────────────────
 // Condition model
@@ -329,27 +330,29 @@ export interface CategoryRuleDTO {
 
 // Labels for UI rendering
 
-export const FIELD_LABELS: Record<RuleConditionField, string> = {
-  any: "Any text",
-  description: "Description",
-  remittanceInfo: "Reference",
-  amount: "Amount",
-  direction: "Direction",
-  account: "Account",
+// Message KEYS, not labels: the rule editor and the saved-rule rows render in
+// the member's language, and this module is pure — it has no translator.
+export const FIELD_LABEL_KEYS: Record<RuleConditionField, MessageKey> = {
+  any: "rules.field.any",
+  description: "rules.field.description",
+  remittanceInfo: "rules.field.remittanceInfo",
+  amount: "rules.field.amount",
+  direction: "rules.field.direction",
+  account: "rules.field.account",
 };
 
-export const OPERATOR_LABELS: Record<RuleConditionOperator, string> = {
-  contains: "contains",
-  equals: "is",
-  startsWith: "starts with",
-  endsWith: "ends with",
-  word: "has the word",
-  matches: "matches regex",
-  gt: "greater than",
-  gte: "at least",
-  lt: "less than",
-  lte: "at most",
-  between: "between",
+export const OPERATOR_LABEL_KEYS: Record<RuleConditionOperator, MessageKey> = {
+  contains: "rules.op.contains",
+  equals: "rules.op.equals",
+  startsWith: "rules.op.startsWith",
+  endsWith: "rules.op.endsWith",
+  word: "rules.op.word",
+  matches: "rules.op.matches",
+  gt: "rules.op.gt",
+  gte: "rules.op.gte",
+  lt: "rules.op.lt",
+  lte: "rules.op.lte",
+  between: "rules.op.between",
 };
 
 export const TEXT_OPERATORS: RuleConditionOperator[] = [

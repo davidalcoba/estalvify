@@ -34,6 +34,21 @@
 - Do not modify unrelated files in a feature change
 - Render money/dates via `lib/formatters` (`formatCurrency`/`formatDate`), never ad-hoc
 
+## User-Facing Strings
+
+- Never hardcode text a person reads. Look it up from the dictionaries —
+  `await getT()` on the server, `useT()` on the client. See UI_RULES.md →
+  "Every visible string comes from the dictionaries" and ARCHITECTURE.md →
+  "Internationalization".
+- Pure modules stay pure: they take a `Translator` as a parameter (as
+  `lib/notifications/generators.ts` does) rather than importing one.
+- A domain failure the user will read is thrown as
+  `new AppError("<message.key>")` (`lib/errors.ts`); the server action renders
+  it with `describeError(err, await getT())`. Do not throw sentences.
+- Copy that is PERSISTED (notifications) is written in the household OWNER's
+  language, because one row is shared by every member. Copy that is RENDERED
+  follows the acting member's.
+
 ## Testing and Checks
 
 - Pure logic (parsers, classifiers, query/where builders, formatters) should have

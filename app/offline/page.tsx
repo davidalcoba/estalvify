@@ -9,18 +9,22 @@
 import type { Metadata } from "next";
 import { WifiOff } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Offline",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("offline.metaTitle") };
+}
 
-export default function OfflinePage() {
+export default async function OfflinePage() {
+  const t = await getT();
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <EmptyState
         icon={WifiOff}
-        title="You're offline"
-        description="Estalvify needs a connection. Reconnect and try again."
+        title={t("offline.title")}
+        description={t("offline.shortBody")}
         className="w-full max-w-md"
       />
     </div>

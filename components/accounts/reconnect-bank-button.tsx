@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanWrite } from "@/components/layout/role-provider";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface ReconnectBankButtonProps {
   connectionId: string;
@@ -14,10 +15,11 @@ interface ReconnectBankButtonProps {
   secondary?: boolean;
 }
 
-export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, label = "Reconnect", secondary = false }: ReconnectBankButtonProps) {
+export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, label, secondary = false }: ReconnectBankButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canWrite = useCanWrite();
+  const t = useT();
 
   if (!canWrite) return null;
 
@@ -34,13 +36,13 @@ export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, lab
         const data = await response.json();
 
         if (!response.ok) {
-          setError(data.error ?? "Failed to reconnect");
+          setError(data.error ?? t("accounts.reconnect.failed"));
           return;
         }
 
         window.location.href = data.url;
       } catch {
-        setError("Network error. Please try again.");
+        setError(t("accounts.network"));
       }
     });
   }
@@ -58,7 +60,7 @@ export function ReconnectBankButton({ connectionId, aspspName, aspspCountry, lab
       >
         {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
         {!isPending && !secondary && <RefreshCw className="h-3 w-3" />}
-        {label}
+        {label ?? t("accounts.reconnect")}
       </Button>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

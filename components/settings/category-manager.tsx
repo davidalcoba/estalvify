@@ -21,6 +21,8 @@ import {
   deleteCategory,
   createSubcategory,
 } from "@/app/(app)/settings/actions";
+import { useT } from "@/components/i18n/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
 const PRESET_COLORS = [
   "#6366f1",
@@ -71,6 +73,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   const [formColor, setFormColor] = useState(PRESET_COLORS[0]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const t = useT();
 
   const isCategory =
     editMode?.type === "add-category" || editMode?.type === "edit-category";
@@ -94,7 +97,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
   function handleSubmit() {
     const name = formName.trim();
     if (!name) {
-      setError("Name is required");
+      setError(t("settings.categories.nameRequired"));
       return;
     }
     setError(null);
@@ -113,7 +116,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         setEditMode(null);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+        setError(err instanceof Error ? err.message : t("settings.saveFailed"));
       }
     });
   }
@@ -132,23 +135,25 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
     });
   }
 
-  const editTitles: Record<NonNullable<EditMode>["type"], string> = {
-    "add-category": "Add category",
-    "edit-category": "Edit category",
-    "add-subcategory": "Add subcategory",
-    "edit-subcategory": "Edit subcategory",
+  const editTitles: Record<NonNullable<EditMode>["type"], MessageKey> = {
+    "add-category": "settings.categories.addCategory",
+    "edit-category": "settings.categories.editCategory",
+    "add-subcategory": "settings.categories.addSubcategory",
+    "edit-subcategory": "settings.categories.editSubcategory",
   };
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Categories</CardTitle>
-          <CardDescription>Personal categories and subcategories.</CardDescription>
+          <CardTitle>{t("settings.categories.title")}</CardTitle>
+          <CardDescription>{t("settings.categories.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {initialCategories.length === 0 && (
-            <p className="text-sm text-muted-foreground py-4 text-center">No categories yet.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              {t("settings.categories.empty")}
+            </p>
           )}
 
           {initialCategories.map((cat) => (
@@ -158,7 +163,11 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                 <button
                   onClick={() => toggleExpand(cat.id)}
                   className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                  aria-label={expandedIds.has(cat.id) ? "Collapse" : "Expand"}
+                  aria-label={
+                    expandedIds.has(cat.id)
+                      ? t("settings.categories.collapse")
+                      : t("settings.categories.expand")
+                  }
                 >
                   {expandedIds.has(cat.id) ? (
                     <ChevronDown className="h-4 w-4" />
@@ -172,13 +181,12 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                 />
                 <span className="flex-1 text-sm font-medium">{cat.name}</span>
                 <span className="text-xs text-muted-foreground mr-1">
-                  {cat.children.length}{" "}
-                  {cat.children.length === 1 ? "subcategory" : "subcategories"}
+                  {t.plural("settings.categories.count", cat.children.length)}
                 </span>
                 <button
                   onClick={() => openEdit({ type: "edit-category", id: cat.id }, cat.name, cat.color)}
                   className="text-muted-foreground hover:text-foreground p-1 rounded"
-                  aria-label="Edit category"
+                  aria-label={t("settings.categories.editCategory")}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -193,7 +201,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                   }
                   disabled={isPending}
                   className="text-muted-foreground hover:text-destructive p-1 rounded"
-                  aria-label="Delete category"
+                  aria-label={t("settings.categories.deleteCategory")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -217,7 +225,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                           openEdit({ type: "edit-subcategory", id: sub.id }, sub.name, cat.color)
                         }
                         className="text-muted-foreground hover:text-foreground p-1 rounded"
-                        aria-label="Edit subcategory"
+                        aria-label={t("settings.categories.editSubcategory")}
                       >
                         <Pencil className="h-3 w-3" />
                       </button>
@@ -232,7 +240,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                         }
                         disabled={isPending}
                         className="text-muted-foreground hover:text-destructive p-1 rounded"
-                        aria-label="Delete subcategory"
+                        aria-label={t("settings.categories.deleteSubcategory")}
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -250,7 +258,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                     className="flex items-center gap-1.5 px-3 py-1.5 pl-10 w-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                   >
                     <Plus className="h-3 w-3" />
-                    Add subcategory
+                    {t("settings.categories.addSubcategory")}
                   </button>
                 </div>
               )}
@@ -264,7 +272,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
             className="w-full mt-2"
           >
             <Plus className="h-4 w-4 mr-1.5" />
-            Add category
+            {t("settings.categories.addCategory")}
           </Button>
         </CardContent>
       </Card>
@@ -273,17 +281,17 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
       <Dialog open={editMode !== null} onOpenChange={(open) => !open && setEditMode(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editMode ? editTitles[editMode.type] : ""}</DialogTitle>
+            <DialogTitle>{editMode ? t(editTitles[editMode.type]) : ""}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-1">
             <div className="space-y-1.5">
-              <Label htmlFor="cat-name">Name</Label>
+              <Label htmlFor="cat-name">{t("settings.categories.name")}</Label>
               <Input
                 id="cat-name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="Category name"
+                placeholder={t("settings.categories.namePlaceholder")}
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 autoFocus
               />
@@ -292,13 +300,13 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
 
             {isCategory && (
               <div className="space-y-1.5">
-                <Label>Color</Label>
+                <Label>{t("settings.categories.color")}</Label>
                 <div className="flex gap-2 flex-wrap">
                   {PRESET_COLORS.map((color) => (
                     <button
                       key={color}
                       type="button"
-                      aria-label={`Select color ${color}`}
+                      aria-label={t("settings.categories.selectColor", { color })}
                       className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${
                         formColor === color ? "ring-2 ring-offset-2 ring-ring scale-110" : ""
                       }`}
@@ -313,10 +321,10 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditMode(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -328,43 +336,46 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TriangleAlert className="h-5 w-5 text-destructive flex-shrink-0" />
-              Delete &ldquo;{deleteTarget?.name}&rdquo;?
+              {t("settings.categories.delete.title", { name: deleteTarget?.name ?? "" })}
             </DialogTitle>
             <DialogDescription asChild>
+              {/* Whole sentences, no inline <strong> around a fragment: the
+                  emphasized words do not fall in the same place in every
+                  language, and a sentence spliced from JSX cannot be
+                  reordered by a translator. */}
               <div className="space-y-2 pt-1">
                 {deleteTarget?.isCategory && deleteTarget.childCount > 0 && (
                   <p>
-                    This will also delete its{" "}
-                    <strong>
-                      {deleteTarget.childCount}{" "}
-                      {deleteTarget.childCount === 1 ? "subcategory" : "subcategories"}
-                    </strong>
-                    .
+                    {t.plural(
+                      "settings.categories.delete.children",
+                      deleteTarget.childCount,
+                    )}
                   </p>
                 )}
                 <p>
-                  Any transactions categorized under{" "}
-                  <strong>&ldquo;{deleteTarget?.name}&rdquo;</strong>
                   {deleteTarget?.isCategory && deleteTarget.childCount > 0
-                    ? " or its subcategories"
-                    : ""}{" "}
-                  will become <strong>uncategorized</strong>.
+                    ? t("settings.categories.delete.transactionsWithChildren", {
+                        name: deleteTarget.name,
+                      })
+                    : t("settings.categories.delete.transactions", {
+                        name: deleteTarget?.name ?? "",
+                      })}
                 </p>
-                <p>This action cannot be undone.</p>
+                <p>{t("settings.categories.delete.irreversible")}</p>
               </div>
             </DialogDescription>
           </DialogHeader>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={handleDeleteConfirmed}
               disabled={isPending}
             >
-              {isPending ? "Deleting…" : "Delete"}
+              {isPending ? t("common.deleting") : t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

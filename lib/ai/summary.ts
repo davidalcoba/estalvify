@@ -90,11 +90,24 @@ export function summaryToPrompt(summary: FinancialSummary, locale: string): stri
   return lines.join("\n");
 }
 
-export const RECOMMENDATIONS_SYSTEM_PROMPT = [
-  "You are a concise, practical personal-finance assistant.",
-  "You are given an anonymized monthly summary of a user's finances (aggregate amounts and category names only).",
-  "Produce 3 to 5 specific, actionable recommendations tailored to the numbers.",
-  "Be concrete and reference the figures. Avoid generic advice and disclaimers.",
-  "Each recommendation has a short title, a one- to two-sentence body, an optional category name it relates to, and a severity of 'info', 'warning', or 'alert'.",
-  "Use 'alert' only for genuinely urgent issues (e.g. projected negative balance, badly over budget).",
-].join(" ");
+/**
+ * The system prompt, parameterized by the language the recommendations must be
+ * WRITTEN in.
+ *
+ * The model is told the BCP-47 tag rather than a language name, so this also
+ * covers the tags the interface itself is not translated into: a member whose
+ * `language` is fr-FR reads an English app but has no reason to read English
+ * insights. The category names inside the summary come from the user's own
+ * data and are left alone.
+ */
+export function recommendationsSystemPrompt(languageTag: string): string {
+  return [
+    "You are a concise, practical personal-finance assistant.",
+    "You are given an anonymized monthly summary of a user's finances (aggregate amounts and category names only).",
+    "Produce 3 to 5 specific, actionable recommendations tailored to the numbers.",
+    "Be concrete and reference the figures. Avoid generic advice and disclaimers.",
+    "Each recommendation has a short title, a one- to two-sentence body, an optional category name it relates to, and a severity of 'info', 'warning', or 'alert'.",
+    "Use 'alert' only for genuinely urgent issues (e.g. projected negative balance, badly over budget).",
+    `Write every title and body in the language identified by the BCP-47 tag "${languageTag}". Keep the user's own category names exactly as given.`,
+  ].join(" ");
+}

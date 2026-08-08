@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionItem } from "@/components/transactions/shared/transaction-item";
 import type { TransactionListItemDTO } from "@/lib/transactions/transaction-dto";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface RulePreviewListProps {
   transactions: TransactionListItemDTO[];
@@ -17,11 +18,13 @@ export function RulePreviewList({
   locale,
   previewLimit,
 }: RulePreviewListProps) {
+  const t = useT();
+
   if (transactions.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center">
         <p className="text-sm text-muted-foreground">
-          No transactions match the conditions.
+          {t("rules.preview.none")}
         </p>
       </div>
     );
@@ -30,20 +33,9 @@ export function RulePreviewList({
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        {total > previewLimit ? (
-          <>
-            Showing{" "}
-            <span className="font-medium text-foreground">{previewLimit}</span>{" "}
-            of{" "}
-            <span className="font-medium text-foreground">{total}</span>{" "}
-            matching transactions
-          </>
-        ) : (
-          <>
-            <span className="font-medium text-foreground">{total}</span>{" "}
-            matching transaction{total !== 1 ? "s" : ""}
-          </>
-        )}
+        {total > previewLimit
+          ? t("rules.preview.showing", { shown: previewLimit, total })
+          : t.plural("rules.preview.count", total)}
       </p>
 
       <Card className="py-0 gap-0 overflow-hidden">

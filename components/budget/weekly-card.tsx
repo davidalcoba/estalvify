@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/formatters";
 import type { WeeklyStatus } from "@/lib/budget/month-status";
 import { CalendarRange } from "lucide-react";
+import { getT } from "@/lib/i18n/server";
+import { RichText } from "@/components/i18n/rich-text";
 
-export function WeeklyCard({
+export async function WeeklyCard({
   status,
   currency,
   locale,
@@ -19,21 +21,30 @@ export function WeeklyCard({
   locale: string;
 }) {
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  const t = await getT();
 
   if (!status.configured) {
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Available this week</CardTitle>
+          <CardTitle className="text-sm font-medium">{t("weekly.title")}</CardTitle>
           <CalendarRange className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Set category budgets in{" "}
-            <Link href="/plan" className="text-brand underline-offset-2 hover:underline">
-              Budget
-            </Link>{" "}
-            first.
+            <RichText
+              template={t("weekly.notConfigured")}
+              slots={{
+                link: (
+                  <Link
+                    href="/plan"
+                    className="text-brand underline-offset-2 hover:underline"
+                  >
+                    {t("nav.budget")}
+                  </Link>
+                ),
+              }}
+            />
           </p>
         </CardContent>
       </Card>
@@ -49,7 +60,7 @@ export function WeeklyCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Available this week</CardTitle>
+        <CardTitle className="text-sm font-medium">{t("weekly.title")}</CardTitle>
         <CalendarRange className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
@@ -62,12 +73,15 @@ export function WeeklyCard({
             {fmt(weekly.availableThisWeek)}
           </span>
           <span className={`text-sm tabular-nums ${opsTone}`}>
-            {status.opsThisWeek} ops
-            {status.opsMedian > 0 ? ` · median ${status.opsMedian}` : ""}
+            {t("weekly.ops", { count: status.opsThisWeek })}
+            {status.opsMedian > 0
+              ? t("weekly.opsMedian", { median: status.opsMedian })
+              : ""}
           </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          {fmt(weekly.dailyRate)}/day · {fmt(weekly.remainingMonth)} left
+          {t("weekly.perDay", { amount: fmt(weekly.dailyRate) })} ·{" "}
+          {t("weekly.left", { amount: fmt(weekly.remainingMonth) })}
         </p>
 
         {status.composition.length > 0 && (
@@ -79,13 +93,13 @@ export function WeeklyCard({
               >
                 <span className="min-w-0 truncate">{row.categoryName}</span>
                 <span className="shrink-0 tabular-nums">
-                  {fmt(row.spent)} · {row.count} ops
+                  {fmt(row.spent)} · {t("weekly.ops", { count: row.count })}
                 </span>
               </li>
             ))}
             {status.composition.length > 3 && (
               <li className="text-muted-foreground/70">
-                +{status.composition.length - 3} more
+                {t("weekly.more", { count: status.composition.length - 3 })}
               </li>
             )}
           </ul>

@@ -23,22 +23,27 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LogoMark } from "@/components/brand/logo";
+import { getT } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n/translate";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
-export const metadata: Metadata = { title: "Invitation" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("invite.metaTitle") };
+}
 
-const ROLE_LABEL: Record<string, string> = {
-  EDITOR: "Editor — can categorize, edit rules and the plan, and manage bank connections",
-  VIEWER: "Viewer — read-only access to everything",
+const ROLE_LABEL: Record<string, MessageKey> = {
+  EDITOR: "invite.role.EDITOR",
+  VIEWER: "invite.role.VIEWER",
 };
 
 // Why the invite cannot be accepted, in words the invitee can act on.
-const ERROR_MESSAGES: Record<string, string> = {
-  not_found: "This invitation link is not valid.",
-  revoked: "This invitation was revoked. Ask for a new link.",
-  already_accepted: "This invitation was already used.",
-  expired: "This invitation has expired. Ask for a new link.",
-  email_mismatch:
-    "This invitation was issued for a different email address. Sign in with the invited account, or ask for a new link.",
+const ERROR_MESSAGES: Record<string, MessageKey> = {
+  not_found: "invite.error.not_found",
+  revoked: "invite.error.revoked",
+  already_accepted: "invite.error.already_accepted",
+  expired: "invite.error.expired",
+  email_mismatch: "invite.error.email_mismatch",
 };
 
 export default async function InvitePage({
@@ -53,6 +58,7 @@ export default async function InvitePage({
 
   const session = await auth();
   if (!session?.user) redirect(`/login?callbackUrl=/invite/${token}`);
+  const t = await getT();
 
   // Where "not now" leads: members go back to the app; a user with no
   // household goes to /welcome, where NOTHING is created unless they choose
@@ -66,11 +72,11 @@ export default async function InvitePage({
   // An acceptance attempt bounced back with a reason — show it.
   if (error) {
     return (
-      <InviteShell title="Can't accept this invitation">
+      <InviteShell title={t("invite.cannotAccept")}>
         <p className="text-sm text-muted-foreground">
-          {ERROR_MESSAGES[error] ?? "Something went wrong. Please try again."}
+          {t(ERROR_MESSAGES[error] ?? "invite.error.generic")}
         </p>
-        <BackToApp href={backHref} />
+        <BackToApp t={t} href={backHref} />
       </InviteShell>
     );
   }
@@ -84,11 +90,11 @@ export default async function InvitePage({
 
   if (!validation.ok) {
     return (
-      <InviteShell title="Can't accept this invitation">
+      <InviteShell title={t("invite.cannotAccept")}>
         <p className="text-sm text-muted-foreground">
-          {ERROR_MESSAGES[validation.reason]}
+          {t(ERROR_MESSAGES[validation.reason] ?? "invite.error.generic")}
         </p>
-        <BackToApp href={backHref} />
+        <BackToApp t={t} href={backHref} />
       </InviteShell>
     );
   }
@@ -98,30 +104,27 @@ export default async function InvitePage({
     where: { id: found.invitedByUserId },
     select: { name: true, email: true },
   });
-  const inviterLabel = inviter?.name ?? inviter?.email ?? "The owner";
+  const inviterLabel = inviter?.name ?? inviter?.email ?? t("invite.defaultInviter");
   const acceptAction = acceptInvite.bind(null, token);
 
   return (
     <InviteShell
-      title={`Join “${found.household.name}”`}
-      description={`${inviterLabel} invited you to their household on Estalvify.`}
+      title={t("invite.join", { household: found.household.name })}
+      description={t("invite.invitedBy", { who: inviterLabel })}
     >
       <div className="rounded-md border bg-muted/40 p-3 text-sm">
-        <p className="font-medium">Your role</p>
+        <p className="font-medium">{t("invite.yourRole")}</p>
         <p className="text-muted-foreground">
-          {ROLE_LABEL[found.role] ?? found.role}
+          {ROLE_LABEL[found.role] ? t(ROLE_LABEL[found.role]) : found.role}
         </p>
       </div>
-      <p className="text-xs text-muted-foreground">
-        You&apos;ll see this household&apos;s accounts, transactions and plans.
-        You can be removed by the owner at any time.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("invite.disclaimer")}</p>
       <form action={acceptAction}>
         <Button type="submit" className="w-full">
-          Accept invitation
+          {t("invite.accept")}
         </Button>
       </form>
-      <BackToApp href={backHref} label="Not now" />
+      <BackToApp t={t} href={backHref} label={t("invite.notNow")} />
     </InviteShell>
   );
 }
@@ -150,15 +153,17 @@ function InviteShell({
 }
 
 function BackToApp({
+  t,
   href,
-  label = "Go to the app",
+  label,
 }: {
+  t: Translator;
   href: string;
   label?: string;
 }) {
   return (
     <Button asChild variant="ghost" className="w-full">
-      <Link href={href}>{label}</Link>
+      <Link href={href}>{label ?? t("invite.goToApp")}</Link>
     </Button>
   );
 }

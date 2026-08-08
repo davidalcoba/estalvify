@@ -38,6 +38,7 @@ AI insights: the `/insights` page generates on-demand recommendations from an **
 - Security and privacy first for financial data
 - Reliable bank sync behavior
 - Clear and predictable UX on desktop and mobile
+- Multilingual interface: English, Castellano and Català, per member
 - Incremental delivery: partial features are acceptable when clearly marked
 
 ## Platform and Stack
@@ -46,6 +47,9 @@ AI insights: the `/insights` page generates on-demand recommendations from an **
 - Prisma 7 with the Neon serverless Postgres adapter
 - Auth.js v5 (`next-auth` beta) with Google OAuth and database sessions
 - Tailwind CSS v4 + shadcn/ui (Radix), theme-aware light/dark via `next-themes`
+- In-house i18n in `lib/i18n/` — typed dictionaries for `en` / `es` / `ca`, no
+  runtime library and no locale in the URL (the language is a per-member
+  preference). See ARCHITECTURE.md → "Internationalization".
 - Recharts for charts (dashboard/reports), wrapped in `components/reports/` and colored via the `--chart-*` tokens
 - `@anthropic-ai/sdk` for AI insights, behind a provider-agnostic wrapper in `lib/ai/` (default provider Claude; `AI_PROVIDER` / `ANTHROPIC_API_KEY` / `AI_MODEL`)
 - Enable Banking (PSD2 open banking) for bank connections and sync

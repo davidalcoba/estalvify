@@ -37,15 +37,17 @@ import type {
   HouseholdInviteDTO,
 } from "@/lib/household/manage";
 import { Copy, Check, Trash2, RefreshCw, Pencil } from "lucide-react";
+import { useT } from "@/components/i18n/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
-const ROLE_OPTIONS = [
-  { value: "EDITOR", label: "Editor" },
-  { value: "VIEWER", label: "Viewer" },
-];
+const ROLE_LABELS: Record<string, MessageKey> = {
+  EDITOR: "settings.household.role.editor",
+  VIEWER: "settings.household.role.viewer",
+};
 
-const ROLE_HELP: Record<string, string> = {
-  EDITOR: "Can categorize, edit rules, plan and manage bank connections.",
-  VIEWER: "Read-only: sees everything, changes nothing.",
+const ROLE_HELP: Record<string, MessageKey> = {
+  EDITOR: "settings.household.role.editorHelp",
+  VIEWER: "settings.household.role.viewerHelp",
 };
 
 export function MembersCard({
@@ -67,6 +69,12 @@ export function MembersCard({
   const [isPending, startTransition] = useTransition();
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(householdName);
+  const t = useT();
+
+  const roleOptions = Object.entries(ROLE_LABELS).map(([value, key]) => ({
+    value,
+    label: t(key),
+  }));
 
   function saveName() {
     const next = nameDraft.trim();
@@ -117,7 +125,7 @@ export function MembersCard({
     setError(null);
     startTransition(async () => {
       const result = await action();
-      if (!result.ok) setError(result.error ?? "Something went wrong");
+      if (!result.ok) setError(result.error ?? t("common.error"));
     });
   }
 
@@ -130,12 +138,12 @@ export function MembersCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Household</CardTitle>
+        <CardTitle>{t("settings.household.title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Name (shown in the sidebar switcher and on invitations) */}
         <div className="space-y-1.5">
-          <Label htmlFor="household-name-editor">Name</Label>
+          <Label htmlFor="household-name-editor">{t("settings.household.name")}</Label>
           {editingName ? (
             <div className="flex items-center gap-2">
               <Input
@@ -154,7 +162,7 @@ export function MembersCard({
                 }}
               />
               <Button size="sm" onClick={saveName} disabled={isPending}>
-                {isPending ? "…" : "Save"}
+                {isPending ? "…" : t("common.save")}
               </Button>
             </div>
           ) : (
@@ -178,9 +186,11 @@ export function MembersCard({
             <li key={m.id} className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
-                  {m.name ?? m.email ?? "Member"}
+                  {m.name ?? m.email ?? t("settings.household.member")}
                   {m.userId === currentUserId && (
-                    <span className="text-muted-foreground"> (you)</span>
+                    <span className="text-muted-foreground">
+                      {t("settings.household.you")}
+                    </span>
                   )}
                 </p>
                 {m.email && (
@@ -188,15 +198,17 @@ export function MembersCard({
                 )}
               </div>
               {m.role === "OWNER" ? (
-                <Badge variant="secondary">Owner</Badge>
+                <Badge variant="secondary">{t("settings.household.role.owner")}</Badge>
               ) : (
                 <>
                   <SimpleSelect
                     size="sm"
                     value={m.role}
-                    options={ROLE_OPTIONS}
+                    options={roleOptions}
                     disabled={isPending}
-                    ariaLabel={`Role for ${m.email ?? m.name ?? "member"}`}
+                    ariaLabel={t("settings.household.roleFor", {
+                      who: m.email ?? m.name ?? t("settings.household.member"),
+                    })}
                     onValueChange={(next) =>
                       run(() => updateMemberRole(m.id, next))
                     }
@@ -205,7 +217,9 @@ export function MembersCard({
                     variant="ghost"
                     size="icon"
                     disabled={isPending}
-                    aria-label={`Remove ${m.email ?? m.name ?? "member"}`}
+                    aria-label={t("settings.household.removeMember", {
+                      who: m.email ?? m.name ?? t("settings.household.member"),
+                    })}
                     onClick={() => run(() => removeMember(m.id))}
                   >
                     <Trash2 className="size-4 text-destructive" aria-hidden />
@@ -219,24 +233,26 @@ export function MembersCard({
         {/* Pending invites */}
         {invites.length > 0 && (
           <div className="space-y-3 border-t pt-5">
-            <p className="text-sm font-medium">Pending invitations</p>
+            <p className="text-sm font-medium">{t("settings.household.pending")}</p>
             <ul className="space-y-3">
               {invites.map((i) => (
                 <li key={i.id} className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">{i.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      {ROLE_OPTIONS.find((r) => r.value === i.role)?.label ?? i.role}
-                      {i.expired ? " · expired" : ""}
+                      {ROLE_LABELS[i.role] ? t(ROLE_LABELS[i.role]) : i.role}
+                      {i.expired ? t("settings.household.expiredSuffix") : ""}
                     </p>
                   </div>
-                  {i.expired && <Badge variant="outline">Expired</Badge>}
+                  {i.expired && (
+                    <Badge variant="outline">{t("settings.household.expired")}</Badge>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
                     disabled={isPending}
-                    aria-label={`New link for ${i.email}`}
-                    title="Generate a new link (replaces this one)"
+                    aria-label={t("settings.household.newLinkFor", { email: i.email })}
+                    title={t("settings.household.newLinkTitle")}
                     onClick={() => handleRenew(i)}
                   >
                     <RefreshCw className="size-4" aria-hidden />
@@ -245,7 +261,7 @@ export function MembersCard({
                     variant="ghost"
                     size="icon"
                     disabled={isPending}
-                    aria-label={`Revoke invitation for ${i.email}`}
+                    aria-label={t("settings.household.revokeFor", { email: i.email })}
                     onClick={() => run(() => revokeMemberInvite(i.id))}
                   >
                     <Trash2 className="size-4 text-destructive" aria-hidden />
@@ -258,9 +274,9 @@ export function MembersCard({
 
         {/* Invite form */}
         <div className="space-y-3 border-t pt-5">
-          <p className="text-sm font-medium">Invite someone</p>
+          <p className="text-sm font-medium">{t("settings.household.invite.title")}</p>
           <div className="space-y-1.5">
-            <Label htmlFor="invite-email">Email</Label>
+            <Label htmlFor="invite-email">{t("settings.household.invite.email")}</Label>
             <Input
               id="invite-email"
               type="email"
@@ -272,15 +288,17 @@ export function MembersCard({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="invite-role">Role</Label>
+            <Label htmlFor="invite-role">{t("settings.household.invite.role")}</Label>
             <SimpleSelect
               value={role}
               onValueChange={setRole}
-              options={ROLE_OPTIONS}
+              options={roleOptions}
               disabled={isPending}
-              ariaLabel="Role for the new member"
+              ariaLabel={t("settings.household.invite.roleAria")}
             />
-            <p className="text-xs text-muted-foreground">{ROLE_HELP[role]}</p>
+            <p className="text-xs text-muted-foreground">
+              {ROLE_HELP[role] ? t(ROLE_HELP[role]) : ""}
+            </p>
           </div>
           {error && (
             <p className="text-sm text-destructive" role="alert">
@@ -288,7 +306,9 @@ export function MembersCard({
             </p>
           )}
           <Button onClick={handleInvite} disabled={isPending || !email.trim()}>
-            {isPending ? "Working…" : "Create invite link"}
+            {isPending
+              ? t("settings.household.invite.working")
+              : t("settings.household.invite.action")}
           </Button>
         </div>
 
@@ -301,16 +321,19 @@ export function MembersCard({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Invitation link</DialogTitle>
+              <DialogTitle>{t("settings.household.link.title")}</DialogTitle>
               <DialogDescription>
-                Share this link with the person you invited. It expires in 7
-                days, works only for their email, and is shown only now — you
-                can generate a new one from the pending list at any time.
+                {t("settings.household.link.body")}
               </DialogDescription>
             </DialogHeader>
             <div className="flex items-center gap-2">
               <Input readOnly value={inviteLink ?? ""} className="font-mono text-xs" />
-              <Button variant="outline" size="icon" onClick={copyLink} aria-label="Copy link">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyLink}
+                aria-label={t("settings.household.link.copy")}
+              >
                 {copied ? (
                   <Check className="size-4 text-success" aria-hidden />
                 ) : (
@@ -320,7 +343,7 @@ export function MembersCard({
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setInviteLink(null)}>
-                Done
+                {t("settings.household.link.done")}
               </Button>
             </DialogFooter>
           </DialogContent>

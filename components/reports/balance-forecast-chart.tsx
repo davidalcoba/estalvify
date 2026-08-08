@@ -13,6 +13,7 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { axisTickStyle, chartGridStroke } from "./shared/chart-style";
 import { renderCurrencyTooltip } from "./shared/currency-tooltip";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export interface ForecastDatum {
   label: string;
@@ -34,6 +35,7 @@ export function BalanceForecastChart({
   threshold?: number;
   height?: number;
 }) {
+  const t = useT();
   const dipsBelow = data.some((d) => d.balance < threshold);
   const stroke = dipsBelow ? "var(--destructive)" : "var(--chart-2)";
 
@@ -64,7 +66,7 @@ export function BalanceForecastChart({
           <Area
             type="monotone"
             dataKey="balance"
-            name="Projected balance"
+            name={t("reports.chart.projectedBalance")}
             stroke={stroke}
             strokeWidth={2}
             fill="url(#forecastFill)"

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { updatePlanningSettings } from "@/app/(app)/settings/actions";
 import { Check } from "lucide-react";
+import { useT } from "@/components/i18n/i18n-provider";
 
 interface PlanningFormProps {
   lowBalanceThreshold: number;
@@ -21,6 +22,7 @@ export function PlanningForm({ lowBalanceThreshold, currency }: PlanningFormProp
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const t = useT();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -29,7 +31,7 @@ export function PlanningForm({ lowBalanceThreshold, currency }: PlanningFormProp
 
     const thresholdValue = Number(threshold);
     if (!Number.isFinite(thresholdValue)) {
-      setError("Threshold must be a number");
+      setError(t("settings.alerts.threshold.invalid"));
       return;
     }
 
@@ -39,7 +41,7 @@ export function PlanningForm({ lowBalanceThreshold, currency }: PlanningFormProp
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+        setError(err instanceof Error ? err.message : t("settings.saveFailed"));
       }
     });
   }
@@ -47,13 +49,13 @@ export function PlanningForm({ lowBalanceThreshold, currency }: PlanningFormProp
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Alerts</CardTitle>
+        <CardTitle>{t("settings.alerts.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
             <Label htmlFor="low-balance-threshold">
-              Low balance threshold ({currency})
+              {t("settings.alerts.threshold.label", { currency })}
             </Label>
             <Input
               id="low-balance-threshold"
@@ -63,20 +65,18 @@ export function PlanningForm({ lowBalanceThreshold, currency }: PlanningFormProp
               onChange={(e) => setThreshold(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Warn when an account&apos;s projected balance is set to dip below
-              this over the next 60 days. 0 means &quot;don&apos;t go
-              negative&quot;; raise it to keep a cushion.
+              {t("settings.alerts.threshold.help")}
             </p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
+              {isPending ? t("common.saving") : t("common.save")}
             </Button>
             {saved && (
               <span className="flex items-center gap-1 text-sm text-success">
                 <Check className="h-4 w-4" />
-                Saved
+                {t("common.saved")}
               </span>
             )}
             {error && <span className="text-sm text-destructive">{error}</span>}

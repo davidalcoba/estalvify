@@ -10,12 +10,10 @@
 export const KNOWN_SCOPES = ["read", "write"] as const;
 export type KnownScope = (typeof KNOWN_SCOPES)[number];
 
-/** What each scope means, in consent-screen language. */
-export const SCOPE_DESCRIPTIONS: Record<KnownScope, string> = {
-  read: "Read your accounts, transactions, categories, rules and plan",
-  write:
-    "Categorize transactions, manage categories, rules and plan items, and trigger bank syncs",
-};
+// What each scope means in consent-screen language now lives in the
+// dictionaries as `mcp.scope.read` / `mcp.scope.write`: the consent screen is
+// rendered in the member's language, and this module is pure — it must not
+// reach for a translator.
 
 export const FULL_SCOPE = KNOWN_SCOPES.join(" ");
 

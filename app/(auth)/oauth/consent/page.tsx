@@ -24,12 +24,16 @@ import { resolveClient, isAllowedRedirectUri } from "@/lib/mcp/clients";
 import {
   normalizeRequestedScope,
   scopesForRole,
-  SCOPE_DESCRIPTIONS,
   type KnownScope,
 } from "@/lib/mcp/scopes";
 import { approveConsent, denyConsent } from "./actions";
+import { getT } from "@/lib/i18n/server";
+import { RichText } from "@/components/i18n/rich-text";
 
-export const metadata: Metadata = { title: "Authorize access" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("consent.metaTitle") };
+}
 
 interface ConsentSearchParams {
   client_id?: string;
@@ -45,6 +49,7 @@ export default async function ConsentPage(props: {
 }) {
   const session = await auth();
   const params = await props.searchParams;
+  const t = await getT();
 
   if (!session?.user) {
     // Restart the flow through the authorize endpoint so its checks run again.
@@ -66,12 +71,8 @@ export default async function ConsentPage(props: {
     return (
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center space-y-2">
-          <CardTitle className="text-xl">Invalid authorization request</CardTitle>
-          <CardDescription>
-            The connection request is missing required parameters or comes from
-            an unknown client. Close this window and start the connection again
-            from your MCP client.
-          </CardDescription>
+          <CardTitle className="text-xl">{t("consent.invalid.title")}</CardTitle>
+          <CardDescription>{t("consent.invalid.body")}</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -98,44 +99,53 @@ export default async function ConsentPage(props: {
           <LogoMark className="size-12 rounded-xl" />
         </div>
         <CardTitle className="text-xl font-bold tracking-tight">
-          Authorize access to your Estalvify data
+          {t("consent.title")}
         </CardTitle>
         <CardDescription>
-          <span className="font-medium text-foreground">{clientLabel}</span>{" "}
-          wants to connect as{" "}
-          <span className="font-medium text-foreground">
-            {session.user.email}
-          </span>
+          <RichText
+            template={t("consent.subtitle")}
+            slots={{
+              client: (
+                <span className="font-medium text-foreground">{clientLabel}</span>
+              ),
+              email: (
+                <span className="font-medium text-foreground">
+                  {session.user.email}
+                </span>
+              ),
+            }}
+          />
           {membership?.household?.name && (
-            <>
-              {" "}
-              (household{" "}
-              <span className="font-medium text-foreground">
-                {membership.household.name}
-              </span>
-              )
-            </>
+            <RichText
+              template={t("consent.household")}
+              slots={{
+                name: (
+                  <span className="font-medium text-foreground">
+                    {membership.household.name}
+                  </span>
+                ),
+              }}
+            />
           )}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
         <div className="rounded-lg border p-4 space-y-3">
-          <p className="text-sm font-medium">This will allow it to:</p>
+          <p className="text-sm font-medium">{t("consent.allows")}</p>
           <ul className="space-y-2">
             {grantedScopes.map((scope) => (
               <li key={scope} className="flex gap-2 text-sm text-muted-foreground">
                 <span aria-hidden className="text-brand">
                   •
                 </span>
-                {SCOPE_DESCRIPTIONS[scope]}
+                {t(`mcp.scope.${scope}`)}
               </li>
             ))}
           </ul>
           {role === "VIEWER" && (
             <p className="text-xs text-muted-foreground">
-              Your role in this household is Viewer, so the connection will be
-              read-only.
+              {t("consent.viewerNote")}
             </p>
           )}
         </div>
@@ -144,20 +154,19 @@ export default async function ConsentPage(props: {
           <form action={denyConsent} className="flex-1">
             <ConsentFields params={params} />
             <Button type="submit" variant="outline" className="w-full">
-              Deny
+              {t("consent.deny")}
             </Button>
           </form>
           <form action={approveConsent} className="flex-1">
             <ConsentFields params={params} />
             <Button type="submit" className="w-full">
-              Allow
+              {t("consent.allow")}
             </Button>
           </form>
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          You can revoke this access at any time by disconnecting the client, or
-          from Settings by deleting your account data.
+          {t("consent.revokeNote")}
         </p>
       </CardContent>
     </Card>

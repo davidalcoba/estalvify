@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { Button } from "@/components/ui/button";
 import { ALL_ACCOUNTS, TREND_WINDOWS } from "@/lib/analytics/report-filters";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export interface ReportAccountOption {
   id: string;
@@ -38,6 +39,7 @@ export function ReportFilters({
   accounts,
   isFiltered,
 }: ReportFiltersProps) {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -56,7 +58,7 @@ export function ReportFilters({
       <SimpleSelect
         value={month}
         onValueChange={(value) => navigate({ month: value })}
-        ariaLabel="Report month"
+        ariaLabel={t("reports.filters.month")}
         className="w-full sm:w-[190px]"
         options={months}
       />
@@ -64,11 +66,11 @@ export function ReportFilters({
       <SimpleSelect
         value={String(trend)}
         onValueChange={(value) => navigate({ trend: value })}
-        ariaLabel="Trend window"
+        ariaLabel={t("reports.filters.trend")}
         className="w-full sm:w-[170px]"
         options={TREND_WINDOWS.map((n) => ({
           value: String(n),
-          label: `Last ${n} months`,
+          label: t("reports.filters.lastMonths", { count: n }),
         }))}
       />
 
@@ -78,10 +80,10 @@ export function ReportFilters({
           onValueChange={(value) =>
             navigate({ accountId: value === ALL_ACCOUNTS ? "" : value })
           }
-          ariaLabel="Filter by account"
+          ariaLabel={t("transactions.filters.account")}
           className="w-full sm:w-[260px]"
           options={[
-            { value: ALL_ACCOUNTS, label: "All accounts" },
+            { value: ALL_ACCOUNTS, label: t("transactions.filters.allAccounts") },
             ...accounts.map((a) => ({
               value: a.id,
               label: `${a.name}${a.iban ? ` (${a.iban.slice(-4)})` : ""}`,

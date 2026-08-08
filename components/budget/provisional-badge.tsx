@@ -10,9 +10,11 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/components/i18n/i18n-provider";
 
 export function ProvisionalBadge() {
   const [open, setOpen] = useState(false);
+  const t = useT();
   return (
     <>
       <button
@@ -22,13 +24,12 @@ export function ProvisionalBadge() {
         className="align-middle"
       >
         <Badge variant="secondary" className="cursor-pointer text-xs">
-          Provisional
+          {t("progress.provisional")}
         </Badge>
       </button>
       {open && (
         <p className="mt-2 text-xs font-normal text-muted-foreground">
-          These numbers can still move: some expected charges have not arrived
-          yet. The month closes once their window has passed.
+          {t("progress.provisional.detail")}
         </p>
       )}
     </>

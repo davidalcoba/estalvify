@@ -55,78 +55,86 @@ import { PendingBadge } from "@/components/layout/pending-badge";
 import { LogoMark } from "@/components/brand/logo";
 import { useCanWrite } from "@/components/layout/role-provider";
 import { cn } from "@/lib/utils";
+import { useT } from "@/components/i18n/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
 // Work-queue routes: pure mutation surfaces a read-only member can't use.
 // Their pages also render a read-only notice for VIEWER, so a deep link
 // stays consistent with the hidden nav item.
 const WRITE_ONLY_URLS = new Set(["/categorize", "/rules"]);
 
-const navItems = [
+// Nav carries message KEYS, not labels: the array is module-level (it never
+// changes) while the strings depend on the member's language, so the lookup
+// happens at render.
+const navItems: {
+  label: MessageKey;
+  items: { title: MessageKey; url: string; icon: typeof LayoutDashboard }[];
+}[] = [
   {
-    label: "Overview",
+    label: "nav.group.overview",
     items: [
       {
-        title: "Dashboard",
+        title: "nav.dashboard",
         url: "/dashboard",
         icon: LayoutDashboard,
       },
       {
-        title: "Categorize",
+        title: "nav.categorize",
         url: "/categorize",
         icon: Tag,
       },
       {
-        title: "Insights",
+        title: "nav.insights",
         url: "/insights",
         icon: Sparkles,
       },
       {
-        title: "Rules",
+        title: "nav.rules",
         url: "/rules",
         icon: ListFilter,
       },
       {
-        title: "Notifications",
+        title: "nav.notifications",
         url: "/notifications",
         icon: Bell,
       },
     ],
   },
   {
-    label: "Planning",
+    label: "nav.group.planning",
     items: [
       {
-        title: "Budget",
+        title: "nav.budget",
         url: "/plan",
         icon: PiggyBank,
       },
       {
-        title: "Recurring",
+        title: "nav.recurring",
         url: "/recurring",
         icon: Repeat,
       },
       {
-        title: "Upcoming",
+        title: "nav.upcoming",
         url: "/forecast",
         icon: LineChart,
       },
       {
-        title: "Reports",
+        title: "nav.reports",
         url: "/reports",
         icon: BarChart3,
       },
     ],
   },
   {
-    label: "Money",
+    label: "nav.group.money",
     items: [
       {
-        title: "Transactions",
+        title: "nav.transactions",
         url: "/transactions",
         icon: ArrowLeftRight,
       },
       {
-        title: "Accounts",
+        title: "nav.accounts",
         url: "/accounts",
         icon: Building2,
       },
@@ -162,6 +170,7 @@ export function AppSidebar({
   onSignOut,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const t = useT();
   const { isMobile, setOpenMobile } = useSidebar();
   const canWrite = useCanWrite();
   const [switching, startSwitching] = useTransition();
@@ -191,8 +200,8 @@ export function AppSidebar({
                 >
                   <LogoMark />
                   <div className="flex flex-col gap-0.5 leading-none">
-                    <span className="font-semibold tracking-tight">Estalvify</span>
-                    <span className="text-xs text-muted-foreground">Personal Finance</span>
+                    <span className="font-semibold tracking-tight">{t("app.name")}</span>
+                    <span className="text-xs text-muted-foreground">{t("app.tagline")}</span>
                   </div>
                 </Link>
               </SidebarMenuButton>
@@ -204,7 +213,7 @@ export function AppSidebar({
               className="shrink-0 rounded-md p-2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             >
               <X className="size-5" />
-              <span className="sr-only">Close menu</span>
+              <span className="sr-only">{t("nav.closeMenu")}</span>
             </button>
           )}
         </div>
@@ -214,7 +223,7 @@ export function AppSidebar({
       <SidebarContent>
         {navItems.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items
@@ -225,18 +234,20 @@ export function AppSidebar({
                     (item.url !== "/dashboard" && pathname.startsWith(item.url));
                   const pending = pendingByUrl[item.url];
 
+                  const title = t(item.title);
+
                   return (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
-                        tooltip={item.title}
+                        tooltip={title}
                         size={isMobile ? "lg" : "default"}
                         onClick={isMobile ? () => setOpenMobile(false) : undefined}
                       >
                         <Link href={item.url}>
                           <item.icon />
-                          <span>{item.title}</span>
+                          <span>{title}</span>
                           {pending && (
                             // No fallback: an empty slot that fills in beats a
                             // placeholder flashing where a badge may never go.
@@ -305,16 +316,18 @@ function UserIdentity({
   user,
   initials,
 }: Pick<UserMenuProps, "user" | "initials">) {
+  const t = useT();
+
   return (
     <>
       <Avatar className="h-8 w-8 rounded-lg">
-        <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
+        <AvatarImage src={user.image ?? undefined} alt={user.name ?? t("nav.user")} />
         <AvatarFallback className="rounded-lg bg-brand/10 text-brand text-xs font-semibold">
           {initials}
         </AvatarFallback>
       </Avatar>
       <div className="grid flex-1 min-w-0 text-left text-sm leading-tight">
-        <span className="truncate font-semibold">{user.name ?? "User"}</span>
+        <span className="truncate font-semibold">{user.name ?? t("nav.user")}</span>
         <span className="truncate text-xs text-muted-foreground">{user.email}</span>
       </div>
     </>
@@ -330,6 +343,7 @@ function UserMenuDesktop({
   onSwitchHousehold,
   onSignOut,
 }: UserMenuProps) {
+  const t = useT();
   // Radix returns focus to the trigger when the menu closes, and a
   // script-driven focus right after a click still matches :focus-visible in
   // Chrome — which left the user row ringed and reading as "selected" long
@@ -391,7 +405,7 @@ function UserMenuDesktop({
             <DropdownMenuItem asChild>
               <Link href="/settings">
                 <Settings className="mr-2 h-4 w-4" />
-                Settings
+                {t("nav.settings")}
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -400,7 +414,7 @@ function UserMenuDesktop({
               className="text-destructive focus:text-destructive"
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+              {t("nav.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -419,6 +433,7 @@ function UserMenuMobile({
   onNavigate,
   onSignOut,
 }: UserMenuProps & { onNavigate: () => void }) {
+  const t = useT();
   // Closing the sidebar unmounts the sheet's contents, so the menu comes back
   // collapsed on the next open without resetting anything by hand.
   const [expanded, setExpanded] = useState(false);
@@ -489,7 +504,7 @@ function UserMenuMobile({
               <SidebarMenuButton size="lg" asChild onClick={onNavigate}>
                 <Link href="/settings">
                   <Settings />
-                  <span>Settings</span>
+                  <span>{t("nav.settings")}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -500,7 +515,7 @@ function UserMenuMobile({
                 className="text-destructive hover:text-destructive active:text-destructive"
               >
                 <LogOut />
-                <span>Sign out</span>
+                <span>{t("nav.signOut")}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

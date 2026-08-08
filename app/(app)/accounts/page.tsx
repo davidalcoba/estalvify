@@ -26,16 +26,22 @@ import { AccountNameEditor } from "@/components/accounts/account-name-editor";
 import { DeleteAccountButton } from "@/components/accounts/delete-account-button";
 import { SyncPoller } from "@/components/accounts/sync-poller";
 import type { BankConnectionStatus } from "@/app/generated/prisma";
+import { getT } from "@/lib/i18n/server";
+import { RichText } from "@/components/i18n/rich-text";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
 
-export const metadata: Metadata = { title: "Bank Accounts" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.bankAccounts") };
+}
 
-const STATUS_CONFIG: Record<BankConnectionStatus, { label: string; icon: React.ElementType; variant: BadgeVariant }> = {
-  ACTIVE: { label: "Connected", icon: CheckCircle2, variant: "success-soft" },
-  SYNCING: { label: "Syncing...", icon: RefreshCw, variant: "brand-soft" },
-  EXPIRED: { label: "Session expired", icon: AlertTriangle, variant: "destructive-soft" },
-  PENDING_REAUTH: { label: "Re-auth needed", icon: RefreshCw, variant: "warning-soft" },
-  PENDING_SETUP: { label: "Setup pending", icon: RefreshCw, variant: "warning-soft" },
-  REVOKED: { label: "Disconnected", icon: AlertTriangle, variant: "secondary" },
+const STATUS_CONFIG: Record<BankConnectionStatus, { label: MessageKey; icon: React.ElementType; variant: BadgeVariant }> = {
+  ACTIVE: { label: "accounts.status.ACTIVE", icon: CheckCircle2, variant: "success-soft" },
+  SYNCING: { label: "accounts.status.SYNCING", icon: RefreshCw, variant: "brand-soft" },
+  EXPIRED: { label: "accounts.status.EXPIRED", icon: AlertTriangle, variant: "destructive-soft" },
+  PENDING_REAUTH: { label: "accounts.status.PENDING_REAUTH", icon: RefreshCw, variant: "warning-soft" },
+  PENDING_SETUP: { label: "accounts.status.PENDING_SETUP", icon: RefreshCw, variant: "warning-soft" },
+  REVOKED: { label: "accounts.status.REVOKED", icon: AlertTriangle, variant: "secondary" },
 };
 
 // Show the most urgent status when multiple connections share a bank
@@ -55,18 +61,19 @@ export default async function AccountsPage({
 }) {
   const { dataUserId, actorUserId } = await requireScope("read");
   const params = await searchParams;
+  const t = await getT();
 
-  const errorMessages: Record<string, string> = {
-    already_connected: "These bank accounts are already linked to your profile.",
-    connection_not_found: "Connection session expired or not found. Please try again.",
-    missing_code_or_state: "The authorisation request was incomplete. Please try again.",
-    setup_expired: "Account setup session expired. Please connect the bank again.",
-    connection_failed: "Something went wrong connecting your bank. Please try again.",
+  const errorMessages: Record<string, MessageKey> = {
+    already_connected: "accounts.error.already_connected",
+    connection_not_found: "accounts.error.connection_not_found",
+    missing_code_or_state: "accounts.error.missing_code_or_state",
+    setup_expired: "accounts.error.setup_expired",
+    connection_failed: "accounts.error.connection_failed",
   };
   // Only render known error codes. An unrecognised value (e.g. a hand-crafted
   // URL) maps to a generic message rather than being reflected back verbatim.
   const callbackError = params.error
-    ? (errorMessages[params.error] ?? "Something went wrong. Please try again.")
+    ? t(errorMessages[params.error] ?? "common.error")
     : null;
 
   // Auto-recover connections stuck in SYNCING for more than 10 minutes.
@@ -204,14 +211,14 @@ export default async function AccountsPage({
         <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
           <CheckCircle className="h-4 w-4 shrink-0" />
           {hasSyncing
-            ? "Bank connected. Syncing your recent transactions — this page will update automatically."
-            : "Bank connected successfully."}
+            ? t("accounts.connected.syncing")
+            : t("accounts.connected.ok")}
         </div>
       )}
       {params.reconnected === "true" && (
         <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
           <CheckCircle className="h-4 w-4 shrink-0" />
-          Bank reconnected successfully. Your accounts and transaction history are intact.
+          {t("accounts.reconnected")}
         </div>
       )}
       {callbackError && (
@@ -220,14 +227,14 @@ export default async function AccountsPage({
           {callbackError}
         </div>
       )}
-      <PageHeader title="Bank Accounts" actions={<ConnectBankDialog />} />
+      <PageHeader title={t("nav.bankAccounts")} actions={<ConnectBankDialog />} />
 
       {consolidatedBalance != null && (
         <Card>
           <CardContent className="flex flex-wrap items-baseline gap-x-8 gap-y-2 pt-4 pb-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Total balance
+                {t("accounts.totalBalance")}
               </p>
               <p className="text-2xl font-semibold tabular-nums">
                 {formatCurrency(consolidatedBalance, currency, locale)}
@@ -236,7 +243,7 @@ export default async function AccountsPage({
             {cushion != null && (
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Months of cushion
+                  {t("accounts.cushion")}
                 </p>
                 <p className="text-2xl font-semibold tabular-nums">{cushion}</p>
               </div>
@@ -248,18 +255,15 @@ export default async function AccountsPage({
       <Card className="bg-brand/5 border-brand/20">
         <CardContent className="flex items-center gap-3 pt-4 pb-4">
           <Shield className="h-5 w-5 shrink-0 text-brand" />
-          <p className="text-sm text-muted-foreground">
-            Read-only via PSD2 — we can&apos;t move money and never see your
-            credentials.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("accounts.psd2")}</p>
         </CardContent>
       </Card>
 
       {bankGroups.length === 0 ? (
         <EmptyState
           icon={Building2}
-          title="No bank accounts connected"
-          description="Connect a bank to start tracking."
+          title={t("accounts.empty.title")}
+          description={t("accounts.empty.body")}
         >
           <ConnectBankDialog />
         </EmptyState>
@@ -272,9 +276,9 @@ export default async function AccountsPage({
             const hasSyncError = !isSyncing && !isExpired && !!groupSyncError;
             const isRateLimitError = hasSyncError && !!groupSyncError?.includes("RATE_LIMIT:");
             const badgeConfig = isRateLimitError
-              ? { label: "Quota reached", icon: AlertTriangle, variant: "warning-soft" as BadgeVariant }
+              ? { label: "accounts.status.quota" as MessageKey, icon: AlertTriangle, variant: "warning-soft" as BadgeVariant }
               : hasSyncError
-                ? { label: "Sync error", icon: AlertTriangle, variant: "warning-soft" as BadgeVariant }
+                ? { label: "accounts.status.syncError" as MessageKey, icon: AlertTriangle, variant: "warning-soft" as BadgeVariant }
                 : STATUS_CONFIG[group.status];
             const StatusIcon = badgeConfig.icon;
             return (
@@ -288,21 +292,25 @@ export default async function AccountsPage({
                       <p className="font-semibold text-sm leading-tight">{group.bankName}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {group.consentExpiresAt
-                          ? `Expires ${formatDate(group.consentExpiresAt, language, timezone)}`
-                          : `Connected ${formatDate(group.firstConnectedAt, language, timezone)}`}
+                          ? t("accounts.expiresOn", {
+                              date: formatDate(group.consentExpiresAt, language, timezone),
+                            })
+                          : t("accounts.connectedOn", {
+                              date: formatDate(group.firstConnectedAt, language, timezone),
+                            })}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
                       <Badge variant={badgeConfig.variant} className="gap-1 text-xs">
                         <StatusIcon className={`h-3 w-3${isSyncing ? " animate-spin" : ""}`} />
-                        {badgeConfig.label}
+                        {t(badgeConfig.label)}
                       </Badge>
                       {isExpired ? (
                         <ReconnectBankButton
                           connectionId={group.connectionIds[0]}
                           aspspName={group.bankId}
                           aspspCountry={group.country}
-                          label="Reconnect"
+                          label={t("accounts.reconnect")}
                         />
                       ) : (
                         <>
@@ -311,7 +319,7 @@ export default async function AccountsPage({
                               connectionId={group.connectionIds[0]}
                               aspspName={group.bankId}
                               aspspCountry={group.country}
-                              label="Refresh access"
+                              label={t("accounts.refreshAccess")}
                               secondary
                             />
                           ) : (
@@ -333,15 +341,32 @@ export default async function AccountsPage({
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                       <span>
                         {isRateLimitError ? (
-                          <>
-                            <span className="font-medium">Bank rate limit reached</span> — the daily API quota
-                            for this connection is exhausted. It will reset tomorrow, or use <span className="font-medium">Refresh access</span> for a fresh quota now.
-                          </>
+                          <RichText
+                            template={t("accounts.rateLimit.body")}
+                            slots={{
+                              title: (
+                                <span className="font-medium">
+                                  {t("accounts.rateLimit.title")}
+                                </span>
+                              ),
+                              action: (
+                                <span className="font-medium">
+                                  {t("accounts.refreshAccess")}
+                                </span>
+                              ),
+                            }}
+                          />
                         ) : (
-                          <>
-                            <span className="font-medium">Last sync had errors</span> — transactions may be incomplete.
-                            Try syncing again or check back later.
-                          </>
+                          <RichText
+                            template={t("accounts.syncError.body")}
+                            slots={{
+                              title: (
+                                <span className="font-medium">
+                                  {t("accounts.syncError.title")}
+                                </span>
+                              ),
+                            }}
+                          />
                         )}
                       </span>
                     </div>
@@ -384,15 +409,15 @@ export default async function AccountsPage({
                               {account.lastSyncError ? (
                                 <Badge variant="warning-soft" title={account.lastSyncError} className="gap-1">
                                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                                  Sync error
+                                  {t("accounts.status.syncError")}
                                 </Badge>
                               ) : latestBalance ? null : isSyncing ? (
                                 <Badge variant="brand-soft" className="gap-1">
                                   <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
-                                  Syncing…
+                                  {t("accounts.status.SYNCING")}
                                 </Badge>
                               ) : (
-                                <Badge variant="secondary">Never synced</Badge>
+                                <Badge variant="secondary">{t("accounts.neverSynced")}</Badge>
                               )}
                             </div>
 
