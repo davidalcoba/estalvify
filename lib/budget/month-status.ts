@@ -8,6 +8,14 @@
 //
 // Pure math: lib/budget/cascade.ts + lib/budget/weekly.ts. Matching state is
 // maintained by lib/planned/engine.ts before this reads it.
+//
+// Two entry points over one implementation. `buildMonthStatus` is the whole
+// thing, for the month screen. `buildWeeklyStatus` stops before the
+// reconciliation and is what the DAILY screen calls: the reconciliation alone
+// costs five queries — the month's full flow list, the active accounts, the
+// balance snapshots, a 120-day daily flow rollup and the cushion baseline —
+// and the dashboard reads none of it. Nothing above the reconciliation depends
+// on it, so the cut is a plain subset, not a second implementation.
 
 import "server-only";
 
@@ -145,7 +153,14 @@ export interface WeekCompositionRow {
   count: number;
 }
 
-export interface MonthStatus {
+/**
+ * Everything the month's position holds EXCEPT the reconciliation block —
+ * i.e. the plan, the objectives and the weekly operating numbers. The daily
+ * screen reads only this, and stopping there is what makes it cheap: the
+ * reconciliation needs the balance snapshots, the daily flow rollup and the
+ * cushion baseline, five queries the dashboard would throw away.
+ */
+export interface WeeklyStatus {
   year: number;
   month: number;
   today: string; // YYYY-MM-DD, user timezone
@@ -175,6 +190,10 @@ export interface MonthStatus {
   chargeControl: ControlRow[];
   objectives: CategoryObjective[];
   incomeObjectives: IncomeObjective[];
+}
+
+/** The full month position: the weekly/plan side plus the reconciliation. */
+export interface MonthStatus extends WeeklyStatus {
   reconciliation: Reconciliation;
 }
 
@@ -261,12 +280,39 @@ function monthDiff(a: { year: number; month: number }, b: { year: number; month:
   return (b.year - a.year) * 12 + (b.month - a.month);
 }
 
+/**
+ * The month's position without the reconciliation block — what the daily
+ * screen reads. Skips the five queries that only feed the reconciliation
+ * (the month's full flow list, the active accounts, the balance snapshots,
+ * the daily flow rollup and the cushion baseline).
+ */
+export async function buildWeeklyStatus(
+  userId: string,
+  timezone: string,
+  target?: { year: number; month: number }
+): Promise<WeeklyStatus> {
+  return buildStatus(userId, timezone, target, false);
+}
+
+/** The full month position — plan, objectives AND reconciliation. */
 export async function buildMonthStatus(
   userId: string,
   timezone: string,
   /** Month to view; defaults to the current one. Navigation never mutates the past. */
   target?: { year: number; month: number }
 ): Promise<MonthStatus> {
+  const status = await buildStatus(userId, timezone, target, true);
+  return status as MonthStatus;
+}
+
+async function buildStatus(
+  userId: string,
+  timezone: string,
+  target: { year: number; month: number } | undefined,
+  /** When false, every query and computation below that exists only for the
+   *  reconciliation block is skipped and the field comes back absent. */
+  withReconciliation: boolean
+): Promise<WeeklyStatus & { reconciliation?: Reconciliation }> {
   const current = currentYearMonth(timezone);
   const { year, month } = target ?? current;
   // Propagate assignments from the current month forward to the viewed month
@@ -349,20 +395,22 @@ export async function buildMonthStatus(
           categorization: { select: { categoryId: true } },
         },
       }),
-      prisma.transaction.findMany({
-        // Both directions for the month's REAL result — transfers between own
-        // accounts excluded (they are internal noise, plan test #11).
-        where: {
-          userId,
-          valueDate: { gte: start, lt: end },
-          NOT: {
-            categorization: {
-              is: { category: { is: { kind: "TRANSFER" } } },
+      withReconciliation
+        ? prisma.transaction.findMany({
+            // Both directions for the month's REAL result — transfers between
+            // own accounts excluded (internal noise, plan test #11).
+            where: {
+              userId,
+              valueDate: { gte: start, lt: end },
+              NOT: {
+                categorization: {
+                  is: { category: { is: { kind: "TRANSFER" } } },
+                },
+              },
             },
-          },
-        },
-        select: { id: true, direction: true, amount: true },
-      }),
+            select: { id: true, direction: true, amount: true },
+          })
+        : Promise.resolve([]),
       prisma.budget.findMany({
         where: { userId },
         orderBy: [{ year: "asc" }, { month: "asc" }],
@@ -379,10 +427,14 @@ export async function buildMonthStatus(
         where: { OR: [{ userId }, { userId: null }] },
         select: { id: true, name: true, color: true, parentId: true },
       }),
-      prisma.bankAccount.findMany({
-        where: { userId, isActive: true },
-        select: { id: true },
-      }),
+      // Only the balance anchoring needs the account list, and that is part of
+      // the reconciliation.
+      withReconciliation
+        ? prisma.bankAccount.findMany({
+            where: { userId, isActive: true },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
     ]);
 
   // ── Variable set (derived by exclusion) ─────────────────────────────────
@@ -488,29 +540,35 @@ export async function buildMonthStatus(
     // anchoring walk needs whatever dates exist, not a fixed "last before the
     // month", and fetching the flows by day lets any window be summed in
     // memory rather than issuing a follow-up query once the anchor is picked.
-    prisma.accountBalance.findMany({
-      where: {
-        bankAccountId: { in: accounts.map((a) => a.id) },
-        date: { gte: anchorWindowStart, lt: end },
-      },
-      orderBy: { date: "asc" },
-      select: { bankAccountId: true, balance: true, date: true, balanceType: true },
-    }),
-    prisma.transaction.groupBy({
-      by: ["valueDate", "direction"],
-      where: { userId, valueDate: { gte: anchorWindowStart, lt: end } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      // Average monthly spend over the trailing full months, for the cushion.
-      where: {
-        userId,
-        direction: "DEBIT",
-        valueDate: { gte: baselineStart, lt: start },
-        NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
-      },
-      _sum: { amount: true },
-    }),
+    withReconciliation
+      ? prisma.accountBalance.findMany({
+          where: {
+            bankAccountId: { in: accounts.map((a) => a.id) },
+            date: { gte: anchorWindowStart, lt: end },
+          },
+          orderBy: { date: "asc" },
+          select: { bankAccountId: true, balance: true, date: true, balanceType: true },
+        })
+      : Promise.resolve([]),
+    withReconciliation
+      ? prisma.transaction.groupBy({
+          by: ["valueDate", "direction"],
+          where: { userId, valueDate: { gte: anchorWindowStart, lt: end } },
+          _sum: { amount: true },
+        })
+      : Promise.resolve([]),
+    withReconciliation
+      ? prisma.transaction.aggregate({
+          // Average monthly spend over the trailing full months, for the cushion.
+          where: {
+            userId,
+            direction: "DEBIT",
+            valueDate: { gte: baselineStart, lt: start },
+            NOT: { categorization: { is: { category: { is: { kind: "TRANSFER" } } } } },
+          },
+          _sum: { amount: true },
+        })
+      : Promise.resolve({ _sum: { amount: null } }),
   ]);
   const fundSpend = new Map<string, number>();
   for (const row of fundRows) {
@@ -664,6 +722,9 @@ export async function buildMonthStatus(
 
   // ── Weekly ───────────────────────────────────────────────────────────────
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  // Days of the viewed month that have run: a past month is over, a future one
+  // has not started. Same reading the category control uses.
+  const daysElapsed = ahead === 0 ? Number(today.slice(8, 10)) : ahead < 0 ? daysInMonth : 0;
   const weekly = computeWeeklyAvailable({
     variableBudget: cascade.variableBudget,
     variableSpentMonth,
@@ -681,174 +742,180 @@ export async function buildMonthStatus(
   });
 
   // ── Reconciliation: real result under accrual + balance-change check ────
-  let matchedCredit = 0;
-  let matchedDebit = 0;
-  for (const p of plannedMonth) {
-    if (p.status !== "MATCHED" || p.matchedAmount == null) continue;
-    const amount = Number(p.matchedAmount.toString());
-    if (p.direction === "CREDIT") matchedCredit += amount;
-    else matchedDebit += amount;
-  }
-  let unmatchedCredit = 0;
-  let unmatchedDebit = 0;
-  for (const tx of monthFlows) {
-    if (matchedIds.has(tx.id)) continue; // matched rows book in their item's month
-    const amount = Math.abs(Number(tx.amount.toString()));
-    if (tx.direction === "CREDIT") unmatchedCredit += amount;
-    else unmatchedDebit += amount;
-  }
-  const actual = computeActualResult({
-    matchedCredit,
-    matchedDebit,
-    unmatchedCredit,
-    unmatchedDebit,
-  });
-
-  // ── Consolidated balance, anchored on real bank readings ────────────────
-  // `/balances` only knows "now", so the history is a diary with holes wherever
-  // the sync did not run. Rather than reach back to the last surviving row —
-  // which opened August on a 7 JUNE figure and invented 4.597 € of saving — the
-  // nearest real reading is picked and the ledger walks the short distance to
-  // the date wanted. The endpoints stay the bank's; only the interpolation is
-  // ours, and `anchorGap` below keeps checking that the two agree.
-  const isoOf = (d: Date) => d.toISOString().slice(0, 10);
-
-  // A date is an anchor only when EVERY active account has a reading on it —
-  // a consolidated total assembled from a partial day would be a fiction.
-  const perDate = new Map<string, Map<string, { balance: number; rank: number }>>();
-  for (const row of balanceRows) {
-    const day = isoOf(row.date);
-    let accountsOnDay = perDate.get(day);
-    if (!accountsOnDay) {
-      accountsOnDay = new Map();
-      perDate.set(day, accountsOnDay);
-    }
-    const rank = balanceRank(row.balanceType);
-    const held = accountsOnDay.get(row.bankAccountId);
-    if (!held || rank < held.rank) {
-      accountsOnDay.set(row.bankAccountId, {
-        balance: Number(row.balance.toString()),
-        rank,
-      });
-    }
-  }
-  const anchors: BalanceAnchor[] =
-    accounts.length === 0
-      ? []
-      : [...perDate.entries()]
-          .filter(([, onDay]) => onDay.size === accounts.length)
-          .map(([date, onDay]) => ({
-            date,
-            balance: round([...onDay.values()].reduce((sum, v) => sum + v.balance, 0)),
-          }))
-          .sort((a, b) => (a.date < b.date ? -1 : 1));
-
-  // Net and gross flow per day, so any window can be summed without another
-  // round trip once the anchor is known. Transfers between the user's own
-  // accounts are INCLUDED: they net to zero across a consolidated total, and
-  // excluding them would open a hole whenever one leg is miscategorised.
-  const netByDay = new Map<string, number>();
-  const grossByDay = new Map<string, number>();
-  for (const row of dailyFlowRows) {
-    const day = isoOf(row.valueDate);
-    const amount = Number(row._sum.amount?.toString() ?? 0);
-    netByDay.set(day, (netByDay.get(day) ?? 0) + (row.direction === "CREDIT" ? amount : -amount));
-    grossByDay.set(day, (grossByDay.get(day) ?? 0) + Math.abs(amount));
-  }
-  const sumBetween = (source: Map<string, number>, after: string, upTo: string) => {
-    let total = 0;
-    for (const [day, value] of source) if (day > after && day <= upTo) total += value;
-    return round(total);
-  };
-
-  // A balance is stated at the END of its day, so the month opens on the close
-  // of the day before it.
-  const openingTarget = isoOf(new Date(start.getTime() - 86_400_000));
-  const monthLastDay = isoOf(new Date(end.getTime() - 86_400_000));
-
-  const openingAnchor = pickAnchor(anchors, openingTarget);
-  const openingBalance = openingAnchor
+  // The block, and the five queries above that feed it, belong to the month
+  // screen: `buildWeeklyStatus` never runs either. Wrapped rather than merely
+  // dropped from the result so it cannot quietly compute a fiction out of the
+  // empty arrays those skipped queries leave behind.
+  const reconciliation = withReconciliation
     ? (() => {
-        const w = walkWindow(openingAnchor.date, openingTarget);
-        return balanceAt(openingAnchor, openingTarget, sumBetween(netByDay, w.after, w.upTo));
+      let matchedCredit = 0;
+      let matchedDebit = 0;
+      for (const p of plannedMonth) {
+        if (p.status !== "MATCHED" || p.matchedAmount == null) continue;
+        const amount = Number(p.matchedAmount.toString());
+        if (p.direction === "CREDIT") matchedCredit += amount;
+        else matchedDebit += amount;
+      }
+      let unmatchedCredit = 0;
+      let unmatchedDebit = 0;
+      for (const tx of monthFlows) {
+        if (matchedIds.has(tx.id)) continue; // matched rows book in their item's month
+        const amount = Math.abs(Number(tx.amount.toString()));
+        if (tx.direction === "CREDIT") unmatchedCredit += amount;
+        else unmatchedDebit += amount;
+      }
+      const actual = computeActualResult({
+        matchedCredit,
+        matchedDebit,
+        unmatchedCredit,
+        unmatchedDebit,
+      });
+
+      // ── Consolidated balance, anchored on real bank readings ────────────────
+      // `/balances` only knows "now", so the history is a diary with holes wherever
+      // the sync did not run. Rather than reach back to the last surviving row —
+      // which opened August on a 7 JUNE figure and invented 4.597 € of saving — the
+      // nearest real reading is picked and the ledger walks the short distance to
+      // the date wanted. The endpoints stay the bank's; only the interpolation is
+      // ours, and `anchorGap` below keeps checking that the two agree.
+      const isoOf = (d: Date) => d.toISOString().slice(0, 10);
+
+      // A date is an anchor only when EVERY active account has a reading on it —
+      // a consolidated total assembled from a partial day would be a fiction.
+      const perDate = new Map<string, Map<string, { balance: number; rank: number }>>();
+      for (const row of balanceRows) {
+        const day = isoOf(row.date);
+        let accountsOnDay = perDate.get(day);
+        if (!accountsOnDay) {
+          accountsOnDay = new Map();
+          perDate.set(day, accountsOnDay);
+        }
+        const rank = balanceRank(row.balanceType);
+        const held = accountsOnDay.get(row.bankAccountId);
+        if (!held || rank < held.rank) {
+          accountsOnDay.set(row.bankAccountId, {
+            balance: Number(row.balance.toString()),
+            rank,
+          });
+        }
+      }
+      const anchors: BalanceAnchor[] =
+        accounts.length === 0
+          ? []
+          : [...perDate.entries()]
+              .filter(([, onDay]) => onDay.size === accounts.length)
+              .map(([date, onDay]) => ({
+                date,
+                balance: round([...onDay.values()].reduce((sum, v) => sum + v.balance, 0)),
+              }))
+              .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+      // Net and gross flow per day, so any window can be summed without another
+      // round trip once the anchor is known. Transfers between the user's own
+      // accounts are INCLUDED: they net to zero across a consolidated total, and
+      // excluding them would open a hole whenever one leg is miscategorised.
+      const netByDay = new Map<string, number>();
+      const grossByDay = new Map<string, number>();
+      for (const row of dailyFlowRows) {
+        const day = isoOf(row.valueDate);
+        const amount = Number(row._sum.amount?.toString() ?? 0);
+        netByDay.set(day, (netByDay.get(day) ?? 0) + (row.direction === "CREDIT" ? amount : -amount));
+        grossByDay.set(day, (grossByDay.get(day) ?? 0) + Math.abs(amount));
+      }
+      const sumBetween = (source: Map<string, number>, after: string, upTo: string) => {
+        let total = 0;
+        for (const [day, value] of source) if (day > after && day <= upTo) total += value;
+        return round(total);
+      };
+
+      // A balance is stated at the END of its day, so the month opens on the close
+      // of the day before it.
+      const openingTarget = isoOf(new Date(start.getTime() - 86_400_000));
+      const monthLastDay = isoOf(new Date(end.getTime() - 86_400_000));
+
+      const openingAnchor = pickAnchor(anchors, openingTarget);
+      const openingBalance = openingAnchor
+        ? (() => {
+            const w = walkWindow(openingAnchor.date, openingTarget);
+            return balanceAt(openingAnchor, openingTarget, sumBetween(netByDay, w.after, w.upTo));
+          })()
+        : null;
+
+      // Closing: the newest real reading that belongs to the month. For the current
+      // month that is today's; for a past one, its own last, so navigating months
+      // shows each one's own change.
+      const closingAnchor = [...anchors].reverse().find((a) => a.date <= monthLastDay) ?? null;
+      const consolidatedBalance = closingAnchor?.balance ?? null;
+      const consolidatedDelta =
+        consolidatedBalance != null && openingBalance != null
+          ? round(consolidatedBalance - openingBalance)
+          : null;
+      // Only when there is no anchor at all — a connection with no history yet.
+      const openingBalanceUnknown = consolidatedBalance != null && openingBalance == null;
+
+      // The reconciliation check, moved from "this month's balance change vs its
+      // flows" to "do two REAL readings agree with the ledger between them". The
+      // old form needed a perfect daily history, which PSD2 cannot promise; this
+      // one survives an outage and still catches flow we never saw. Measured on
+      // production across the eight-week hole: 33,49 € over 487 transactions.
+      const priorAnchor = [...anchors].reverse().find((a) => a.date <= openingTarget) ?? null;
+      const discrepancy =
+        priorAnchor && closingAnchor
+          ? anchorGap(
+              priorAnchor,
+              closingAnchor,
+              sumBetween(netByDay, priorAnchor.date, closingAnchor.date)
+            )
+          : null;
+      // Judged against the flow of the window it spans, not the month's — the gap
+      // can cover two months when the sync was down, and 33 € across 487
+      // transactions is noise while the same figure over one day would not be.
+      const discrepancyGrossFlow =
+        priorAnchor && closingAnchor
+          ? sumBetween(grossByDay, priorAnchor.date, closingAnchor.date)
+          : 0;
+
+      const avgMonthlySpend = baselineAgg._sum.amount
+        ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
+        : 0;
+
+      // Performance compares against the plan ACCRUED TO DATE, not the whole
+      // month's. Against the whole month the screen is red from the 1st to the
+      // 26th by construction — the charges land in the first week and the salaries
+      // on the 27th — and an indicator that is red half of every month is noise.
+      const expectedToDate = expectedResultToDate({
+        plannedItems: plannedMonth.map((p) => ({
+          direction: p.direction,
+          amount: Number(p.amount.toString()),
+          matched: p.status === "MATCHED",
+          windowToDay: p.windowToDay,
+          anchorMonthEnd: p.anchorMonthEnd,
+        })),
+        linearSpend: cascade.rolloverQuotas + cascade.variableBudget,
+        daysElapsed,
+        daysInMonth,
+      });
+
+      const reconciliation: Reconciliation = {
+        ...actual,
+        expectedResult: cascade.expectedResult,
+        expectedResultToDate: expectedToDate,
+        performance: performance(actual.actualResult, expectedToDate),
+        projectedResult: projectedResult(
+          actual.actualResult,
+          cascade.expectedResult,
+          expectedToDate
+        ),
+        consolidatedDelta,
+        openingBalanceUnknown,
+        discrepancy,
+        discrepancyGrossFlow,
+        consolidatedBalance,
+        monthsOfCushion: monthsOfCushion(consolidatedBalance, avgMonthlySpend),
+      };
+      return reconciliation;
       })()
-    : null;
-
-  // Closing: the newest real reading that belongs to the month. For the current
-  // month that is today's; for a past one, its own last, so navigating months
-  // shows each one's own change.
-  const closingAnchor = [...anchors].reverse().find((a) => a.date <= monthLastDay) ?? null;
-  const consolidatedBalance = closingAnchor?.balance ?? null;
-  const consolidatedDelta =
-    consolidatedBalance != null && openingBalance != null
-      ? round(consolidatedBalance - openingBalance)
-      : null;
-  // Only when there is no anchor at all — a connection with no history yet.
-  const openingBalanceUnknown = consolidatedBalance != null && openingBalance == null;
-
-  // The reconciliation check, moved from "this month's balance change vs its
-  // flows" to "do two REAL readings agree with the ledger between them". The
-  // old form needed a perfect daily history, which PSD2 cannot promise; this
-  // one survives an outage and still catches flow we never saw. Measured on
-  // production across the eight-week hole: 33,49 € over 487 transactions.
-  const priorAnchor = [...anchors].reverse().find((a) => a.date <= openingTarget) ?? null;
-  const discrepancy =
-    priorAnchor && closingAnchor
-      ? anchorGap(
-          priorAnchor,
-          closingAnchor,
-          sumBetween(netByDay, priorAnchor.date, closingAnchor.date)
-        )
-      : null;
-  // Judged against the flow of the window it spans, not the month's — the gap
-  // can cover two months when the sync was down, and 33 € across 487
-  // transactions is noise while the same figure over one day would not be.
-  const discrepancyGrossFlow =
-    priorAnchor && closingAnchor
-      ? sumBetween(grossByDay, priorAnchor.date, closingAnchor.date)
-      : 0;
-
-  const avgMonthlySpend = baselineAgg._sum.amount
-    ? Math.abs(Number(baselineAgg._sum.amount.toString())) / CUSHION_BASELINE_MONTHS
-    : 0;
-
-  // Days of the viewed month that have run: a past month is over, a future one
-  // has not started. Same reading the category control uses.
-  const daysElapsed = ahead === 0 ? Number(today.slice(8, 10)) : ahead < 0 ? daysInMonth : 0;
-  // Performance compares against the plan ACCRUED TO DATE, not the whole
-  // month's. Against the whole month the screen is red from the 1st to the
-  // 26th by construction — the charges land in the first week and the salaries
-  // on the 27th — and an indicator that is red half of every month is noise.
-  const expectedToDate = expectedResultToDate({
-    plannedItems: plannedMonth.map((p) => ({
-      direction: p.direction,
-      amount: Number(p.amount.toString()),
-      matched: p.status === "MATCHED",
-      windowToDay: p.windowToDay,
-      anchorMonthEnd: p.anchorMonthEnd,
-    })),
-    linearSpend: cascade.rolloverQuotas + cascade.variableBudget,
-    daysElapsed,
-    daysInMonth,
-  });
-
-  const reconciliation: Reconciliation = {
-    ...actual,
-    expectedResult: cascade.expectedResult,
-    expectedResultToDate: expectedToDate,
-    performance: performance(actual.actualResult, expectedToDate),
-    projectedResult: projectedResult(
-      actual.actualResult,
-      cascade.expectedResult,
-      expectedToDate
-    ),
-    consolidatedDelta,
-    openingBalanceUnknown,
-    discrepancy,
-    discrepancyGrossFlow,
-    consolidatedBalance,
-    monthsOfCushion: monthsOfCushion(consolidatedBalance, avgMonthlySpend),
-  };
+    : undefined;
 
   // Pace reference for the viewed month: a past month is fully elapsed, a
   // future one hasn't started. Provisional applies while last month's charges
