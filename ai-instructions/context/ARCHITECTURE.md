@@ -839,6 +839,36 @@ Rules for that kind of value:
 - Give it a TTL as well, for the paths that change the value without going
   through an action (a sync importing new transactions).
 
+## A read path pays only for what it renders
+
+Pages read live from Prisma, so the cost of a screen is whatever its builders
+query — and two of the heaviest builders are shared by screens that need very
+different slices of them. Both are therefore split, and a new caller picks the
+narrow entry point unless it actually renders the wide one.
+
+- **`lib/budget/month-status.ts`** exposes `buildMonthStatus` (everything) and
+  `buildWeeklyStatus` (everything except the reconciliation block). The
+  reconciliation alone costs five queries — the month's full flow list, the
+  active accounts, 120 days of balance snapshots, a 120-day daily-flow rollup
+  and the six-month cushion baseline — and the daily screen renders none of it.
+  One implementation, one flag: nothing above the reconciliation depends on it,
+  so `WeeklyStatus` is a plain subset and `MonthStatus extends WeeklyStatus`.
+  The skipped queries are gated rather than left to return empty arrays,
+  because a reconciliation computed over empty inputs is a fiction, not a zero.
+- **`lib/planned/engine.ts`**'s `syncPlannedState` takes
+  `{ refreshSchedule }`. Generation and matching are what the money numbers
+  depend on; `refreshSeriesSchedule` re-derives `nextExpectedDate` /
+  `lastSeenAt` by running every active series' matcher over eighteen months of
+  the feed, and only Recurring shows those fields. Dashboard passes
+  `refreshSchedule: false`; the nightly cron, Budget and Upcoming keep them
+  fresh.
+
+The other half of the same problem is *when* the work blocks the render. A page
+whose header does not depend on the slow query renders the header immediately
+and streams the body behind a `<Suspense>` boundary, with the route's
+`loading.tsx` and the boundary's fallback sharing one skeleton component so
+they cannot drift (`app/(app)/dashboard`, `app/(app)/plan`).
+
 ## Server to Client DTO Boundary
 
 Do not pass ORM-rich objects directly to client components.

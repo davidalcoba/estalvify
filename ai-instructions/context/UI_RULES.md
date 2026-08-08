@@ -289,6 +289,12 @@ change? If yes, the skeleton changes too.
 - Mirror the real layout: same outer spacing (`space-y-4` vs `space-y-6`),
   same grid classes, same card count, same desktop/mobile split.
 - Skeleton the *first* screen, not the empty state — assume data exists.
+- When a page ALSO streams its body behind a `<Suspense>` boundary, the
+  boundary's fallback and the route's `loading.tsx` are the same skeleton and
+  must stay identical — so export one component and have both use it, rather
+  than writing the shape twice. Dashboard keeps its body grid and skeleton
+  together in `components/budget/dashboard-skeleton.tsx`; Budget's live in
+  `components/budget/month-shell.tsx`.
 - Never draw a subtitle line: `PageHeader` has no subtitle.
 
 ## Sidebar Count Badges
@@ -323,6 +329,15 @@ Design for desktop and mobile as two first-class presentations:
 
 - Desktop: higher information density, wider layouts, table-friendly patterns
 - Mobile: simplified flows, card/list-first layouts, touch-friendly actions
+
+A screen is not finished when it merely *survives* a wide viewport. A
+`mx-auto max-w-*` column reads as centred and deliberate on the phone it was
+designed for and as an unfinished mobile port on a desktop, which is exactly
+how the Dashboard shipped: one 576px column of cards with empty gutters either
+side while every other screen used the full width. Unless the content has a
+genuine reading-width limit (prose, a settings form — `settings` keeps its
+`max-w-lg`), a multi-card screen lays out as `grid grid-cols-1 gap-4
+lg:grid-cols-2` like Budget and Reports, and lets the cards use the width.
 
 Use one shared domain logic layer and separate view components when needed.
 
