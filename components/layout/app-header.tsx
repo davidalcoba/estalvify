@@ -6,8 +6,6 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { NotificationBell } from "@/components/notifications/notification-bell";
-import type { NotificationDTO } from "@/lib/notifications/notification-dto";
 import { usePathname } from "next/navigation";
 
 const PAGE_TITLES: Record<string, string> = {
@@ -27,11 +25,14 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 export function AppHeader({
-  notifications,
-  unreadCount,
+  bell,
 }: {
-  notifications: NotificationDTO[];
-  unreadCount: number;
+  /**
+   * The notification bell, rendered by the shell inside a Suspense boundary.
+   * A slot rather than data: the two notification queries used to block the
+   * whole layout, so nothing at all painted until they returned.
+   */
+  bell: React.ReactNode;
 }) {
   const pathname = usePathname();
 
@@ -50,7 +51,7 @@ export function AppHeader({
       <Separator orientation="vertical" className="h-4" />
       <h1 className="text-sm font-medium text-foreground">{title}</h1>
       <div className="ml-auto flex items-center gap-1">
-        <NotificationBell notifications={notifications} unreadCount={unreadCount} />
+        {bell}
         <ThemeToggle />
       </div>
     </header>
