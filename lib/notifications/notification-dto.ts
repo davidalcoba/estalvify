@@ -1,6 +1,8 @@
 // Plain, serializable notification shape for the client bell — no Date/Decimal
 // crosses the server→client boundary (mirrors the other *-dto modules).
 
+import type { Translator } from "@/lib/i18n/translate";
+
 export type NotificationSeverity = "INFO" | "WARNING" | "ALERT";
 
 export interface NotificationDTO {
@@ -46,13 +48,22 @@ export function toNotificationDTO(n: NotificationRecordLike): NotificationDTO {
 /**
  * Short "how long ago" label. Shared by the bell and the notifications page so
  * the same notification never reads as two different ages.
+ *
+ * Takes the translator rather than a locale: the buckets are the app's own
+ * ("2d ago" stops at days, deliberately), so `Intl.RelativeTimeFormat` would
+ * have to be talked out of its own rounding anyway, and the four strings are
+ * cheaper to read in the dictionary than in a format-options object.
  */
-export function relativeTime(iso: string, now: number = Date.now()): string {
+export function relativeTime(
+  iso: string,
+  t: Translator,
+  now: number = Date.now(),
+): string {
   const diffMs = Math.max(0, now - new Date(iso).getTime());
   const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return t("notifications.time.now");
+  if (minutes < 60) return t("notifications.time.minutes", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return t("notifications.time.hours", { count: hours });
+  return t("notifications.time.days", { count: Math.floor(hours / 24) });
 }

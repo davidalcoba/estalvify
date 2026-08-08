@@ -24,16 +24,21 @@ import {
   updatePushTypes,
   sendTestPush,
 } from "@/app/(app)/settings/actions";
+import { useT } from "@/components/i18n/i18n-provider";
 
-/** The alerts a member can route to their phone, in order of urgency. */
-const PUSH_TYPES: { type: NotificationType; label: string }[] = [
-  { type: "LOW_BALANCE_PROJECTED", label: "Balance won't cover charges" },
-  { type: "CONSENT_EXPIRING", label: "Bank access expiring" },
-  { type: "NO_TRANSACTIONS", label: "Sync looks stalled" },
-  { type: "RECURRING_UPCOMING", label: "Recurring charge due" },
-  { type: "RECURRING_AMOUNT_CHANGE", label: "Recurring amount changed" },
-  { type: "RECURRING_MISSED", label: "Recurring charge missing" },
-];
+/**
+ * The alerts a member can route to their phone, in order of urgency. The
+ * label is looked up as `settings.push.type.<TYPE>`, so adding a
+ * NotificationType here without its message is a type error.
+ */
+const PUSH_TYPES = [
+  "LOW_BALANCE_PROJECTED",
+  "CONSENT_EXPIRING",
+  "NO_TRANSACTIONS",
+  "RECURRING_UPCOMING",
+  "RECURRING_AMOUNT_CHANGE",
+  "RECURRING_MISSED",
+] as const satisfies readonly NotificationType[];
 
 const neverChanges = () => () => {};
 function useIsClient(): boolean {
@@ -84,6 +89,7 @@ export function PushToggle({
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const isClient = useIsClient();
+  const t = useT();
 
   // Reconcile with the browser: the row can outlive the real subscription
   // (permission revoked in OS settings, site data cleared) and vice versa.
@@ -104,7 +110,7 @@ export function PushToggle({
   async function enable() {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      setError("Notifications are blocked. Allow them in browser settings.");
+      setError(t("settings.push.blocked"));
       return;
     }
 
@@ -125,7 +131,7 @@ export function PushToggle({
     // Turning it on with nothing selected would be a switch that does nothing,
     // so default to every alert; the member can pare it back below.
     if (selected.length === 0) {
-      const all = PUSH_TYPES.map((t) => t.type);
+      const all = [...PUSH_TYPES];
       setSelected(all);
       await updatePushTypes(all);
     }
@@ -151,9 +157,7 @@ export function PushToggle({
       } catch (cause) {
         console.error("[push] toggle failed:", cause);
         setError(
-          next
-            ? "Could not enable notifications."
-            : "Could not disable notifications.",
+          next ? t("settings.push.enableFailed") : t("settings.push.disableFailed"),
         );
       }
     });
@@ -162,7 +166,7 @@ export function PushToggle({
   function toggleType(type: NotificationType, on: boolean) {
     const next = on
       ? [...selected, type]
-      : selected.filter((t) => t !== type);
+      : selected.filter((candidate) => candidate !== type);
     setSelected(next);
     startTransition(async () => {
       await updatePushTypes(next);
@@ -184,22 +188,22 @@ export function PushToggle({
   const blocked = needsInstall || !supported || notConfigured;
 
   const reason = needsInstall
-    ? "On iPhone, add Estalvify to your Home Screen first."
+    ? t("settings.push.needsInstall")
     : !supported
-      ? "This browser doesn't support push notifications."
+      ? t("settings.push.unsupported")
       : notConfigured
-        ? "Push is not configured on this deployment."
+        ? t("settings.push.notConfigured")
         : null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Push notifications</CardTitle>
+        <CardTitle>{t("settings.push.title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="push-toggle" className="font-normal">
-            Alerts on this device.
+            {t("settings.push.deviceLabel")}
           </Label>
           <Switch
             id="push-toggle"
@@ -214,10 +218,10 @@ export function PushToggle({
         {enabled && !blocked && (
           <>
             <div className="space-y-3 border-t pt-4">
-              {PUSH_TYPES.map(({ type, label }) => (
+              {PUSH_TYPES.map((type) => (
                 <div key={type} className="flex items-center justify-between gap-4">
                   <Label htmlFor={`push-${type}`} className="font-normal text-sm">
-                    {label}
+                    {t(`settings.push.type.${type}`)}
                   </Label>
                   <Switch
                     id={`push-${type}`}
@@ -229,7 +233,7 @@ export function PushToggle({
               ))}
               {selected.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Nothing selected — alerts stay in the bell only.
+                  {t("settings.push.noneSelected")}
                 </p>
               )}
             </div>
@@ -241,7 +245,7 @@ export function PushToggle({
                 onClick={runTest}
                 disabled={isPending}
               >
-                Send test
+                {t("settings.push.sendTest")}
               </Button>
               {testResult && (
                 <p className="text-xs text-muted-foreground">{testResult}</p>
@@ -253,7 +257,9 @@ export function PushToggle({
         {/* Surfaced from the DB: the reason the last real send failed. Without
             this a rejection is invisible outside the Vercel logs. */}
         {lastError && !testResult && (
-          <p className="text-xs text-destructive">Last send failed: {lastError}</p>
+          <p className="text-xs text-destructive">
+            {t("settings.push.lastError", { error: lastError })}
+          </p>
         )}
         {error && <p className="text-xs text-destructive">{error}</p>}
       </CardContent>

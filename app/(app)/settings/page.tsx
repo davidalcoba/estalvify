@@ -13,12 +13,18 @@ import { PushToggle } from "@/components/settings/push-toggle";
 import type { NotificationType } from "@/app/generated/prisma";
 import { listHouseholdPeople, type HouseholdPeople } from "@/lib/household/manage";
 import { seedDefaultCategories } from "./actions";
+import { getT } from "@/lib/i18n/server";
+import type { Translator } from "@/lib/i18n/translate";
 
-export const metadata: Metadata = { title: "Settings" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("nav.settings") };
+}
 
 export default async function SettingsPage() {
   const scope = await requireScope("read");
   const userId = scope.dataUserId;
+  const t = await getT();
 
   // Members management is owner-only; others never see the card (the actions
   // behind it require "admin" anyway).
@@ -76,6 +82,7 @@ export default async function SettingsPage() {
     });
     return (
       <SettingsLayout
+        t={t}
         prefs={prefs}
         user={user}
         categories={seeded}
@@ -91,6 +98,7 @@ export default async function SettingsPage() {
 
   return (
     <SettingsLayout
+      t={t}
       prefs={prefs}
       user={user}
       categories={categories}
@@ -105,6 +113,7 @@ export default async function SettingsPage() {
 }
 
 function SettingsLayout({
+  t,
   prefs,
   user,
   categories,
@@ -115,6 +124,7 @@ function SettingsLayout({
   pushTypes,
   pushLastError,
 }: {
+  t: Translator;
   prefs: UserPrefs;
   people: HouseholdPeople | null;
   actorUserId: string;
@@ -141,7 +151,7 @@ function SettingsLayout({
   if (role === "VIEWER") {
     return (
       <div className="space-y-6">
-        <PageHeader title="Settings" />
+        <PageHeader title={t("nav.settings")} />
         <div className="max-w-lg space-y-6">
           <SettingsForm
             timezone={prefs.timezone}
@@ -161,12 +171,10 @@ function SettingsLayout({
 
           <Card>
             <CardHeader>
-              <CardTitle>Read-only access</CardTitle>
+              <CardTitle>{t("settings.viewer.title")}</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Your role in this household is Viewer. Categories, alerts and
-              data management are handled by the household owner and editors;
-              the preferences above only change how the app renders for you.
+              {t("settings.viewer.body")}
             </CardContent>
           </Card>
         </div>
@@ -176,7 +184,7 @@ function SettingsLayout({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" />
+      <PageHeader title={t("nav.settings")} />
 
       <div className="max-w-lg space-y-6">
         <SettingsForm
