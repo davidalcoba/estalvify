@@ -56,6 +56,11 @@ model User {
   notificationReads     NotificationRead[]
   pushSubscriptions     PushSubscription[]
 
+  // Which alert types may vibrate this member's phone. Personal, like the
+  // other per-member prefs: two people in a household can want different
+  // things on their lock screen. Empty = the bell only, no push.
+  pushTypes NotificationType[] @default([])
+
   @@map("users")
 }
 
@@ -776,6 +781,12 @@ model PushSubscription {
 
   userAgent String?
   createdAt DateTime @default(now())
+
+  // Why the last send to this device failed, and when. Kept so a rejection
+  // (a bad VAPID subject, a rate limit) is visible in Settings instead of
+  // dying in a server log nobody can read. Cleared on the next success.
+  lastError   String?
+  lastErrorAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

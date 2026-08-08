@@ -59,13 +59,13 @@ export function upcomingRecurringNotifications(
 
     const when = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
     const amount = formatCurrency(item.averageAmount, currency, locale);
-    const lead = item.direction === "CREDIT" ? "Expected" : "A payment of";
+    const lead = item.direction === "CREDIT" ? "Incoming" : "Charge of";
 
     specs.push({
       type: "RECURRING_UPCOMING",
       severity: "INFO",
-      title: `Upcoming: ${item.displayName}`,
-      body: `${lead} ${amount} is due ${when} (${item.nextExpectedDate}).`,
+      title: item.displayName,
+      body: `${lead} ${amount} ${when}.`,
       dedupeKey: `recurring-due:${item.merchantKey}:${item.nextExpectedDate}`,
       metadata: { merchantKey: item.merchantKey },
     });
@@ -128,7 +128,7 @@ export function consentExpiringNotifications(
       type: "CONSENT_EXPIRING",
       severity: CONSENT_STEP_SEVERITY[step] ?? "WARNING",
       title: `${conn.bankName} access expires ${when}`,
-      body: `Your bank consent runs out on ${expiryLabel}. Reconnect from Accounts to keep transactions flowing — once it lapses, syncing stops silently.`,
+      body: `Reconnect before ${expiryLabel} or syncing stops.`,
       dedupeKey: `consent-expiring:${conn.connectionId}:${step}`,
       metadata: { connectionId: conn.connectionId, daysLeft: String(daysLeft) },
     });
@@ -178,8 +178,8 @@ export function staleTransactionNotifications(
     specs.push({
       type: "NO_TRANSACTIONS",
       severity: days >= thresholdDays * 3 ? "ALERT" : "WARNING",
-      title: `No new transactions in ${account.accountName}`,
-      body: `The most recent transaction is ${days} days old (${account.lastTransactionDate}). Check the connection on Accounts — it may need reconnecting.`,
+      title: `${account.accountName} looks stalled`,
+      body: `Nothing new in ${days} days. The connection may need reconnecting.`,
       dedupeKey: `no-transactions:${account.accountId}:${isoYearWeek(today)}`,
       metadata: { accountId: account.accountId, staleDays: String(days) },
     });
@@ -218,15 +218,7 @@ export function cashflowBreachNotifications(
       type: "LOW_BALANCE_PROJECTED" as NotificationType,
       severity: (b.daysAway <= 7 ? "ALERT" : "WARNING") as NotificationSeverity,
       title: `${b.accountName} won't cover upcoming charges`,
-      body: `${b.accountName} is projected to fall to ${formatCurrency(
-        b.breachBalance,
-        currency,
-        locale
-      )} ${when}, below your ${formatCurrency(threshold, currency, locale)} threshold. A transfer of ${formatCurrency(
-        topUp,
-        currency,
-        locale
-      )} would keep it covered.`,
+      body: `Down to ${formatCurrency(b.breachBalance, currency, locale)} ${when}. Add ${formatCurrency(topUp, currency, locale)} to cover it.`,
       dedupeKey: `cashflow-low:${b.accountId}:${isoYearWeek(today)}`,
       metadata: {
         accountId: b.accountId,
