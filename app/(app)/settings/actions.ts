@@ -4,7 +4,8 @@ import { signOut } from "@/auth";
 import { requireScope } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import type { CategoryKind } from "@/app/generated/prisma";
+import type { CategoryKind, NotificationType } from "@/app/generated/prisma";
+import { sendPushToSelf } from "@/lib/notifications/push";
 import { deleteUserAccount } from "@/lib/account/delete-user";
 import {
   createHouseholdInvite,
@@ -63,6 +64,57 @@ export async function savePushSubscription(subscription: {
     where: { endpoint },
     create: { userId: actorUserId, endpoint, p256dh, auth: authKey, userAgent },
     update: { userId: actorUserId, p256dh, auth: authKey, userAgent },
+  });
+
+  revalidatePath("/settings");
+}
+
+/**
+ * Send a push to the acting member's own devices and report what happened.
+ *
+ * The point is the return value: without it, "the notification never arrived"
+ * is unfalsifiable from the app, since the failure lives in a Vercel log. This
+ * ignores the per-type preferences on purpose — someone debugging push has
+ * often switched everything off.
+ */
+export async function sendTestPush(): Promise<{ ok: boolean; message: string }> {
+  const { actorUserId } = await requireScope("read");
+
+  const devices = await prisma.pushSubscription.count({
+    where: { userId: actorUserId },
+  });
+  if (devices === 0) {
+    return { ok: false, message: "No device is subscribed yet." };
+  }
+
+  const result = await sendPushToSelf(actorUserId, {
+    type: "LOW_BALANCE_PROJECTED",
+    severity: "INFO",
+    title: "Estalvify",
+    body: "Push is working.",
+    dedupeKey: `test:${actorUserId}`,
+  });
+
+  if (result.errors.length > 0) {
+    return { ok: false, message: result.errors.join(" · ") };
+  }
+  if (result.sent === 0) {
+    return { ok: false, message: "Nothing was sent — no reachable device." };
+  }
+  revalidatePath("/settings");
+  return {
+    ok: true,
+    message: `Sent to ${result.sent} device${result.sent === 1 ? "" : "s"}.`,
+  };
+}
+
+/** Choose which alert types may reach this member's phone. */
+export async function updatePushTypes(types: NotificationType[]) {
+  const { actorUserId } = await requireScope("read");
+
+  await prisma.user.update({
+    where: { id: actorUserId },
+    data: { pushTypes: { set: types } },
   });
 
   revalidatePath("/settings");

@@ -10,6 +10,7 @@ import { CategoryManager } from "@/components/settings/category-manager";
 import { PrivacyDataCard } from "@/components/settings/privacy-data-card";
 import { MembersCard } from "@/components/settings/members-card";
 import { PushToggle } from "@/components/settings/push-toggle";
+import type { NotificationType } from "@/app/generated/prisma";
 import { listHouseholdPeople, type HouseholdPeople } from "@/lib/household/manage";
 import { seedDefaultCategories } from "./actions";
 
@@ -26,7 +27,7 @@ export default async function SettingsPage() {
 
   // Merged prefs: personal fields (timezone/language/number format) come from
   // the ACTING member's row, the currency from the household owner's.
-  const [prefs, user, categories, pushSubscriptions] = await Promise.all([
+  const [prefs, user, categories, pushSubscriptions, actor] = await Promise.all([
     getUserPrefs(userId, scope.actorUserId),
     prisma.user.findUnique({
       where: { id: userId },
@@ -47,8 +48,17 @@ export default async function SettingsPage() {
       orderBy: { sortOrder: "asc" },
     }),
     // Initial state only — PushToggle reconciles against the browser on mount,
-    // since the row can outlive the real subscription.
-    prisma.pushSubscription.count({ where: { userId: scope.actorUserId } }),
+    // since the row can outlive the real subscription. lastError is what makes
+    // a failed send visible without reading server logs.
+    prisma.pushSubscription.findMany({
+      where: { userId: scope.actorUserId },
+      select: { lastError: true, lastErrorAt: true },
+      orderBy: { lastErrorAt: { sort: "desc", nulls: "last" } },
+    }),
+    prisma.user.findUnique({
+      where: { id: scope.actorUserId },
+      select: { pushTypes: true },
+    }),
   ]);
 
   // Seed default categories for new users
@@ -72,7 +82,9 @@ export default async function SettingsPage() {
         people={people}
         actorUserId={scope.actorUserId}
         role={scope.role}
-        pushSubscribed={pushSubscriptions > 0}
+        pushSubscribed={pushSubscriptions.length > 0}
+        pushTypes={actor?.pushTypes ?? []}
+        pushLastError={pushSubscriptions[0]?.lastError ?? null}
       />
     );
   }
@@ -85,7 +97,9 @@ export default async function SettingsPage() {
       people={people}
       actorUserId={scope.actorUserId}
       role={scope.role}
-      pushSubscribed={pushSubscriptions > 0}
+      pushSubscribed={pushSubscriptions.length > 0}
+      pushTypes={actor?.pushTypes ?? []}
+      pushLastError={pushSubscriptions[0]?.lastError ?? null}
     />
   );
 }
@@ -98,12 +112,16 @@ function SettingsLayout({
   actorUserId,
   role,
   pushSubscribed,
+  pushTypes,
+  pushLastError,
 }: {
   prefs: UserPrefs;
   people: HouseholdPeople | null;
   actorUserId: string;
   role: "OWNER" | "EDITOR" | "VIEWER";
   pushSubscribed: boolean;
+  pushTypes: NotificationType[];
+  pushLastError: string | null;
   user: {
     email?: string | null;
     lowBalanceThreshold?: { toString(): string } | null;
@@ -135,7 +153,11 @@ function SettingsLayout({
 
           {/* Personal to this device, so it is not a household setting: a
               viewer sees the bell, so a viewer may be notified. */}
-          <PushToggle subscribed={pushSubscribed} />
+          <PushToggle
+            subscribed={pushSubscribed}
+            types={pushTypes}
+            lastError={pushLastError}
+          />
 
           <Card>
             <CardHeader>
@@ -169,7 +191,11 @@ function SettingsLayout({
           currency={prefs.currency}
         />
 
-        <PushToggle subscribed={pushSubscribed} />
+        <PushToggle
+            subscribed={pushSubscribed}
+            types={pushTypes}
+            lastError={pushLastError}
+          />
 
         <CategoryManager initialCategories={categories} />
 
