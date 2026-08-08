@@ -454,14 +454,29 @@ export async function refreshSeriesSchedule(userId: string): Promise<void> {
   if (writes.length > 0) await prisma.$transaction(writes);
 }
 
+export interface SyncPlannedOptions {
+  /**
+   * Recompute each series' `nextExpectedDate` / `lastSeenAt`. On by default.
+   *
+   * It is by far the most expensive step — it reads eighteen months of the
+   * transaction feed and runs every active series' matcher over all of it —
+   * and the only screen that shows what it writes is Recurring. The DAILY
+   * screen therefore turns it off: its numbers come from the planned items and
+   * their matches, which the two steps above keep true, and the schedule
+   * fields stay fresh through the nightly cron and through Budget / Upcoming.
+   */
+  refreshSchedule?: boolean;
+}
+
 /** Generation + matching in one call — what cron and pages actually use. */
 export async function syncPlannedState(
   userId: string,
   timezone: string,
   currency: string,
-  locale: string
+  locale: string,
+  options: SyncPlannedOptions = {}
 ): Promise<void> {
   await ensurePlannedItems(userId, timezone);
   await runPlannedMatching(userId, timezone, currency, locale);
-  await refreshSeriesSchedule(userId);
+  if (options.refreshSchedule ?? true) await refreshSeriesSchedule(userId);
 }

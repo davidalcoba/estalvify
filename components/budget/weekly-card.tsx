@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/formatters";
-import type { MonthStatus } from "@/lib/budget/month-status";
+import type { WeeklyStatus } from "@/lib/budget/month-status";
 import { CalendarRange } from "lucide-react";
 
 export function WeeklyCard({
@@ -14,7 +14,7 @@ export function WeeklyCard({
   currency,
   locale,
 }: {
-  status: MonthStatus;
+  status: WeeklyStatus;
   currency: string;
   locale: string;
 }) {
@@ -22,7 +22,7 @@ export function WeeklyCard({
 
   if (!status.configured) {
     return (
-      <Card className="md:col-span-2">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Available this week</CardTitle>
           <CalendarRange className="h-4 w-4 text-muted-foreground" />
@@ -47,7 +47,7 @@ export function WeeklyCard({
       : "text-muted-foreground";
 
   return (
-    <Card className="md:col-span-2">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">Available this week</CardTitle>
         <CalendarRange className="h-4 w-4 text-muted-foreground" />
