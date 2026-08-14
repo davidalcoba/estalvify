@@ -8,6 +8,14 @@
 // boundary, the same shape Budget uses: everything below the header waits on
 // the planned-state sync, and there is no reason to hold the header hostage
 // to it.
+//
+// The greeting does await ONE thing — the member's timezone, so it can say
+// "Buenas tardes" at 16:03 instead of the fixed "Buenos días" it used to.
+// That costs no extra query: `getUserPrefs` is React-cached and the body
+// calls it anyway, so this only decides which of the two awaits it first, and
+// the header already waits on `auth()` and the language lookup. The planned
+// sync — the expensive part, and the reason the boundary exists — stays
+// behind it.
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -28,6 +36,15 @@ import { WeeklyCard } from "@/components/budget/weekly-card";
 import { ControlMini } from "@/components/budget/control-mini";
 import { Wallet } from "lucide-react";
 import { getT } from "@/lib/i18n/server";
+import type { MessageKey } from "@/lib/i18n/dictionaries/en";
+import { greetingBand, hourInTimezone, type GreetingBand } from "@/lib/greeting";
+
+/** Message keys, not labels: the band is constant, the language is not. */
+const GREETING_KEY: Record<GreetingBand, MessageKey> = {
+  morning: "dashboard.greeting.morning",
+  afternoon: "dashboard.greeting.afternoon",
+  evening: "dashboard.greeting.evening",
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -100,13 +117,17 @@ async function DashboardBody({
 
 export default async function DashboardPage() {
   const scope = await requireScope("read");
-  const t = await getT();
+  const [t, { timezone }] = await Promise.all([
+    getT(),
+    getUserPrefs(scope.dataUserId, scope.actorUserId),
+  ]);
   const firstName =
     scope.actor.name?.split(" ")[0] ?? t("dashboard.greetingFallback");
+  const greeting = GREETING_KEY[greetingBand(hourInTimezone(timezone))];
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t("dashboard.greeting", { name: firstName })} />
+      <PageHeader title={t(greeting, { name: firstName })} />
       <Suspense fallback={<DashboardBodySkeleton />}>
         <DashboardBody userId={scope.dataUserId} actorUserId={scope.actorUserId} />
       </Suspense>

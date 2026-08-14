@@ -289,7 +289,10 @@ export const en = {
     "Categorize transactions, manage categories, rules and plan items, and trigger bank syncs",
 
   // ─────────────────────────── dashboard / budget ───────────────────────────
-  "dashboard.greeting": "Good morning, {name} 👋",
+  // Cut at 06/14/21 in the member's own timezone — see lib/greeting.ts.
+  "dashboard.greeting.morning": "Good morning, {name} 👋",
+  "dashboard.greeting.afternoon": "Good afternoon, {name} 👋",
+  "dashboard.greeting.evening": "Good evening, {name} 👋",
   "dashboard.greetingFallback": "there",
   "dashboard.noAccounts.title": "Connect your first bank account",
   "dashboard.noAccounts.body": "Link a bank to start tracking. Syncs daily.",

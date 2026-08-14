@@ -288,7 +288,9 @@ export const ca: Dictionary = {
     "Categoritzar moviments, gestionar categories, regles i elements del pla, i llançar sincronitzacions bancàries",
 
   // ─────────────────────────── dashboard / budget ───────────────────────────
-  "dashboard.greeting": "Bon dia, {name} 👋",
+  "dashboard.greeting.morning": "Bon dia, {name} 👋",
+  "dashboard.greeting.afternoon": "Bona tarda, {name} 👋",
+  "dashboard.greeting.evening": "Bona nit, {name} 👋",
   "dashboard.greetingFallback": "per aquí",
   "dashboard.noAccounts.title": "Connecta el teu primer compte bancari",
   "dashboard.noAccounts.body":

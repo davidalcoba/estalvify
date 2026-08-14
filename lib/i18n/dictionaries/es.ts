@@ -288,7 +288,9 @@ export const es: Dictionary = {
     "Categorizar movimientos, gestionar categorías, reglas y elementos del plan, y lanzar sincronizaciones bancarias",
 
   // ─────────────────────────── dashboard / budget ───────────────────────────
-  "dashboard.greeting": "Buenos días, {name} 👋",
+  "dashboard.greeting.morning": "Buenos días, {name} 👋",
+  "dashboard.greeting.afternoon": "Buenas tardes, {name} 👋",
+  "dashboard.greeting.evening": "Buenas noches, {name} 👋",
   "dashboard.greetingFallback": "por aquí",
   "dashboard.noAccounts.title": "Conecta tu primera cuenta bancaria",
   "dashboard.noAccounts.body":

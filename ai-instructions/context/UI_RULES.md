@@ -240,6 +240,13 @@ Two more rules came out of the same pass:
   can I still spend" and "what have I spent". Each is now its own block with
   its own heading, separated by a rule. Five figures under one heading is not
   a card, it is a dump.
+- **Copy that claims to know something must actually know it.** The greeting
+  was a constant `Good morning` and therefore wrong from 14:00 to 06:00 —
+  visible above every other thing on the daily screen. Either derive it (the
+  member's timezone is a stored preference; `lib/greeting.ts` is pure and
+  unit-tested) or word it so it is true at any hour. The same test applies to
+  anything phrased as an observation: a greeting, a "last updated", a
+  "nothing new today".
 - **A column heading is not the place to define a column.** Grid tracks sized
   `auto` take their width from the widest cell *including the heading*, so a
   self-explaining heading (`Mes / presupuesto` over `555 € / 550 €`) is paid
