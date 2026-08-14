@@ -96,16 +96,20 @@ export function ChartCardSkeleton({
 export function ListCardSkeleton({
   rows = 5,
   titleWidth = "w-40",
+  descriptionWidth,
   className,
 }: {
   rows?: number;
   titleWidth?: string;
+  /** Set when the real card carries a `CardDescription` under its title. */
+  descriptionWidth?: string;
   className?: string;
 }) {
   return (
     <Card className={className}>
       <CardHeader>
         <Skeleton className={cn("h-5", titleWidth)} />
+        {descriptionWidth && <Skeleton className={cn("h-3", descriptionWidth)} />}
       </CardHeader>
       <CardContent className="space-y-3">
         {Array.from({ length: rows }).map((_, i) => (
@@ -114,6 +118,49 @@ export function ListCardSkeleton({
             <Skeleton className="h-4 w-20 shrink-0" />
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Card led by ONE big figure and its captions, over a divided list — the
+ * Dashboard's week card. Distinct from `ListCardSkeleton`, whose rows are all
+ * the same weight: here the first thing to paint is the number.
+ */
+export function StatListCardSkeleton({
+  rows = 3,
+  titleWidth = "w-40",
+  descriptionWidth = "w-24",
+  className,
+}: {
+  rows?: number;
+  titleWidth?: string;
+  descriptionWidth?: string;
+  className?: string;
+}) {
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <Skeleton className={cn("h-5", titleWidth)} />
+        <Skeleton className={cn("h-3", descriptionWidth)} />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="mt-2 h-3 w-44" />
+        <Skeleton className="mt-1.5 h-3 w-52" />
+        <div className="mt-4 space-y-3 border-t pt-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="ml-auto h-4 w-20 shrink-0" />
+          </div>
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton className="h-3 flex-1" />
+              <Skeleton className="h-3 w-24 shrink-0" />
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
