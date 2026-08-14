@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isoDayOfWeek,
   isoWeekStart,
+  isoWeekEnd,
   computeWeeklyAvailable,
   weekOperations,
   weeklyOpsMedian,
@@ -16,6 +17,11 @@ describe("ISO week helpers", () => {
   it("week start is the Monday", () => {
     expect(isoWeekStart("2026-08-05")).toBe("2026-08-03");
     expect(isoWeekStart("2026-08-03")).toBe("2026-08-03");
+  });
+  it("week end is the Sunday, and a month boundary is not a special case", () => {
+    expect(isoWeekEnd("2026-08-05")).toBe("2026-08-09");
+    expect(isoWeekEnd("2026-08-09")).toBe("2026-08-09");
+    expect(isoWeekEnd("2026-08-31")).toBe("2026-09-06");
   });
 });
 

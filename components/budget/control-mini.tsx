@@ -1,6 +1,16 @@
 // Server component: compact category status for the daily screen — one line
 // per manual objective, week and month, tone by control state. No prose.
 //
+// What the columns MEAN lives in the card description, not in their headings.
+// `SEMANA` over a bare amount was unreadable — it could be a budget, a
+// remainder or a spend, and the app's own user could not tell ("de la lista
+// tampoco sé qué es la columna de semana"). Spelling it out in the headings
+// (`Mes / presupuesto`) was tried first and rejected on measurement: the
+// numeric tracks are `auto`, so a heading wider than its cells steals the
+// width from the category name — ~25px on a 375px screen, enough to truncate
+// `Transporte público`. A description above the grid costs nothing
+// horizontally and can name both columns in the order they appear.
+//
 // Laid out as a grid, not as flex rows with fixed-width number columns: those
 // align only as long as you guess the widest amount right, and the day you
 // guess low the numbers spill out of the card (they did — `197,80 €/200,00 €`
@@ -11,7 +21,13 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { formatCurrencyRound } from "@/lib/formatters";
 import type { ControlRow } from "@/lib/budget/control";
 import { ListChecks } from "lucide-react";
@@ -32,22 +48,25 @@ export async function ControlMini({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
-          <Link href="/plan" className="hover:underline">
-            {t("control.title")}
-          </Link>
-        </CardTitle>
-        <ListChecks className="h-4 w-4 text-muted-foreground" />
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="text-sm font-medium">
+            <Link href="/plan" className="hover:underline">
+              {t("control.title")}
+            </Link>
+          </CardTitle>
+          <CardDescription className="text-xs">{t("control.subtitle")}</CardDescription>
+        </div>
+        <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1.5 text-sm">
           <span aria-hidden />
           <span aria-hidden />
-          <span className="text-right text-[10px] uppercase tracking-wide text-muted-foreground/70">
+          <span className="self-end text-right text-[10px] leading-tight uppercase tracking-wide text-muted-foreground/70">
             {t("control.week")}
           </span>
-          <span className="text-right text-[10px] uppercase tracking-wide text-muted-foreground/70">
+          <span className="self-end text-right text-[10px] leading-tight uppercase tracking-wide text-muted-foreground/70">
             {t("control.month")}
           </span>
           {control.map((c) => {

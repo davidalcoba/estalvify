@@ -25,6 +25,13 @@ export function isoWeekStart(date: string): string {
   return new Date(Date.UTC(y, m - 1, d - shift)).toISOString().slice(0, 10);
 }
 
+/** The Sunday (YYYY-MM-DD) of the ISO week containing `date`. */
+export function isoWeekEnd(date: string): string {
+  return new Date(Date.parse(isoWeekStart(date)) + 6 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 export interface WeeklyAvailable {
   /** What remains of the month's variable budget. */
   remainingMonth: number;
