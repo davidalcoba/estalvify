@@ -224,6 +224,35 @@ Two more rules came out of the same pass:
 - **State the pace in days, not per cent.** `23% elapsed` next to a list of
   objectives was read as "23 % of the objectives"; `Day 7 of 31` cannot be
   mistaken for progress against a goal.
+- **A derived figure shows its arithmetic.** The Dashboard's week number is
+  the daily rate times the days left of the ISO week, and printed alone it is
+  a number the reader has to take on faith. Under it, `3 days × 129,25 € a
+  day` — the same two operands the code used. The rule generalizes: where a
+  headline figure comes from a calculation the user could not guess, the line
+  beneath it is the calculation, not a second unrelated statistic.
+- **Every number says what it is, and every period says of what.** `129,25
+  €/día · quedan 2326,41 €` never states what remains; `16 ops · mediana 49.5`
+  sits beside a euro amount and reads as money. Labels go with the figures,
+  counters live next to the thing they count (the ops counter belongs to the
+  week's *spending* block, not to the money left), and no `€` figure shares a
+  line with a bare non-currency number.
+- **Group by question, not by data source.** The week card answers two: "what
+  can I still spend" and "what have I spent". Each is now its own block with
+  its own heading, separated by a rule. Five figures under one heading is not
+  a card, it is a dump.
+- **Copy that claims to know something must actually know it.** The greeting
+  was a constant `Good morning` and therefore wrong from 14:00 to 06:00 —
+  visible above every other thing on the daily screen. Either derive it (the
+  member's timezone is a stored preference; `lib/greeting.ts` is pure and
+  unit-tested) or word it so it is true at any hour. The same test applies to
+  anything phrased as an observation: a greeting, a "last updated", a
+  "nothing new today".
+- **A column heading is not the place to define a column.** Grid tracks sized
+  `auto` take their width from the widest cell *including the heading*, so a
+  self-explaining heading (`Mes / presupuesto` over `555 € / 550 €`) is paid
+  for out of the column that had to truncate anyway — the category name.
+  Define the columns once in the card description, in the order they appear,
+  and keep the headings to the one word that identifies each.
 
 ## Copy: terse, SaaS-style
 

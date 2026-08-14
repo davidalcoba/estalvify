@@ -4,7 +4,10 @@
 // the skeleton drifting from the real layout the next time the breakpoints
 // change (UI_RULES → "A card must never outgrow its column").
 
-import { ListCardSkeleton } from "@/components/layout/skeletons";
+import {
+  ListCardSkeleton,
+  StatListCardSkeleton,
+} from "@/components/layout/skeletons";
 
 /**
  * The two cards sit side by side from `lg` up and stack below it — the grid
@@ -16,12 +19,17 @@ import { ListCardSkeleton } from "@/components/layout/skeletons";
 export const DASHBOARD_BODY_GRID =
   "grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start";
 
-/** Available this week (number + composition) next to the category list. */
+/**
+ * To spend this week (the number, its two caption lines and the week's
+ * composition) next to the category list. Both cards carry a description
+ * under their title, so both skeletons draw that second line — a skeleton
+ * that promises a layout the page does not deliver is worse than none.
+ */
 export function DashboardBodySkeleton() {
   return (
     <div className={DASHBOARD_BODY_GRID}>
-      <ListCardSkeleton rows={4} titleWidth="w-40" />
-      <ListCardSkeleton rows={8} titleWidth="w-28" />
+      <StatListCardSkeleton rows={3} titleWidth="w-44" descriptionWidth="w-28" />
+      <ListCardSkeleton rows={8} titleWidth="w-28" descriptionWidth="w-44" />
     </div>
   );
 }
