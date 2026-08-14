@@ -199,8 +199,9 @@ async function applyMove(
 }
 
 /**
- * Resolve the category ids a `list_transactions` filter should match: the
- * category itself plus, unless the caller opts out, everything below it.
+ * Resolve the category ids a `categoryId` filter should match (used by
+ * `list_transactions` and `list_planned_items`): the category itself plus,
+ * unless the caller opts out, everything below it.
  *
  * Accepts an **inactive** category on purpose. `delete_category` is a soft
  * delete, so transactions keep pointing at a deleted category and are invisible
@@ -885,7 +886,14 @@ export interface PlannedOneOffFields {
 
 export async function listPlannedItemsForUser(
   userId: string,
-  filter?: { year?: number; month?: number; status?: PlannedStatus },
+  filter?: {
+    year?: number;
+    month?: number;
+    status?: PlannedStatus;
+    // Already resolved by the caller (resolveCategoryFilter), so the subtree
+    // expansion lives in one place and this stays a plain `in` on the column.
+    categoryIds?: string[];
+  },
 ) {
   const items = await prisma.plannedItem.findMany({
     where: {
@@ -893,6 +901,7 @@ export async function listPlannedItemsForUser(
       ...(filter?.year ? { year: filter.year } : {}),
       ...(filter?.month ? { month: filter.month } : {}),
       ...(filter?.status ? { status: filter.status } : {}),
+      ...(filter?.categoryIds ? { categoryId: { in: filter.categoryIds } } : {}),
     },
     orderBy: [{ year: "asc" }, { month: "asc" }, { windowFromDay: "asc" }],
     include: { category: { select: { name: true } } },

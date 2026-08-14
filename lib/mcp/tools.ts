@@ -695,16 +695,34 @@ export function registerTools(server: McpServer): void {
         "the whole history — 0 means the matcher is broken), candidatesInWindow " +
         "(recognized inside this period's window), and windowStatus " +
         "(FUTURE / OPEN / CLOSED) — so a healthy series whose charge simply has " +
-        "not arrived is distinguishable from a misconfigured one.",
+        "not arrived is distinguishable from a misconfigured one. `categoryId` " +
+        "narrows to the items filed under that category, INCLUDING its subcategories " +
+        "(set includeSubcategories: false for the category alone).",
       inputSchema: {
         year: z.number().int().optional(),
         month: z.number().int().min(1).max(12).optional(),
         status: z.enum(["PENDING", "MATCHED", "MISSED"]).optional(),
+        categoryId: z.string().optional(),
+        includeSubcategories: z.boolean().optional(),
       },
     },
-    async ({ year, month, status }, extra) => {
+    async ({ year, month, status, categoryId, includeSubcategories }, extra) => {
       const userId = requireUserId(extra as ToolExtra, "read");
-      return json(await listPlannedItemsForUser(userId, { year, month, status }));
+      try {
+        const scope = categoryId
+          ? await resolveCategoryFilter(userId, categoryId, includeSubcategories !== false)
+          : null;
+        return json(
+          await listPlannedItemsForUser(userId, {
+            year,
+            month,
+            status,
+            ...(scope ? { categoryIds: scope.ids } : {}),
+          }),
+        );
+      } catch (err) {
+        return errorResult(err, "list_planned_items failed");
+      }
     },
   );
 

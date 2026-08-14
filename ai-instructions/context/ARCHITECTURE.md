@@ -671,7 +671,9 @@ VIEWER the connection will be read-only.
   pagination + **category filter and per-category counts** — returns both
   `description` and `remittanceInfo` plus the categorization source, which is what
   makes a misfiring rule debuggable), `list_categories`, `list_accounts`,
-  `get_budgets` (LEGACY — budgets were replaced by the Plan; read-only), `list_plan_items`,
+  `get_budgets` (LEGACY — budgets were replaced by the Plan; read-only),
+  `list_planned_items` (year/month, `status`, and a `categoryId` that shares
+  `list_transactions`' subtree resolution — see below),
   `list_rules` (with run metrics — `neverMatched` means `lastMatchAt === null` after at
   least one run, never "zero matches in the last run"), `test_rule` (evaluate conditions
   without saving). Writes: `bulk_categorize` (`lib/mcp/categorize.ts`, capped),
@@ -685,7 +687,10 @@ VIEWER the connection will be read-only.
   it never reads) — that drift shipped three times before the test existed.
 - **Auditing the category tree from MCP.** `list_transactions` takes a
   `categoryId` (subcategories included by default, via the pure `subtreeIds` in
-  `lib/categories/hierarchy.ts`) and `categoryCounts: true`, which adds the count
+  `lib/categories/hierarchy.ts`; `list_planned_items` takes the same pair through
+  the shared `resolveCategoryFilter`, so plan and reality are filtered the same
+  way and an unknown category errors instead of silently returning everything)
+  and `categoryCounts: true`, which adds the count
   per category over the same filtered set — every visible category *including
   those at zero*, deleted categories that still hold rows, and an `uncategorized`
   total. Without those counts the tree can't be audited from a client at all: an
