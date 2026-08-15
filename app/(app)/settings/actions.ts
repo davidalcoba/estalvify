@@ -50,12 +50,26 @@ export async function updatePersonalPreferences(data: {
  * several devices, and a browser reissuing the same endpoint must update its row
  * instead of adding another. The upsert also re-points an endpoint at the
  * current member if a device changed hands.
+ *
+ * `replacesDevice` retires the member's other rows carrying the same user agent.
+ * Reinstalling an iOS web app abandons its subscription without ever calling
+ * `unsubscribe()`, so the old row survives — and the push service keeps
+ * accepting sends to it, which means no amount of server-side evidence can tell
+ * the orphan from the live one. The device cannot either: the previous
+ * registration is gone, endpoint included. So the only moment the two are
+ * distinguishable is this one, when a member deliberately subscribes anew: the
+ * subscription arriving now is the live one by construction. Passed only from
+ * that branch of the toggle — never when an existing subscription is reused,
+ * where it would delete a healthy sibling for no reason. It is still a
+ * heuristic, and two identical phones on one account are its blind spot; the
+ * one that loses its row gets it back the next time its owner enables push.
  */
 export async function savePushSubscription(subscription: {
   endpoint: string;
   p256dh: string;
   auth: string;
   userAgent?: string;
+  replacesDevice?: boolean;
 }) {
   const { actorUserId } = await requireScope("read");
 
@@ -67,6 +81,12 @@ export async function savePushSubscription(subscription: {
     create: { userId: actorUserId, endpoint, p256dh, auth: authKey, userAgent },
     update: { userId: actorUserId, p256dh, auth: authKey, userAgent },
   });
+
+  if (subscription.replacesDevice && userAgent) {
+    await prisma.pushSubscription.deleteMany({
+      where: { userId: actorUserId, userAgent, endpoint: { not: endpoint } },
+    });
+  }
 
   revalidatePath("/settings");
 }

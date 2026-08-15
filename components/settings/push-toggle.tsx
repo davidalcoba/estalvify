@@ -169,6 +169,12 @@ export function PushToggle({
       p256dh: json.keys?.p256dh ?? "",
       auth: json.keys?.auth ?? "",
       userAgent: navigator.userAgent,
+      // A brand-new subscription supersedes whatever this device left behind —
+      // reinstalling an iOS web app orphans its old subscription without
+      // unsubscribing, and the push service keeps accepting sends to it, so
+      // nothing later can tell the two apart. Only ever from this branch:
+      // reusing `existing` proves nothing about which rows are dead.
+      replacesDevice: existing === null,
     });
 
     // Turning it on with nothing selected would be a switch that does nothing,
