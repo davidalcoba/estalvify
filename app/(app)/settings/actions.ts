@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { CategoryKind, NotificationType } from "@/app/generated/prisma";
 import { sendPushToSelf } from "@/lib/notifications/push";
+import { deviceKey } from "@/lib/notifications/device-key";
 import { deleteUserAccount } from "@/lib/account/delete-user";
 import { getT } from "@/lib/i18n/server";
 import { describeError } from "@/lib/errors";
@@ -51,7 +52,7 @@ export async function updatePersonalPreferences(data: {
  * instead of adding another. The upsert also re-points an endpoint at the
  * current member if a device changed hands.
  *
- * `replacesDevice` retires the member's other rows carrying the same user agent.
+ * `replacesDevice` retires the member's other rows for the same device.
  * Reinstalling an iOS web app abandons its subscription without ever calling
  * `unsubscribe()`, so the old row survives — and the push service keeps
  * accepting sends to it, which means no amount of server-side evidence can tell
@@ -60,9 +61,13 @@ export async function updatePersonalPreferences(data: {
  * distinguishable is this one, when a member deliberately subscribes anew: the
  * subscription arriving now is the live one by construction. Passed only from
  * that branch of the toggle — never when an existing subscription is reused,
- * where it would delete a healthy sibling for no reason. It is still a
- * heuristic, and two identical phones on one account are its blind spot; the
- * one that loses its row gets it back the next time its owner enables push.
+ * where it would delete a healthy sibling for no reason.
+ *
+ * Sameness is `deviceKey()`, not the user agent verbatim: one iPhone left rows
+ * six days apart reading `Version/26.5.2` and `Version/26.6`, and comparing the
+ * strings whole let the corpse through. Matching is done in JS rather than SQL
+ * because the key is derived — a member has a handful of devices, so reading
+ * them to compare costs nothing.
  */
 export async function savePushSubscription(subscription: {
   endpoint: string;
@@ -82,10 +87,21 @@ export async function savePushSubscription(subscription: {
     update: { userId: actorUserId, p256dh, auth: authKey, userAgent },
   });
 
-  if (subscription.replacesDevice && userAgent) {
-    await prisma.pushSubscription.deleteMany({
-      where: { userId: actorUserId, userAgent, endpoint: { not: endpoint } },
+  const key = userAgent ? deviceKey(userAgent) : "";
+  if (subscription.replacesDevice && key) {
+    const others = await prisma.pushSubscription.findMany({
+      where: { userId: actorUserId, endpoint: { not: endpoint } },
+      select: { endpoint: true, userAgent: true },
     });
+    const superseded = others
+      .filter((other) => other.userAgent && deviceKey(other.userAgent) === key)
+      .map((other) => other.endpoint);
+
+    if (superseded.length > 0) {
+      await prisma.pushSubscription.deleteMany({
+        where: { endpoint: { in: superseded } },
+      });
+    }
   }
 
   revalidatePath("/settings");
