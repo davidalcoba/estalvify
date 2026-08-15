@@ -494,7 +494,11 @@ holds the pure spec builders; `generateNotificationsForUser()`
     gone. The one moment the two are separable is a deliberate re-subscribe, so
     `savePushSubscription({ replacesDevice: true })` — passed only when
     `subscribe()` actually created a subscription, never when an existing one is
-    reused — retires the member's other rows with the same user agent. Two
+    reused — retires the member's other rows for the same device. Sameness is
+    `deviceKey()` (`lib/notifications/device-key.ts`), which keeps the platform
+    token and drops every number in it, **not** the user agent verbatim: one
+    iPhone left rows six days apart reading `Version/26.5.2` and `Version/26.6`,
+    and a browser update between two subscriptions is the normal case. Two
     identical phones on one account is the blind spot; the loser re-registers by
     enabling push again.
 
