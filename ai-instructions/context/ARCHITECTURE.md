@@ -486,6 +486,17 @@ holds the pure spec builders; `generateNotificationsForUser()`
     `subscription.options.applicationServerKey` against the current key: a
     mismatch shows the switch as off, and turning it on unsubscribes, deletes
     the stale row, and subscribes afresh.
+  - **An abandoned subscription is indistinguishable from a live one.**
+    Reinstalling an iOS web app drops its subscription without calling
+    `unsubscribe()`, and the push service goes on returning 201 for the orphan,
+    so it never 410s its way out and no delivery result can single it out. The
+    device cannot help either — the old registration, endpoint included, is
+    gone. The one moment the two are separable is a deliberate re-subscribe, so
+    `savePushSubscription({ replacesDevice: true })` — passed only when
+    `subscribe()` actually created a subscription, never when an existing one is
+    reused — retires the member's other rows with the same user agent. Two
+    identical phones on one account is the blind spot; the loser re-registers by
+    enabling push again.
 
 Three constraints worth knowing before touching this:
 
