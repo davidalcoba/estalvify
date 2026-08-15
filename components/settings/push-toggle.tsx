@@ -73,6 +73,25 @@ function decodeVapidKey(base64: string): Uint8Array<ArrayBuffer> {
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
+/**
+ * Is this subscription bound to the key we currently sign pushes with?
+ *
+ * A subscription remembers the `applicationServerKey` it was created with, and
+ * the push service only accepts pushes signed by that pair. One created against
+ * a different key — or against none, which is what an app deployed before the
+ * VAPID variables were set handed to `subscribe()` — is permanently unreachable
+ * while still looking healthy from the device: it keeps its endpoint, the
+ * toggle reads as on, and every send is rejected server-side.
+ */
+function usesCurrentKey(subscription: PushSubscription, key: Uint8Array): boolean {
+  const applied = subscription.options?.applicationServerKey;
+  if (!applied) return false;
+  const bytes = new Uint8Array(applied);
+  return (
+    bytes.length === key.length && bytes.every((byte, i) => byte === key[i])
+  );
+}
+
 export function PushToggle({
   subscribed,
   types,
@@ -99,7 +118,14 @@ export function PushToggle({
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
-      if (!cancelled) setEnabled(Boolean(existing));
+      // A subscription bound to a stale key reads as on while receiving
+      // nothing, which is the worst of both: showing it as off is what puts
+      // the repair — turning the switch back on — in front of the member.
+      const usable =
+        existing !== null &&
+        VAPID_PUBLIC_KEY !== "" &&
+        usesCurrentKey(existing, decodeVapidKey(VAPID_PUBLIC_KEY));
+      if (!cancelled) setEnabled(usable);
     }
     void sync();
     return () => {
@@ -115,10 +141,27 @@ export function PushToggle({
     }
 
     const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: decodeVapidKey(VAPID_PUBLIC_KEY),
-    });
+    const key = decodeVapidKey(VAPID_PUBLIC_KEY);
+
+    // Replace a subscription left over from another key rather than adding to
+    // it: subscribe() answers an existing subscription with a *different*
+    // applicationServerKey by throwing InvalidStateError, so without this the
+    // device can never get back to a working one — turning the switch on just
+    // fails, and turning it off and on again is the only escape.
+    let existing = await registration.pushManager.getSubscription();
+    if (existing && !usesCurrentKey(existing, key)) {
+      const stale = existing.endpoint;
+      await existing.unsubscribe();
+      await deletePushSubscription(stale);
+      existing = null;
+    }
+
+    const subscription =
+      existing ??
+      (await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      }));
 
     const json = subscription.toJSON();
     await savePushSubscription({
