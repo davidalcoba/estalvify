@@ -70,11 +70,20 @@ function ensureConfigured(): string | null {
   if (problem) return problem;
 
   if (!configured) {
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT!,
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-      process.env.VAPID_PRIVATE_KEY!,
-    );
+    try {
+      webpush.setVapidDetails(
+        process.env.VAPID_SUBJECT!,
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+        process.env.VAPID_PRIVATE_KEY!,
+      );
+    } catch (error) {
+      // web-push validates the key pair itself and throws. Letting that escape
+      // would abort generateNotificationsForUser() *after* the bell rows were
+      // written, and the cron swallows the rejection — the exact shape of
+      // "the alert is in the app but the phone stayed quiet, with nothing
+      // anywhere saying why".
+      return `VAPID keys rejected by web-push: ${(error as Error).message}`;
+    }
     configured = true;
   }
   return null;
@@ -97,6 +106,22 @@ function describe(error: unknown): string {
   return status
     ? `Push service returned ${status}: ${body ?? message ?? ""}`.trim()
     : `Send failed: ${message ?? String(error)}`;
+}
+
+/**
+ * Remember on the device rows why a send failed, so Settings can show it.
+ *
+ * Best-effort on purpose: the reason a push did not arrive must never become
+ * the reason a cron run did.
+ */
+async function recordFailure(endpoints: string[], reason: string) {
+  if (endpoints.length === 0) return;
+  await prisma.pushSubscription
+    .updateMany({
+      where: { endpoint: { in: endpoints } },
+      data: { lastError: reason, lastErrorAt: new Date() },
+    })
+    .catch(() => {});
 }
 
 /**
@@ -137,14 +162,25 @@ async function deliver(
 ): Promise<PushResult> {
   if (userIds.length === 0 || specs.length === 0) return EMPTY;
 
-  const configError = ensureConfigured();
-  if (configError) return { sent: 0, dropped: 0, errors: [configError] };
-
   const subscriptions = await prisma.pushSubscription.findMany({
     where: { userId: { in: userIds } },
     include: { user: { select: { pushTypes: true } } },
   });
   if (subscriptions.length === 0) return EMPTY;
+
+  // Checked *after* loading the devices so the failure has somewhere to live.
+  // A config error used to return here with the reason in the return value
+  // alone, and the generation path throws that value away — which made a
+  // misconfigured VAPID setup indistinguishable, from every surface the app
+  // has, from a push that was delivered and simply never shown.
+  const configError = ensureConfigured();
+  if (configError) {
+    await recordFailure(
+      subscriptions.map((subscription) => subscription.endpoint),
+      configError,
+    );
+    return { sent: 0, dropped: 0, errors: [configError] };
+  }
 
   const errors = new Set<string>();
   const stale = new Set<string>();
@@ -184,12 +220,7 @@ async function deliver(
               stale.add(subscription.endpoint);
             } else {
               // Keep the row, but remember why it failed so Settings can show it.
-              await prisma.pushSubscription
-                .update({
-                  where: { endpoint: subscription.endpoint },
-                  data: { lastError: reason, lastErrorAt: new Date() },
-                })
-                .catch(() => {});
+              await recordFailure([subscription.endpoint], reason);
             }
           }
         });
