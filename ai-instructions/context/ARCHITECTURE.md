@@ -464,9 +464,28 @@ holds the pure spec builders; `generateNotificationsForUser()`
     on Vercel that made an Apple rejection indistinguishable from "nothing to
     send". `vapidConfigError()` validates the subject and key shapes up front,
     because Apple answers a malformed `VAPID_SUBJECT` with an opaque JWT error.
+    The config check runs **after** the devices are loaded, so its reason lands
+    on their rows too: returning it in `PushResult` alone hid it completely on
+    the cron path, which discards that value. `ensureConfigured()` also catches
+    what `webpush.setVapidDetails()` throws — escaping there would abort
+    generation *after* the bell rows were written, and the cron's
+    `Promise.allSettled` swallows the rejection.
+  - **The cron path logs what it sent.** It is the one send nobody is watching;
+    `generateNotificationsForUser()` logs the `PushResult` so a run that reached
+    zero devices is visible in the Vercel logs rather than only inferable from
+    a phone that stayed quiet.
   - Each member chooses which types may reach their phone (`User.pushTypes`).
     `sendPushToSelf` — the Settings test button — bypasses that filter so
     someone who switched everything off can still answer "is push working?".
+  - **A subscription is bound to the VAPID public key it was created with.** One
+    made against a different key — or against none, which is what the app handed
+    `subscribe()` while `NEXT_PUBLIC_VAPID_PUBLIC_KEY` was unset — keeps a valid
+    endpoint and reads as subscribed while every send to it is rejected. Worse,
+    `subscribe()` throws `InvalidStateError` rather than replacing it, so the
+    device cannot recover on its own. `push-toggle.tsx` compares
+    `subscription.options.applicationServerKey` against the current key: a
+    mismatch shows the switch as off, and turning it on unsubscribes, deletes
+    the stale row, and subscribes afresh.
 
 Three constraints worth knowing before touching this:
 

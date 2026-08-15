@@ -155,7 +155,22 @@ export async function generateNotificationsForUser(
 
   // Best-effort: a push failure must not fail generation. The bell already has
   // the notification whether or not the device push went through.
-  await sendPushBatch(userId, fresh);
+  //
+  // The result is logged rather than discarded. This is the only push path with
+  // nobody watching — the Settings test button reports straight back to the
+  // person who pressed it, but a cron send that reached zero devices left no
+  // trace at all, so "the bell filled up and the phone stayed silent" had no
+  // evidence behind it either way.
+  const push = await sendPushBatch(userId, fresh);
+  if (push.errors.length > 0) {
+    console.warn(
+      `[notifications] push for ${userId}: sent ${push.sent}, dropped ${push.dropped} — ${push.errors.join(" · ")}`,
+    );
+  } else if (fresh.length > 0) {
+    console.info(
+      `[notifications] push for ${userId}: ${fresh.length} new alert(s), ${push.sent} delivery(ies)`,
+    );
+  }
 
   return specs.length;
 }
