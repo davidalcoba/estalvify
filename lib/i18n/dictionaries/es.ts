@@ -230,8 +230,23 @@ export const es: Dictionary = {
 
   // ─────────────────────────── auth / invitations / OAuth consent ───────────────────────────
   "auth.login.metaTitle": "Iniciar sesión",
-  "auth.login.title": "Te damos la bienvenida a Estalvify",
-  "auth.login.subtitle": "Tu compañero de finanzas personales. Inicia sesión para empezar.",
+  "auth.login.title": "Tu dinero, con las cuentas claras",
+  "auth.login.subtitle":
+    "Estalvify reúne tus cuentas bancarias, ordena cada movimiento y te dice cuánto te queda para gastar este mes.",
+  "auth.login.point.banks.title": "Tus bancos, conectados",
+  "auth.login.point.banks.body":
+    "Sincronización PSD2 de solo lectura a través de Enable Banking. Tus claves del banco nunca pasan por Estalvify.",
+  "auth.login.point.rules.title": "Categorías que se mantienen solas",
+  "auth.login.point.rules.body":
+    "Tus propias reglas clasifican lo que se repite, mes tras mes.",
+  "auth.login.point.plan.title": "El mes, antes de que llegue",
+  "auth.login.point.plan.body":
+    "Un plan, los cargos recurrentes que lo sostienen y una previsión de saldo a 60 días.",
+  "auth.login.signIn.title": "Inicia sesión",
+  "auth.login.signIn.subtitle": "Entra con tu cuenta de Google.",
+  "auth.login.googleOnly": "De momento, Google es la única entrada.",
+  "auth.login.security":
+    "Estalvify nunca ve tu contraseña: la autenticación ocurre en Google.",
   "auth.login.google": "Continuar con Google",
   "auth.login.legal": "Al iniciar sesión, aceptas nuestros {terms} y nuestra {privacy}.",
   "auth.login.terms": "términos del servicio",

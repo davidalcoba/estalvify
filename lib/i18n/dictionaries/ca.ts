@@ -228,9 +228,23 @@ export const ca: Dictionary = {
 
   // ─────────────────────────── auth / invitations / OAuth consent ───────────────────────────
   "auth.login.metaTitle": "Inicia la sessió",
-  "auth.login.title": "Et donem la benvinguda a Estalvify",
+  "auth.login.title": "Els teus diners, amb els comptes clars",
   "auth.login.subtitle":
-    "El teu company de finances personals. Inicia la sessió per començar.",
+    "Estalvify reuneix els teus comptes bancaris, ordena cada moviment i et diu quant et queda per gastar aquest mes.",
+  "auth.login.point.banks.title": "Els teus bancs, connectats",
+  "auth.login.point.banks.body":
+    "Sincronització PSD2 de només lectura a través d'Enable Banking. Les teves claus del banc no passen mai per Estalvify.",
+  "auth.login.point.rules.title": "Categories que es mantenen soles",
+  "auth.login.point.rules.body":
+    "Les teves pròpies regles classifiquen el que es repeteix, mes rere mes.",
+  "auth.login.point.plan.title": "El mes, abans que arribi",
+  "auth.login.point.plan.body":
+    "Un pla, els càrrecs recurrents que el sostenen i una previsió de saldo a 60 dies.",
+  "auth.login.signIn.title": "Inicia la sessió",
+  "auth.login.signIn.subtitle": "Entra amb el teu compte de Google.",
+  "auth.login.googleOnly": "De moment, Google és l'única entrada.",
+  "auth.login.security":
+    "Estalvify no veu mai la teva contrasenya: l'autenticació passa a Google.",
   "auth.login.google": "Continua amb Google",
   "auth.login.legal":
     "En iniciar la sessió, acceptes els nostres {terms} i la nostra {privacy}.",

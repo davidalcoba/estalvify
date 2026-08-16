@@ -282,6 +282,31 @@ behaviour at every width; the sticky header is not a mobile-only element.
 - A route with no `PageHeader` has nothing to report, so the header keeps its
   title — which is the right fallback, not a bug to fix elsewhere.
 
+## The sign-in screen states the product, and only true things
+
+`/login` is the one screen a stranger sees, so it is laid out as a front door
+rather than a lone dialog: on a wide screen the product says what it is on the
+left and the sign-in card sits on the right; on a phone the same material
+stacks in reading order — name, promise, card, proof — placed with explicit
+grid rows so no markup is rendered twice. The `(auth)` layout centers whatever
+the page gives it and owns the page padding, so sibling screens (`/welcome`,
+`/invite`, the MCP consent) stay a single narrow card without changes.
+
+- **Every claim is about something that ships.** The three points in
+  `components/auth/product-points.tsx` are written from
+  `PROJECT_OVERVIEW.md` — read-only PSD2 sync through Enable Banking, the
+  user's own categorization rules, the 60-day balance forecast. No
+  certifications we do not hold, no user counts, no "bank-grade" adjectives,
+  nothing "coming soon". **A feature that is removed or changed must change
+  this screen in the same commit.**
+- **Name the limitation instead of hiding it.** One button and no password
+  field reads as a broken form until you know why, so the card says Google is
+  the only way in, and says where the password goes.
+- **The Google mark keeps its own colours** (`components/brand/google-icon.tsx`)
+  — the documented exception to the no-hardcoded-colour rule, since it is a
+  trademark reproduced to someone else's guidelines. Do not tint it, and do not
+  substitute a lucide icon.
+
 ## Copy: terse, SaaS-style
 
 - **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)
