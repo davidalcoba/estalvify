@@ -294,6 +294,17 @@ export const ca: Dictionary = {
   "dashboard.noAccounts.body":
     "Vincula un banc per començar a portar el control. Se sincronitza cada dia.",
   "dashboard.noAccounts.action": "Ves a Comptes →",
+  // ─────────────────────────── tauler: pròxims càrrecs ───────────────────────────
+  "upcoming.title": "Pròxims càrrecs",
+  "upcoming.subtitle": "queden {amount} per sortir en {days} dies",
+  "upcoming.subtitleEmpty": "els pròxims {days} dies",
+  "upcoming.empty": "No hi ha res previst en les pròximes dues setmanes.",
+  "upcoming.today": "avui",
+  "upcoming.tomorrow": "demà",
+  "upcoming.missedOne": "{name} no ha arribat",
+  "upcoming.missedCount.one": "{count} càrrec no ha arribat",
+  "upcoming.missedCount.other": "{count} càrrecs no han arribat",
+  "upcoming.more": "+{count} més a Pròxims",
   "weekly.title": "Per gastar aquesta setmana",
   "weekly.notConfigured": "Primer defineix pressupostos per categoria a {link}.",
   "weekly.until": "Fins al {weekday}",

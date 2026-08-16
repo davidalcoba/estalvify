@@ -20,16 +20,23 @@ export const DASHBOARD_BODY_GRID =
   "grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start";
 
 /**
- * To spend this week (the number, its two caption lines and the week's
- * composition) next to the category list. Both cards carry a description
- * under their title, so both skeletons draw that second line — a skeleton
- * that promises a layout the page does not deliver is worse than none.
+ * To spend this week (the number, its caption, the month meter and the week's
+ * composition) next to the category list, with the next charges spanning both
+ * columns underneath. Every card carries a description under its title, so
+ * every skeleton draws that second line — a skeleton that promises a layout
+ * the page does not deliver is worse than none.
  */
 export function DashboardBodySkeleton() {
   return (
     <div className={DASHBOARD_BODY_GRID}>
       <StatListCardSkeleton rows={3} titleWidth="w-44" descriptionWidth="w-28" />
       <ListCardSkeleton rows={8} titleWidth="w-28" descriptionWidth="w-44" />
+      <ListCardSkeleton
+        rows={5}
+        titleWidth="w-36"
+        descriptionWidth="w-48"
+        className="lg:col-span-2"
+      />
     </div>
   );
 }

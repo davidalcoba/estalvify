@@ -295,6 +295,17 @@ export const es: Dictionary = {
   "dashboard.noAccounts.body":
     "Vincula un banco para empezar a llevar el control. Se sincroniza a diario.",
   "dashboard.noAccounts.action": "Ir a Cuentas →",
+  // ─────────────────────────── panel: próximos cargos ───────────────────────────
+  "upcoming.title": "Próximos cargos",
+  "upcoming.subtitle": "quedan {amount} por salir en {days} días",
+  "upcoming.subtitleEmpty": "los próximos {days} días",
+  "upcoming.empty": "No hay nada previsto en las próximas dos semanas.",
+  "upcoming.today": "hoy",
+  "upcoming.tomorrow": "mañana",
+  "upcoming.missedOne": "{name} no llegó",
+  "upcoming.missedCount.one": "{count} cargo no llegó",
+  "upcoming.missedCount.other": "{count} cargos no llegaron",
+  "upcoming.more": "+{count} más en Próximos",
   "weekly.title": "Para gastar esta semana",
   "weekly.notConfigured": "Primero define presupuestos por categoría en {link}.",
   "weekly.until": "Hasta el {weekday}",
