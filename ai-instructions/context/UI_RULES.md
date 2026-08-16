@@ -254,6 +254,34 @@ Two more rules came out of the same pass:
   Define the columns once in the card description, in the order they appear,
   and keep the headings to the one word that identifies each.
 
+## One title on screen at a time
+
+A screen names itself twice — as the page's `<h2>` (`PageHeader`) and in the
+sticky header — and at the top of a page that is a plain duplicate, on desktop
+as much as on a phone. It stops being one as soon as the page scrolls: the
+`<h2>` leaves and the header's copy becomes the only thing saying where you
+are, which matters most on a phone, where the sidebar is closed.
+
+So **the header's title is deferred, not deleted**: hidden while the page's own
+title is on screen, faded in as that one goes under the header — the iOS
+large-title handover. `PageHeader` reports its heading's visibility through
+`components/layout/page-title-context.tsx`; `AppHeader` reads it. Same
+behaviour at every width; the sticky header is not a mobile-only element.
+
+- **Do not add a second title to a page**, and do not restore an always-on one
+  in the header — pick the `PageHeader` title and let the shell do the rest.
+- The header's copy is **kept mounted and faded**, never unmounted: the row
+  must not reflow, and the swap is meant to go unnoticed. It carries
+  `aria-hidden` while invisible, so a screen reader is never read both.
+- The heading is measured against the header's **actual** height, which grows
+  by the status-bar inset once installed (`h-header-safe`) — hence the
+  `[data-app-header]` hook rather than a hardcoded 56px.
+- Nothing resets the state per route: the outgoing `PageHeader` hands the title
+  back as it unmounts, and the state starts "page title visible" so the header
+  never flashes its own for a frame on a navigation.
+- A route with no `PageHeader` has nothing to report, so the header keeps its
+  title — which is the right fallback, not a bug to fix elsewhere.
+
 ## Copy: terse, SaaS-style
 
 - **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)
@@ -469,6 +497,47 @@ at all. Two rules follow:
 
 Do not re-pin `maximumScale` in the viewport: it disables pinch-zoom and is an
 accessibility regression.
+
+### Pull to refresh
+
+Reload on a phone is the gesture, not a button: drag down from the top of any
+`(app)` screen and the page reloads. It is the answer to "there is no reload in
+standalone" for the data itself — the shell already carries the way back.
+
+It is mounted once, for every route at once: `PullToRefresh`
+(`components/layout/pull-to-refresh.tsx`) **renders the `<main>` element** of
+the app shell, and `hooks/use-pull-to-refresh.ts` runs the gesture.
+**Do not add a per-page refresh control, and do not mount a second one** — a
+screen that needs to reload after its own action calls `router.refresh()` as
+it already does.
+
+What the pattern commits to, so a future change does not undo it by halves:
+
+- **The refresh is `router.refresh()` in a transition.** Every screen is a
+  server component, so re-running the route on the server *is* the reload:
+  data comes back fresh while the month picker, the filters and the scroll
+  position survive, and `isPending` is what the spinner waits on — never a
+  fixed timer, and never `location.reload()` (which would drop all of that and
+  re-download the app).
+- **Touch only.** Gated on `(pointer: coarse)`; a desktop browser keeps its
+  own reload and its own overscroll untouched.
+- **We take the browser's gesture, we do not sit next to it.** While the hook
+  is mounted the body gets `overscroll-behavior-y: contain` and the pull
+  `preventDefault`s, so Chrome's native pull-to-refresh and the iOS
+  rubber-band do not run alongside ours. Both restored on unmount, so
+  `/login`, `/offline` and the legal pages keep theirs.
+- **The page moves, not just a badge.** `<main>` slides down and the indicator
+  comes out from behind the sticky header, which is what makes it read as the
+  page being pulled. The transform is applied *only* while the sheet is off
+  its rest position — a permanent one would make `<main>` a containing block
+  for every fixed-position descendant.
+- **It yields to whatever else owns the finger.** It does not start when a
+  dialog or the mobile sidebar is open (`data-scroll-locked` on the body),
+  when the page is scrolled, or inside a region that is itself scrolled; a
+  sideways or upward start is left to the page.
+- The travel curve, the arming threshold and the resistance live in
+  `lib/ui/pull-to-refresh.ts` and are unit-tested. **Tune the feel there**, not
+  with magic numbers in the component.
 
 ## Future Native Readiness
 

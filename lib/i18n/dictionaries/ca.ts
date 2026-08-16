@@ -21,6 +21,7 @@ export const ca: Dictionary = {
   "common.next": "Següent",
   "common.error": "Alguna cosa ha anat malament",
   "common.dismiss": "Descarta",
+  "common.refreshing": "Actualitzant…",
 
   // ─────────────────────────── shell / navigation ───────────────────────────
   "app.name": "Estalvify",

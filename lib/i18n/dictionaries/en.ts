@@ -30,6 +30,8 @@ export const en = {
   "common.next": "Next",
   "common.error": "Something went wrong",
   "common.dismiss": "Dismiss",
+  // Announced by the pull-to-refresh indicator, which is otherwise silent.
+  "common.refreshing": "Refreshing…",
 
   // ─────────────────────────── shell / navigation ───────────────────────────
   "app.name": "Estalvify",
