@@ -24,6 +24,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { NotificationBellData } from "@/components/layout/notification-bell-data";
 import { RoleProvider } from "@/components/layout/role-provider";
 import { InstallPrompt } from "@/components/layout/install-prompt";
+import { PullToRefresh } from "@/components/layout/pull-to-refresh";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const scope = await getScope();
@@ -73,11 +74,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </Suspense>
             }
           />
-          {/* pb-safe-4 keeps the last row clear of the iOS home indicator once
+          {/* PullToRefresh renders the <main> element: on a touch device,
+              dragging down from the top of a page reloads it (see
+              components/layout/pull-to-refresh.tsx).
+              pb-safe-4 keeps the last row clear of the iOS home indicator once
               installed; it resolves to the normal p-4 in a browser tab. */}
-          <main className="flex flex-1 flex-col gap-4 p-4 pb-safe-4 lg:p-6">
+          <PullToRefresh className="flex flex-1 flex-col gap-4 p-4 pb-safe-4 lg:p-6">
             {children}
-          </main>
+          </PullToRefresh>
           <InstallPrompt />
         </SidebarInset>
       </SidebarProvider>

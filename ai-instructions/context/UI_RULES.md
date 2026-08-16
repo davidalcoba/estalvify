@@ -470,6 +470,47 @@ at all. Two rules follow:
 Do not re-pin `maximumScale` in the viewport: it disables pinch-zoom and is an
 accessibility regression.
 
+### Pull to refresh
+
+Reload on a phone is the gesture, not a button: drag down from the top of any
+`(app)` screen and the page reloads. It is the answer to "there is no reload in
+standalone" for the data itself — the shell already carries the way back.
+
+It is mounted once, for every route at once: `PullToRefresh`
+(`components/layout/pull-to-refresh.tsx`) **renders the `<main>` element** of
+the app shell, and `hooks/use-pull-to-refresh.ts` runs the gesture.
+**Do not add a per-page refresh control, and do not mount a second one** — a
+screen that needs to reload after its own action calls `router.refresh()` as
+it already does.
+
+What the pattern commits to, so a future change does not undo it by halves:
+
+- **The refresh is `router.refresh()` in a transition.** Every screen is a
+  server component, so re-running the route on the server *is* the reload:
+  data comes back fresh while the month picker, the filters and the scroll
+  position survive, and `isPending` is what the spinner waits on — never a
+  fixed timer, and never `location.reload()` (which would drop all of that and
+  re-download the app).
+- **Touch only.** Gated on `(pointer: coarse)`; a desktop browser keeps its
+  own reload and its own overscroll untouched.
+- **We take the browser's gesture, we do not sit next to it.** While the hook
+  is mounted the body gets `overscroll-behavior-y: contain` and the pull
+  `preventDefault`s, so Chrome's native pull-to-refresh and the iOS
+  rubber-band do not run alongside ours. Both restored on unmount, so
+  `/login`, `/offline` and the legal pages keep theirs.
+- **The page moves, not just a badge.** `<main>` slides down and the indicator
+  comes out from behind the sticky header, which is what makes it read as the
+  page being pulled. The transform is applied *only* while the sheet is off
+  its rest position — a permanent one would make `<main>` a containing block
+  for every fixed-position descendant.
+- **It yields to whatever else owns the finger.** It does not start when a
+  dialog or the mobile sidebar is open (`data-scroll-locked` on the body),
+  when the page is scrolled, or inside a region that is itself scrolled; a
+  sideways or upward start is left to the page.
+- The travel curve, the arming threshold and the resistance live in
+  `lib/ui/pull-to-refresh.ts` and are unit-tested. **Tune the feel there**, not
+  with magic numbers in the component.
+
 ## Future Native Readiness
 
 Even though native app work is not in scope now, UI decisions should keep migration simple:
