@@ -1,28 +1,32 @@
 // Server component: the operating number — what is left to SPEND between now
 // and Sunday — followed by what has already been spent this week.
 //
-// v5, a legibility pass. The card used to print five figures with almost no
-// labels: `387,75 €  16 ops · mediana 49.5` over `129,25 €/día · quedan
-// 2326,41 €`, then an unheaded list of categories. Read cold, none of it says
-// what it is — the ops counter sits beside a euro amount and reads as money,
-// `quedan` never says of what, and the category list could as easily be
-// budgets as spending. It was shown to its own user and the verdict was "I
-// don't understand any of this box".
+// v6, a second legibility pass, after the v5 card was shown to its user again:
+// "difícil de entender y poco vistoso". Two things were wrong with it, and
+// they are different in kind.
 //
-// So the card now separates the two questions it answers, each under its own
-// label:
+// 1. IT TOLD THE OVERSPENT MONTH IN THE WORDS OF THE HEALTHY ONE. `remaining
+//    Month` had gone to −248,16 €, so the daily rate came out at −15,51 € and
+//    the card printed, in order: `To spend this week  −15,51 €`, `1 day ×
+//    −15,51 € a day`, `−248,16 € left for the rest of the month`. Every figure
+//    was arithmetically right and the sentence was nonsense — nobody can spend
+//    a negative amount per day, and "left" of a negative number is a
+//    contradiction. The sign is a STATE, not a value: `weeklyHeadline` in
+//    lib/budget/weekly.ts now returns which of the two stories to tell, past
+//    the budget there is 0 to spend, and how far past is said in its own
+//    words.
+// 2. IT HAD NO SHAPE. Six unrelated figures stacked in grey. The month meter
+//    is the missing piece: one bar carrying the spend against the budget with
+//    a mark where the calendar has got to, so "ahead of pace" is a glance
+//    rather than a subtraction. The week's composition rows get the same
+//    treatment — a proportional bar in the category's colour instead of a dot,
+//    which is the one thing a reader wants from that list (who took the
+//    money) and the shape says it before the numbers do.
 //
-//   1. WHAT CAN I STILL SPEND — the big number, with the arithmetic that
-//      produces it spelled out underneath (`3 días × 129,25 € al día`) and
-//      the window it covers in the card description (`Hasta el domingo`).
-//      A derived figure the reader cannot reconstruct is not information.
-//   2. WHAT HAVE I SPENT — the week's total, its operation count against the
-//      12-week median, and the composition by category (informative: no
-//      limits, no traffic lights; half the categories are episodic and a
-//      weekly budget on them would cry wolf the week shoes get bought).
-//
-// The counters moved into (2) because that is what they describe: they are a
-// property of the spending, not of the money left.
+// What did NOT change, because it was right: the card answers two questions
+// under two labels — what can I still spend, and what have I spent — and the
+// composition carries no limits and no traffic lights (half the categories are
+// episodic; a weekly budget on them would cry wolf the week shoes get bought).
 
 import Link from "next/link";
 import {
@@ -32,13 +36,43 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatCurrencyRound } from "@/lib/formatters";
 import type { WeeklyStatus } from "@/lib/budget/month-status";
-import { isoWeekEnd } from "@/lib/budget/weekly";
+import { isoWeekEnd, monthMeter, weeklyHeadline } from "@/lib/budget/weekly";
 import { CalendarRange } from "lucide-react";
 import { getT } from "@/lib/i18n/server";
 import { UI_LOCALE_TAGS } from "@/lib/i18n/locales";
 import { RichText } from "@/components/i18n/rich-text";
+
+/**
+ * The month behind the week: budget consumed, with a hairline where the
+ * calendar stands. Built here rather than from `components/ui/progress`
+ * because that primitive carries one value and this needs the second mark —
+ * without the reference the fill says nothing (objectives-card.tsx draws its
+ * bars for the same reason).
+ *
+ * `aria-hidden`: every number in it is already stated in the caption below, so
+ * to a screen reader this is decoration of that sentence, not new information.
+ */
+function MonthMeter({ spentPct, elapsedPct, over }: { spentPct: number; elapsedPct: number; over: boolean }) {
+  return (
+    <div aria-hidden className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={`h-full rounded-full transition-all ${over ? "bg-destructive" : "bg-brand"}`}
+        style={{ width: `${spentPct}%` }}
+      />
+      {/* Where the month has got to. Hidden once the bar is full: with the
+          whole track painted, a mark inside it reads as a division of the
+          spend rather than as the calendar. */}
+      {spentPct < 100 && (
+        <span
+          className="absolute inset-y-0 w-px bg-foreground/40"
+          style={{ left: `${elapsedPct}%` }}
+        />
+      )}
+    </div>
+  );
+}
 
 export async function WeeklyCard({
   status,
@@ -50,6 +84,8 @@ export async function WeeklyCard({
   locale: string;
 }) {
   const fmt = (n: number) => formatCurrency(n, currency, locale);
+  // Cents on a zero are noise: the point of the figure is that there is none.
+  const fmt0 = (n: number) => formatCurrencyRound(n, currency, locale);
   const t = await getT();
 
   if (!status.configured) {
@@ -80,7 +116,13 @@ export async function WeeklyCard({
     );
   }
 
-  const { weekly } = status;
+  const headline = weeklyHeadline(status.weekly);
+  const meter = monthMeter({
+    variableBudget: status.cascade.variableBudget,
+    variableSpentMonth: status.variableSpentMonth,
+    today: status.today,
+    daysInMonth: status.daysInMonth,
+  });
   const opsTone =
     status.opsMedian > 0 && status.opsThisWeek > status.opsMedian
       ? "text-warning"
@@ -92,6 +134,10 @@ export async function WeeklyCard({
     UI_LOCALE_TAGS[t.locale],
     { weekday: "long", timeZone: "UTC" }
   );
+  // Share of the week's spend, for the composition bars. Guarded: a week whose
+  // transactions net to zero must not paint NaN-wide bars.
+  const weekTotal = status.composition.reduce((sum, row) => sum + row.spent, 0);
+  const share = (spent: number) => (weekTotal > 0 ? Math.min(100, (spent / weekTotal) * 100) : 0);
 
   return (
     <Card>
@@ -105,21 +151,41 @@ export async function WeeklyCard({
         <CalendarRange className="h-4 w-4 shrink-0 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <p
-          className={`text-3xl font-bold tabular-nums ${
-            weekly.availableThisWeek < 0 ? "text-destructive" : ""
-          }`}
-        >
-          {fmt(weekly.availableThisWeek)}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t.plural("weekly.breakdown", weekly.daysLeftInWeek, {
-            amount: fmt(weekly.dailyRate),
-          })}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {t("weekly.left", { amount: fmt(weekly.remainingMonth) })}
-        </p>
+        {headline.kind === "available" ? (
+          <>
+            <p className="text-3xl font-bold tabular-nums">{fmt(headline.amount)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t.plural("weekly.breakdown", headline.daysLeftInWeek, {
+                amount: fmt(headline.dailyRate),
+              })}
+            </p>
+          </>
+        ) : (
+          <>
+            {/* Zero, not the overspend, is the answer to "what can I spend" —
+                the overshoot is a different figure and gets its own line. */}
+            <p className="text-3xl font-bold tabular-nums text-muted-foreground">{fmt0(0)}</p>
+            <p className="mt-1 text-xs font-medium text-destructive">
+              {t("weekly.overBudget", { amount: fmt(headline.overspent) })}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("weekly.nothingLeft", { weekday })}
+            </p>
+          </>
+        )}
+
+        <div className="mt-4 space-y-1.5">
+          <MonthMeter spentPct={meter.spentPct} elapsedPct={meter.elapsedPct} over={meter.over} />
+          <p className="text-xs text-muted-foreground">
+            {headline.kind === "available" ? (
+              <>
+                {t("weekly.left", { amount: fmt(meter.remaining) })}
+                {" · "}
+              </>
+            ) : null}
+            {t("weekly.dayOfMonth", { day: meter.dayOfMonth, days: status.daysInMonth })}
+          </p>
+        </div>
 
         <div className="mt-4 border-t pt-3">
           <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -134,26 +200,33 @@ export async function WeeklyCard({
           </p>
 
           {status.composition.length > 0 && (
-            <ul className="mt-2 space-y-1 text-xs">
+            <ul className="mt-3 space-y-2.5 text-xs">
               {status.composition.slice(0, 3).map((row) => (
-                <li
-                  key={row.categoryId ?? "uncategorized"}
-                  className="flex items-center gap-2 text-muted-foreground"
-                >
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: row.categoryColor ?? "var(--muted-foreground)" }}
-                  />
-                  <span className="min-w-0 flex-1 truncate">
-                    {row.categoryId ? row.categoryName : t("weekly.uncategorized")}
-                  </span>
-                  <span className="shrink-0 tabular-nums">
-                    {fmt(row.spent)} · {t.plural("weekly.ops", row.count)}
-                  </span>
+                <li key={row.categoryId ?? "uncategorized"} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate">
+                      {row.categoryId ? row.categoryName : t("weekly.uncategorized")}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {fmt(row.spent)} · {t.plural("weekly.ops", row.count)}
+                    </span>
+                  </div>
+                  {/* Share of the week, in the category's own colour — the
+                      question this list answers is who took the money, and a
+                      length answers it before the figures are read. */}
+                  <div aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${share(row.spent)}%`,
+                        backgroundColor: row.categoryColor ?? "var(--muted-foreground)",
+                      }}
+                    />
+                  </div>
                 </li>
               ))}
               {status.composition.length > 3 && (
-                <li className="pl-4 text-muted-foreground/70">
+                <li className="text-muted-foreground/70">
                   {t("weekly.more", { count: status.composition.length - 3 })}
                 </li>
               )}
