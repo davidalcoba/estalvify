@@ -6,6 +6,8 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { usePageTitle } from "@/components/layout/page-title-context";
+import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { useT } from "@/components/i18n/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/dictionaries/en";
@@ -39,6 +41,9 @@ export function AppHeader({
 }) {
   const pathname = usePathname();
   const t = useT();
+  // Null only outside the app shell, where nothing reports a page title; the
+  // header then behaves as it always did and keeps its own.
+  const collapsed = usePageTitle()?.collapsed ?? true;
 
   // Find the best matching title
   const key =
@@ -51,10 +56,26 @@ export function AppHeader({
     // The header is sticky at top-0, so with viewport-fit=cover it sits under
     // the status bar once installed. h-header-safe + pt-safe push the row clear
     // of it; both collapse to the plain h-14 in a browser tab.
-    <header className="sticky top-0 z-40 flex h-header-safe pt-safe shrink-0 items-center gap-2 border-b bg-background px-4">
+    <header
+      data-app-header
+      className="sticky top-0 z-40 flex h-header-safe pt-safe shrink-0 items-center gap-2 border-b bg-background px-4"
+    >
       <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="h-4" />
-      <h1 className="text-sm font-medium text-foreground">{title}</h1>
+      {/* The page states its own name at the top; this one takes over as that
+          heading scrolls under the header, so the two are never on screen at
+          once. Kept mounted and faded rather than unmounted: the row must not
+          reflow, and the swap is meant to be barely noticed.
+          See components/layout/page-title-context.tsx. */}
+      <div
+        aria-hidden={!collapsed}
+        className={cn(
+          "flex min-w-0 items-center gap-2 transition-[opacity,transform] duration-200 ease-out",
+          collapsed ? "opacity-100" : "-translate-x-1 opacity-0",
+        )}
+      >
+        <Separator orientation="vertical" className="h-4" />
+        <h1 className="truncate text-sm font-medium text-foreground">{title}</h1>
+      </div>
       <div className="ml-auto flex items-center gap-1">
         {bell}
         <ThemeToggle />

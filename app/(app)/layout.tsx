@@ -25,6 +25,7 @@ import { NotificationBellData } from "@/components/layout/notification-bell-data
 import { RoleProvider } from "@/components/layout/role-provider";
 import { InstallPrompt } from "@/components/layout/install-prompt";
 import { PullToRefresh } from "@/components/layout/pull-to-refresh";
+import { PageTitleProvider } from "@/components/layout/page-title-context";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const scope = await getScope();
@@ -61,27 +62,32 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           onSignOut={handleSignOut}
         />
         <SidebarInset>
-          <AppHeader
-            bell={
-              // No fallback: the bell is a small icon, and a placeholder
-              // flashing in the header is more noticeable than its absence
-              // for the moment the query takes.
-              <Suspense fallback={null}>
-                <NotificationBellData
-                  dataUserId={userId}
-                  actorUserId={scope.actorUserId}
-                />
-              </Suspense>
-            }
-          />
-          {/* PullToRefresh renders the <main> element: on a touch device,
-              dragging down from the top of a page reloads it (see
-              components/layout/pull-to-refresh.tsx).
-              pb-safe-4 keeps the last row clear of the iOS home indicator once
-              installed; it resolves to the normal p-4 in a browser tab. */}
-          <PullToRefresh className="flex flex-1 flex-col gap-4 p-4 pb-safe-4 lg:p-6">
-            {children}
-          </PullToRefresh>
+          {/* Wraps header and page together: the page's own title tells the
+              header when to show its copy, so the name is never on screen
+              twice. See components/layout/page-title-context.tsx. */}
+          <PageTitleProvider>
+            <AppHeader
+              bell={
+                // No fallback: the bell is a small icon, and a placeholder
+                // flashing in the header is more noticeable than its absence
+                // for the moment the query takes.
+                <Suspense fallback={null}>
+                  <NotificationBellData
+                    dataUserId={userId}
+                    actorUserId={scope.actorUserId}
+                  />
+                </Suspense>
+              }
+            />
+            {/* PullToRefresh renders the <main> element: on a touch device,
+                dragging down from the top of a page reloads it (see
+                components/layout/pull-to-refresh.tsx).
+                pb-safe-4 keeps the last row clear of the iOS home indicator
+                once installed; it resolves to the normal p-4 in a browser tab. */}
+            <PullToRefresh className="flex flex-1 flex-col gap-4 p-4 pb-safe-4 lg:p-6">
+              {children}
+            </PullToRefresh>
+          </PageTitleProvider>
           <InstallPrompt />
         </SidebarInset>
       </SidebarProvider>
