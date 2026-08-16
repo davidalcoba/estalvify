@@ -282,6 +282,30 @@ behaviour at every width; the sticky header is not a mobile-only element.
 - A route with no `PageHeader` has nothing to report, so the header keeps its
   title — which is the right fallback, not a bug to fix elsewhere.
 
+## The sign-in screen is a door, not a page
+
+`/login` is the logo, one button and the legal line, centred in a narrow card.
+Nothing else. A pitch was tried on it — headline, product points, a note about
+where the password goes — and removed by explicit product decision: it made the
+one thing you can do harder to find, and a login screen is not where the
+product is sold.
+
+- **Do not add copy to it.** No headline, no subtitle, no feature list, no
+  reassurance paragraph. If something genuinely must be said, it belongs on a
+  marketing page, not on the door.
+- **The sign-in button is sized to its label**, not stretched to the card. A
+  full-width button reads as a banner and loses the shape that says "button" —
+  which is the whole affordance on a screen with a single control.
+- **The screen still needs a heading**: an `sr-only` `<h1>` carries it, since a
+  screen reader otherwise gets a page with a logo and a button and no name.
+- **The Google mark keeps its own colours** (`components/brand/google-icon.tsx`)
+  — the documented exception to the no-hardcoded-colour rule, since it is a
+  trademark reproduced to someone else's guidelines. Do not tint it, and do not
+  substitute a lucide icon.
+- The `(auth)` layout centres whatever the page gives it and owns the page
+  padding, so `/welcome`, `/invite` and the MCP consent screen need nothing of
+  their own to stay clear of a phone's edges.
+
 ## Copy: terse, SaaS-style
 
 - **No page subtitles.** `PageHeader` is used with a `title` (and optional `actions`)
