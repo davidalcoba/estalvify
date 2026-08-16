@@ -228,9 +228,6 @@ export const ca: Dictionary = {
 
   // ─────────────────────────── auth / invitations / OAuth consent ───────────────────────────
   "auth.login.metaTitle": "Inicia la sessió",
-  "auth.login.title": "Et donem la benvinguda a Estalvify",
-  "auth.login.subtitle":
-    "El teu company de finances personals. Inicia la sessió per començar.",
   "auth.login.google": "Continua amb Google",
   "auth.login.legal":
     "En iniciar la sessió, acceptes els nostres {terms} i la nostra {privacy}.",

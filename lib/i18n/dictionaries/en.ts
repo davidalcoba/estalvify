@@ -232,8 +232,6 @@ export const en = {
 
   // ─────────────────────────── auth / invitations / OAuth consent ───────────────────────────
   "auth.login.metaTitle": "Sign In",
-  "auth.login.title": "Welcome to Estalvify",
-  "auth.login.subtitle": "Your personal finance companion. Sign in to get started.",
   "auth.login.google": "Continue with Google",
   "auth.login.legal": "By signing in, you agree to our {terms} and {privacy}.",
   "auth.login.terms": "terms of service",

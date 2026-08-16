@@ -230,8 +230,6 @@ export const es: Dictionary = {
 
   // ─────────────────────────── auth / invitations / OAuth consent ───────────────────────────
   "auth.login.metaTitle": "Iniciar sesión",
-  "auth.login.title": "Te damos la bienvenida a Estalvify",
-  "auth.login.subtitle": "Tu compañero de finanzas personales. Inicia sesión para empezar.",
   "auth.login.google": "Continuar con Google",
   "auth.login.legal": "Al iniciar sesión, aceptas nuestros {terms} y nuestra {privacy}.",
   "auth.login.terms": "términos del servicio",
