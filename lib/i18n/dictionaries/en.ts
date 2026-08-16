@@ -232,25 +232,6 @@ export const en = {
 
   // ─────────────────────────── auth / invitations / OAuth consent ───────────────────────────
   "auth.login.metaTitle": "Sign In",
-  // The pitch beside the sign-in card. Every claim below is about something
-  // the app actually does — see components/auth/product-points.tsx.
-  "auth.login.title": "Your money, with the accounts kept straight",
-  "auth.login.subtitle":
-    "Estalvify brings your bank accounts together, files every movement and tells you what is left to spend this month.",
-  "auth.login.point.banks.title": "Your banks, connected",
-  "auth.login.point.banks.body":
-    "Read-only PSD2 sync through Enable Banking. Your bank credentials never reach Estalvify.",
-  "auth.login.point.rules.title": "Categories that keep themselves",
-  "auth.login.point.rules.body":
-    "Your own rules file whatever repeats, month after month.",
-  "auth.login.point.plan.title": "The month, before it happens",
-  "auth.login.point.plan.body":
-    "A plan, the recurring charges behind it and a 60-day balance forecast.",
-  "auth.login.signIn.title": "Sign in",
-  "auth.login.signIn.subtitle": "Continue with your Google account.",
-  "auth.login.googleOnly": "Google is the only way in for now.",
-  "auth.login.security":
-    "Estalvify never sees your password — Google handles the sign-in.",
   "auth.login.google": "Continue with Google",
   "auth.login.legal": "By signing in, you agree to our {terms} and {privacy}.",
   "auth.login.terms": "terms of service",
