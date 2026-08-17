@@ -34,6 +34,8 @@ import {
 } from "@/components/budget/dashboard-skeleton";
 import { WeeklyCard } from "@/components/budget/weekly-card";
 import { ControlMini } from "@/components/budget/control-mini";
+import { UpcomingMini } from "@/components/budget/upcoming-mini";
+import { buildUpcoming } from "@/lib/planned/upcoming-data";
 import { Wallet } from "lucide-react";
 import { getT } from "@/lib/i18n/server";
 import type { MessageKey } from "@/lib/i18n/dictionaries/en";
@@ -64,7 +66,7 @@ async function DashboardBody({
   userId: string;
   actorUserId: string;
 }) {
-  const { locale, timezone, currency } = await getUserPrefs(userId, actorUserId);
+  const { locale, language, timezone, currency } = await getUserPrefs(userId, actorUserId);
   const t = await getT();
 
   const [hasAccounts, status] = await Promise.all([
@@ -93,10 +95,25 @@ async function DashboardBody({
     );
   }
 
+  // One extra query, and it rides on the sync already done above: the planned
+  // items are generated and matched by `syncPlannedState`, and the step this
+  // screen skips (`refreshSchedule`) only writes RecurringSeries fields that
+  // nothing here reads.
+  const upcoming = await buildUpcoming(userId, status.today);
+
   return (
     <div className={DASHBOARD_BODY_GRID}>
       <WeeklyCard status={status} currency={currency} locale={locale} />
       <ControlMini control={status.control} currency={currency} locale={locale} />
+      {/* Full width under the two: it is a short agenda, and the eye reads a
+          date-name-amount line better across the card than down a column. */}
+      <UpcomingMini
+        upcoming={upcoming}
+        currency={currency}
+        locale={locale}
+        language={language}
+        className="lg:col-span-2"
+      />
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm lg:col-span-2">
         <Link href="/plan" className="text-muted-foreground underline-offset-4 hover:underline">
           {t("nav.budget")}
