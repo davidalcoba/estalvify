@@ -62,6 +62,84 @@ export function computeWeeklyAvailable(input: {
   };
 }
 
+/**
+ * Which of the two stories the week is telling. The card used to have only
+ * one: it printed `availableThisWeek` whatever its sign, so a month already
+ * over budget came out as "To spend this week: −15,51 €", explained by
+ * "1 day × −15,51 € a day" and "−248,16 € left for the rest of the month". A
+ * negative daily rate is not something anyone can act on, and "left" of a
+ * negative amount is a contradiction — the arithmetic was right and the
+ * sentence was nonsense.
+ *
+ * The sign is a state, not a value: past the budget there is nothing to spend
+ * (0, not a negative allowance) and the number that matters is how far past.
+ */
+export type WeeklyHeadline =
+  | { kind: "available"; amount: number; daysLeftInWeek: number; dailyRate: number }
+  /** The month's variable budget is spent. `overspent` is ≥ 0. */
+  | { kind: "exhausted"; overspent: number; daysLeftInWeek: number };
+
+export function weeklyHeadline(weekly: WeeklyAvailable): WeeklyHeadline {
+  if (!(weekly.remainingMonth > 0)) {
+    return {
+      kind: "exhausted",
+      overspent: round(Math.max(0, -weekly.remainingMonth)),
+      daysLeftInWeek: weekly.daysLeftInWeek,
+    };
+  }
+  return {
+    kind: "available",
+    amount: Math.max(0, weekly.availableThisWeek),
+    daysLeftInWeek: weekly.daysLeftInWeek,
+    dailyRate: weekly.dailyRate,
+  };
+}
+
+const clampPct = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0);
+
+export interface MonthMeter {
+  /** 0–100 of the month's variable budget already spent. Capped at the budget. */
+  spentPct: number;
+  /** 0–100 of the month elapsed — the reference that makes spentPct judgeable. */
+  elapsedPct: number;
+  over: boolean;
+  /** How far past the budget, ≥ 0. */
+  overspent: number;
+  /** What is still spendable, ≥ 0. */
+  remaining: number;
+  dayOfMonth: number;
+}
+
+/**
+ * The month behind the week, as two percentages: how much of the budget is
+ * gone and how much of the month is. Spending ahead of the calendar is the
+ * whole reading, and it is the piece the card had no way to show — six
+ * figures and no shape.
+ *
+ * A budget of 0 is not a division: nothing assigned means any spend is over.
+ */
+export function monthMeter(input: {
+  variableBudget: number;
+  variableSpentMonth: number;
+  /** Today's date, YYYY-MM-DD (user timezone). */
+  today: string;
+  daysInMonth: number;
+}): MonthMeter {
+  const budget = Number.isFinite(input.variableBudget) ? input.variableBudget : 0;
+  const spent = Number.isFinite(input.variableSpentMonth) ? input.variableSpentMonth : 0;
+  const dayOfMonth = Number(input.today.slice(8, 10));
+  const days = input.daysInMonth > 0 ? input.daysInMonth : 1;
+
+  return {
+    spentPct: budget > 0 ? clampPct((spent / budget) * 100) : spent > 0 ? 100 : 0,
+    elapsedPct: clampPct((dayOfMonth / days) * 100),
+    over: spent > budget,
+    overspent: round(Math.max(0, spent - budget)),
+    remaining: round(Math.max(0, budget - spent)),
+    dayOfMonth,
+  };
+}
+
 export interface VariableTx {
   date: string; // YYYY-MM-DD
   amount: number; // absolute

@@ -167,6 +167,45 @@ The pattern, as implemented in `components/budget/objectives-card.tsx`:
 Zero targets must not paint `NaN`: clamp every percentage through a
 finite-checked helper.
 
+## A sign flip is a different sentence
+
+A figure that can go negative usually stops being the same *kind* of figure
+when it does, and printing it with the same label and the same arithmetic
+produces something that parses and means nothing. The dashboard's week card
+did exactly this: past its budget the month's remainder was −248,16 €, so it
+printed `To spend this week −15,51 €`, explained by `1 day × −15,51 € a day`
+and `−248,16 € left for the rest of the month`. Every number was right and
+every sentence was false — nobody spends a negative amount per day, and
+"left" of a negative amount is a contradiction. Its own user's verdict was
+that the card was impossible to understand.
+
+- **Decide the state, then write the sentence.** The pure layer returns which
+  story to tell — `weeklyHeadline` in `lib/budget/weekly.ts` returns
+  `available` or `exhausted`, never a signed number for the component to
+  interpret — and each state has its own copy: `0 €`, `248,16 € over the
+  month's budget`, `Nothing left to spend until Sunday`.
+- **Never show a negative allowance, rate or remainder.** Zero is the honest
+  floor for "what can I spend"; how far past is a *different* figure and gets
+  its own line, in `text-destructive`.
+- **Unit-test the flipped state.** It is the one nobody looks at while
+  building, because the seed data is healthy.
+
+## Give the number a shape
+
+A card that is six figures stacked in grey is read as none of them. Where a
+figure is a part of a whole, draw the whole: the week card's meter is the
+month's spend against its budget with a hairline where the calendar stands,
+so "ahead of pace" is a glance instead of a subtraction, and the composition
+rows carry a proportional bar in the category's own colour, because "who took
+the money" is what that list is for and a length answers it before the
+amounts are read.
+
+Keep the shapes honest: a bar that represents a share carries **no limit and
+no traffic light** unless a limit really exists (half the categories are
+episodic — a weekly budget on them would cry wolf the week shoes get bought).
+Mark the bar `aria-hidden` when the caption under it already states every
+number it draws; it is decoration of that sentence, not new information.
+
 ## No database words on screen
 
 `rollover`, `accrual`, `variable budget`, `flows vs balance` are vocabulary of

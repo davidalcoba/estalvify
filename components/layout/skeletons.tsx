@@ -124,9 +124,10 @@ export function ListCardSkeleton({
 }
 
 /**
- * Card led by ONE big figure and its captions, over a divided list — the
- * Dashboard's week card. Distinct from `ListCardSkeleton`, whose rows are all
- * the same weight: here the first thing to paint is the number.
+ * Card led by ONE big figure and its caption, then a meter, over a divided
+ * list of rows that each carry their own bar — the Dashboard's week card.
+ * Distinct from `ListCardSkeleton`, whose rows are all the same weight: here
+ * the first thing to paint is the number, and the bars are half the shape.
  */
 export function StatListCardSkeleton({
   rows = 3,
@@ -148,18 +149,26 @@ export function StatListCardSkeleton({
       <CardContent>
         <Skeleton className="h-9 w-40" />
         <Skeleton className="mt-2 h-3 w-44" />
+        {/* The month meter and the line that reads it out. */}
+        <Skeleton className="mt-4 h-2 w-full rounded-full" />
         <Skeleton className="mt-1.5 h-3 w-52" />
-        <div className="mt-4 space-y-3 border-t pt-3">
+        <div className="mt-4 border-t pt-3">
           <div className="flex items-center gap-3">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="ml-auto h-4 w-20 shrink-0" />
           </div>
-          {Array.from({ length: rows }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Skeleton className="h-3 flex-1" />
-              <Skeleton className="h-3 w-24 shrink-0" />
-            </div>
-          ))}
+          <Skeleton className="mt-1.5 h-3 w-48" />
+          <div className="mt-3 space-y-2.5">
+            {Array.from({ length: rows }).map((_, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-3 flex-1" />
+                  <Skeleton className="h-3 w-24 shrink-0" />
+                </div>
+                <Skeleton className="h-1 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>

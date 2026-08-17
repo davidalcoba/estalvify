@@ -7,6 +7,8 @@ import {
   weekOperations,
   weeklyOpsMedian,
   weekComposition,
+  weeklyHeadline,
+  monthMeter,
 } from "./weekly";
 
 describe("ISO week helpers", () => {
@@ -106,5 +108,89 @@ describe("weeklyOpsMedian", () => {
     // A noisy current week must not move the median.
     rows.push({ date: "2026-08-04", amount: 10, categoryId: null });
     expect(weeklyOpsMedian(rows, "2026-08-05")).toBe(3);
+  });
+});
+
+describe("weeklyHeadline", () => {
+  const base = { remainingMonth: 400, dailyRate: 28.57, daysLeftInWeek: 3, availableThisWeek: 85.71 };
+
+  it("hands over the allowance while the month still has budget", () => {
+    expect(weeklyHeadline(base)).toEqual({
+      kind: "available",
+      amount: 85.71,
+      daysLeftInWeek: 3,
+      dailyRate: 28.57,
+    });
+  });
+
+  it("never reports a negative allowance — past the budget there is nothing to spend", () => {
+    // The screenshot case: the month is 248,16 € over, so the daily rate and
+    // the week's figure both come out negative.
+    const over = weeklyHeadline({
+      remainingMonth: -248.16,
+      dailyRate: -15.51,
+      daysLeftInWeek: 1,
+      availableThisWeek: -15.51,
+    });
+    expect(over).toEqual({ kind: "exhausted", overspent: 248.16, daysLeftInWeek: 1 });
+  });
+
+  it("treats a budget spent to the cent as exhausted, with nothing overspent", () => {
+    const exact = weeklyHeadline({ ...base, remainingMonth: 0, availableThisWeek: 0, dailyRate: 0 });
+    expect(exact).toEqual({ kind: "exhausted", overspent: 0, daysLeftInWeek: 3 });
+  });
+
+  it("floors a rounding-negative allowance at zero rather than printing it", () => {
+    const headline = weeklyHeadline({ ...base, remainingMonth: 0.4, availableThisWeek: -0.01 });
+    expect(headline).toMatchObject({ kind: "available", amount: 0 });
+  });
+});
+
+describe("monthMeter", () => {
+  const day = (today: string) => ({ today, daysInMonth: 31 });
+
+  it("reads spending against the calendar", () => {
+    const m = monthMeter({ variableBudget: 1500, variableSpentMonth: 700, ...day("2026-08-15") });
+    expect(m.spentPct).toBeCloseTo(46.67, 2);
+    expect(m.elapsedPct).toBeCloseTo(48.39, 2);
+    expect(m.over).toBe(false);
+    expect(m.remaining).toBe(800);
+    expect(m.overspent).toBe(0);
+    expect(m.dayOfMonth).toBe(15);
+  });
+
+  it("caps the bar at the budget and reports the overshoot separately", () => {
+    const m = monthMeter({ variableBudget: 1500, variableSpentMonth: 1748.16, ...day("2026-08-16") });
+    expect(m.spentPct).toBe(100);
+    expect(m.over).toBe(true);
+    expect(m.overspent).toBe(248.16);
+    expect(m.remaining).toBe(0);
+  });
+
+  it("spending exactly the budget is not yet over", () => {
+    const m = monthMeter({ variableBudget: 1500, variableSpentMonth: 1500, ...day("2026-08-16") });
+    expect(m.over).toBe(false);
+    expect(m.spentPct).toBe(100);
+    expect(m.remaining).toBe(0);
+  });
+
+  it("does not divide by a budget of zero", () => {
+    expect(monthMeter({ variableBudget: 0, variableSpentMonth: 0, ...day("2026-08-16") })).toMatchObject({
+      spentPct: 0,
+      over: false,
+    });
+    expect(monthMeter({ variableBudget: 0, variableSpentMonth: 50, ...day("2026-08-16") })).toMatchObject({
+      spentPct: 100,
+      over: true,
+      overspent: 50,
+    });
+  });
+
+  it("keeps both percentages inside 0–100 whatever it is handed", () => {
+    const m = monthMeter({ variableBudget: Number.NaN, variableSpentMonth: Number.NaN, ...day("2026-08-16") });
+    expect(m.spentPct).toBe(0);
+    expect(m.elapsedPct).toBeGreaterThan(0);
+    const last = monthMeter({ variableBudget: 100, variableSpentMonth: 10, today: "2026-08-31", daysInMonth: 31 });
+    expect(last.elapsedPct).toBe(100);
   });
 });
