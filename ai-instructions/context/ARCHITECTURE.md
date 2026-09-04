@@ -28,21 +28,45 @@
   deployment; merges to `main` promote to production. Vercel-native features in
   use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
   (`/api/queues/sync-connection`).
-- **Function Storage is a cumulative quota, and preview deployments are what
-  fills it.** The free tier includes 10 GB, and it counts the function bundles of
-  every deployment still retained — not the live one. Nothing expires on the
-  Hobby plan, so the bill is `bundle size × deployments ever made`, and with a
-  preview per branch push that second factor grows faster than any feature does.
+- **Function Storage is a rolling 30-day window, not a pile that grows for
+  ever.** The free tier includes 10 GB, and it counts the function bundles of
+  every deployment still *retained* — not just the live one. Retention is a
+  project setting (Vercel → Settings → Deployment Retention), and this project
+  runs at its default: `deploymentExpiration` = 30 days for production, preview,
+  cancelled and errored alike, with `deploymentsToKeep: 10` as a floor. So the
+  bill is `bundle size × deployments of the last 30 days`, it reaches a plateau
+  rather than climbing, and the way to lower the plateau is to shrink the bundle
+  or to shorten the window. Verify the policy with
+  `GET /v9/projects/{id}` → `deploymentExpiration`; `PATCH /v9/projects` rejects
+  the field, so changing it means the dashboard.
+
+  Measured 2026-09-04: 258 deployments retained, spanning exactly 30 days
+  (25.8/day on active days, one day peaking at 98 — a preview per branch push
+  is the multiplier), for ~7.5 GB. That is a plateau, and it had already been
+  reached.
+
   Almost every route is dynamic (`ƒ`), so a deployment ships ~39 functions, and
   file tracing gives each one its own copy of the shared runtime: the per-route
   bundle is dominated by what is common to all of them, not by the route. Hence
-  the `outputFileTracingExcludes` for `sharp`/`@img` in `next.config.ts` (~33 MB
+  the `outputFileTracingExcludes` in `next.config.ts` — `sharp`/`@img` (~33 MB
   × 39 functions of `libvips` that nothing loads — see `UI_RULES.md` → "Icon
-  assets are generated"). What is left is ~5 MB per DB-touching function for
-  Prisma's WASM query compiler, which the generated client also keeps as a
-  base64 copy of the same bytes. Reclaiming space means **deleting old
-  deployments** (`vercel remove estalvify --safe`, which spares aliased ones);
-  shrinking the bundle only slows the growth from here on.
+  assets are generated"), and Prisma's raw `query_compiler_fast_bg.wasm`, which
+  only the edge entry points import while the Node runtime reads the base64
+  copy of the same bytes. Together they take a deployment from ~1795 MB of
+  summed bundles to ~510 MB (measured 2026-09-04 by summing every
+  `.next/**/*.nft.json`), which puts the 30-day plateau at ~2 GB.
+
+  What remains is the query compiler itself: webpack inlines the 4.9 MB base64
+  copy into shared server chunks that land in 36 of the 40 function traces
+  — ~190 MB per deployment, and the largest single item left. Most of it is
+  irreducible (every function that queries the DB needs the compiler), but
+  routes that touch no database carry it too, pulled in through the root
+  layout's session chain; splitting that import is the remaining lever.
+
+  Reclaiming space *now* rather than waiting for the window to roll means
+  **deleting old deployments** (`vercel remove estalvify --safe`, which spares
+  aliased ones, or `DELETE /v13/deployments/{id}`); shrinking the bundle only
+  lowers the plateau from here on.
 - **Branch flow: feature branch → `preview` → `main`.** Three long-lived refs
   matter: a feature branch (throwaway preview + throwaway Neon branch), `preview`
   (the release candidate, fixed URL `https://estalvify-preview.vercel.app` — a

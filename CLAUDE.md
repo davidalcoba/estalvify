@@ -42,6 +42,16 @@ permitted through this proxy") and the session token reports `admin: false` — 
 changes go through the GitHub UI (Settings → Rules) or a personal token, using
 the payload kept at `.github/rulesets/main-release-path.json`.
 
+**Deleting a git branch is refused the same way**, so a session cannot tidy up
+stale refs: `git push origin --delete <branch>` dies with `RPC failed; HTTP 403`
+and `DELETE /repos/{repo}/git/refs/heads/<branch>` answers the same "Write
+access to this GitHub API path is not permitted through this proxy" (observed
+2026-09-04, on all 30 refs tried). GitHub Actions is not subject to it — that is
+how `prune-merged-branch.yml` deletes the head branch on every merge into
+`preview`, with its own `contents: write`. So a branch merged the normal way is
+already cleaned up; only refs predating that workflow (added 2026-08-08,
+`a4ce921`) need a hand, and they need *yours*, or a one-off `workflow_dispatch`.
+
 ### When the release is blocked by a cancelled check
 
 `ci.yml` runs on **both** the push to `preview` and the pull request into
