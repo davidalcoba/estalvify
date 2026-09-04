@@ -24,6 +24,21 @@ const nextConfig: NextConfig = {
   // Required for Prisma in Next.js serverless
   serverExternalPackages: ["@prisma/client", "prisma"],
 
+  // Keep `sharp` out of the deployed bundles. It is in the tree only because
+  // Next.js declares it for image optimization and because
+  // `scripts/generate-icons.mjs` rasterizes with it locally — the app imports
+  // `next/image` nowhere, and on Vercel image optimization is a platform
+  // service, so no function ever loads it. File tracing pulled it in anyway,
+  // and it is not small: the two `libvips` builds (glibc *and* musl, only one
+  // of which could ever run) plus the bindings are ~33 MB, copied into every
+  // one of the ~39 route functions. Measured on this tree, excluding it takes
+  // the deployment's function bundles from ~1795 MB to ~506 MB, which matters
+  // because Vercel's Function Storage quota accumulates over *every*
+  // deployment ever kept, not just the live one.
+  outputFileTracingExcludes: {
+    "*": ["node_modules/@img/**", "node_modules/sharp/**"],
+  },
+
   // Security headers
   async headers() {
     return [
