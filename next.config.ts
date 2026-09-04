@@ -33,10 +33,25 @@ const nextConfig: NextConfig = {
   // of which could ever run) plus the bindings are ~33 MB, copied into every
   // one of the ~39 route functions. Measured on this tree, excluding it takes
   // the deployment's function bundles from ~1795 MB to ~506 MB, which matters
-  // because Vercel's Function Storage quota accumulates over *every*
-  // deployment ever kept, not just the live one.
+  // because Vercel's Function Storage quota counts the bundles of every
+  // deployment still retained, not just the live one.
+  //
+  // The second exclusion is Prisma's query compiler. The generated client
+  // ships the same WASM twice: `query_compiler_fast_bg.wasm` (3.7 MB) and a
+  // base64 copy of those bytes in `query_compiler_fast_bg.wasm-base64.js`
+  // (4.9 MB). Only the base64 one runs here — `index.js` reaches the compiler
+  // through `require('./query_compiler_fast_bg.wasm-base64.js')`, and the raw
+  // `.wasm` is imported solely by `wasm-worker-loader.mjs` /
+  // `wasm-edge-light-loader.mjs`, the edge and workerd entry points. No route
+  // in this app declares `runtime = "edge"`, so the raw file is dead weight
+  // that file tracing still copies into five function bundles: ~17.5 MB per
+  // deployment. Drop this exclusion the day a route moves to the edge runtime.
   outputFileTracingExcludes: {
-    "*": ["node_modules/@img/**", "node_modules/sharp/**"],
+    "*": [
+      "node_modules/@img/**",
+      "node_modules/sharp/**",
+      "app/generated/prisma/query_compiler_fast_bg.wasm",
+    ],
   },
 
   // Security headers
