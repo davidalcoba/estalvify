@@ -28,6 +28,21 @@
   deployment; merges to `main` promote to production. Vercel-native features in
   use: Cron (`vercel.json` → `/api/cron/sync`) and Queues
   (`/api/queues/sync-connection`).
+- **Function Storage is a cumulative quota, and preview deployments are what
+  fills it.** The free tier includes 10 GB, and it counts the function bundles of
+  every deployment still retained — not the live one. Nothing expires on the
+  Hobby plan, so the bill is `bundle size × deployments ever made`, and with a
+  preview per branch push that second factor grows faster than any feature does.
+  Almost every route is dynamic (`ƒ`), so a deployment ships ~39 functions, and
+  file tracing gives each one its own copy of the shared runtime: the per-route
+  bundle is dominated by what is common to all of them, not by the route. Hence
+  the `outputFileTracingExcludes` for `sharp`/`@img` in `next.config.ts` (~33 MB
+  × 39 functions of `libvips` that nothing loads — see `UI_RULES.md` → "Icon
+  assets are generated"). What is left is ~5 MB per DB-touching function for
+  Prisma's WASM query compiler, which the generated client also keeps as a
+  base64 copy of the same bytes. Reclaiming space means **deleting old
+  deployments** (`vercel remove estalvify --safe`, which spares aliased ones);
+  shrinking the bundle only slows the growth from here on.
 - **Branch flow: feature branch → `preview` → `main`.** Three long-lived refs
   matter: a feature branch (throwaway preview + throwaway Neon branch), `preview`
   (the release candidate, fixed URL `https://estalvify-preview.vercel.app` — a

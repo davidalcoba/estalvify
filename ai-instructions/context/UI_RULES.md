@@ -63,7 +63,11 @@ asset from them — `app/icon.svg`, `app/apple-icon.png`, `app/favicon.ico`,
 **Changing the mark means editing the geometry in both `logo.tsx` and that
 script, then re-running `node scripts/generate-icons.mjs`** — do not touch the
 generated files directly. The script needs `sharp` (present in the tree via
-Next.js, not a declared devDependency); nothing at build or runtime uses it.
+Next.js, not a declared devDependency); nothing at build or runtime uses it —
+which is why `next.config.ts` excludes `sharp` and `@img/*` from output file
+tracing, keeping ~33 MB of `libvips` out of every deployed function. Keep the
+exclusion if you touch that config; the script reads `sharp` from
+`node_modules`, not from the deployment.
 
 The manifest carries rounded `purpose: "any"` icons plus a separate full-bleed
 `purpose: "maskable"` one, because a platform that masks the icon crops a rounded
